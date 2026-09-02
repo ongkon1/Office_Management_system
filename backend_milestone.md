@@ -1,0 +1,605 @@
+# Backend Milestone Plan
+
+## Multi-Division Employee Timesheet and Work Management System
+
+| Field | Decision |
+|---|---|
+| Delivery order | Backend begins after the frontend contracts and priority flows are stable |
+| Application model | One full-stack Next.js application, not separate frontend and backend projects |
+| Application framework | Next.js App Router with TypeScript |
+| Database | MySQL |
+| Requirements source | `project_requirement.md` |
+| Frontend contract source | `frontend_milestone.md` and the implemented frontend service interfaces |
+| Backend goal | Secure, auditable, testable business logic and persistence that replace frontend mock adapters without redesigning approved screens |
+
+## 1. Task Status Convention
+
+Use exactly one status marker on every tracked task:
+
+- `[ ]` Pending - work has not started.
+- `[~]` In progress - work is actively being implemented or reviewed.
+- `[x]` Done - work is implemented, tested, reviewed, and satisfies its acceptance criteria.
+
+Tracking rules:
+
+- Every task must have exactly one marker.
+- Change `[ ]` to `[~]` when implementation begins.
+- Change `[~]` to `[x]` only after code, automated tests, security checks, and applicable operational checks pass.
+- Return a completed task to `[~]` if a material regression or requirement change reopens it.
+- Phase progress is calculated from numbered `BE-*` tasks. Exit-criteria checkboxes are gates and are not included in task totals.
+- A phase is complete only when every required task and exit criterion in that phase is done.
+
+## 2. Backend Architecture Boundaries
+
+### 2.1 One Next.js Application
+
+- Frontend routes, server-rendered reads, application mutations, external APIs, scheduled jobs, and database access will live in one Next.js repository.
+- Server Components should perform authenticated page reads through application services.
+- Server Actions should handle first-party UI mutations when they provide a clean form/action boundary.
+- Route Handlers should handle external REST endpoints, webhooks, integration callbacks, file delivery, and endpoints that require an HTTP contract.
+- Business rules must live in framework-independent domain/application services rather than React components, pages, Server Actions, or Route Handlers.
+- Database queries must be isolated behind repositories so business services and tests do not depend directly on the selected ORM/query builder.
+- Long-running exports, notifications, imports, and integration synchronization must run outside interactive request latency through a durable job mechanism selected in Phase 0.
+
+### 2.2 Data and Time Rules
+
+- MySQL will be the authoritative operational datastore.
+- Store clock instants in UTC and store the applicable local work date, business timezone, and policy version needed to reproduce daily calculations.
+- Store durations as integers, never floating-point hours.
+- Store financial rates and amounts in fixed-precision decimal columns with an explicit currency.
+- Use effective-dated records for assignments, work policies, holidays, evaluation weights, and cost rates.
+- Use database transactions for operations that change multiple related records or derived summaries.
+- Preserve historical records through deactivation, versioning, or audited amendments; do not cascade-delete business history.
+
+### 2.3 Security Boundaries
+
+- Authentication proves identity; authorization must be checked independently for every query and mutation.
+- Authorization must support role, division, project, record ownership, workflow state, and field-level restrictions.
+- Government-project, salary, cost, evaluation, export, attachment, and audit data must be denied by default.
+- UI visibility is not a security control. Server Components, Actions, Route Handlers, jobs, exports, and search must all enforce the same policies.
+- Audit logging must be append-only for application users and must record sensitive reads and material state changes.
+
+### 2.4 Backend Definition of Done
+
+A backend task may be marked `[x]` only when all applicable conditions are true:
+
+- The implementation follows the approved domain and frontend contract.
+- Input validation, authentication, authorization, transactions, idempotency, and error handling are present where required.
+- Unit, integration, authorization, and workflow tests cover normal and important failure paths.
+- Sensitive data is absent from unsafe logs, errors, notifications, caches, and responses.
+- Database changes include forward and rollback/recovery guidance and work on an empty database and representative existing data.
+- Observability identifies failures without leaking protected content.
+- Relevant requirement IDs and backend task IDs are traceable in tests or technical documentation.
+- Type checks, lint checks, automated tests, and the production build pass.
+
+## 3. Milestone Overview
+
+| Phase | Name | Demonstrable outcome |
+|---:|---|---|
+| 0 | Architecture and delivery foundation | Technical decisions, contracts, environments, and quality gates are recorded. |
+| 1 | MySQL schema and data foundation | Versioned schema, migrations, seed data, repositories, and transaction conventions work. |
+| 2 | Authentication, authorization, and audit | Secure sessions, role/scope policies, protected fields, and immutable audit evidence work. |
+| 3 | Organization, projects, and tasks | Employees, divisions, assignments, projects, tasks, and files persist with correct scope rules. |
+| 4 | Timesheet calculation and correction | Time entry, timers, breaks, classifications, validation, remarks, corrections, and verification work end to end. |
+| 5 | HR, attendance, WFH, leave, workload, and evaluation | HR workflows and periodic evaluation operate on authoritative data. |
+| 6 | Reporting, Finance, and exports | Permission-safe reports, costing, payroll summaries, and durable exports reconcile to source data. |
+| 7 | Notifications, documents, search, and integrations | Supporting services and controlled external interfaces operate reliably. |
+| 8 | Quality, performance, backup, and security hardening | The system passes automated, load, recovery, and security gates. |
+| 9 | Production readiness and frontend cutover | Mock services are removed, data is migrated, operations are documented, and release is approved. |
+
+## 4. Detailed Phase Tasks
+
+## Phase 0 - Architecture and Delivery Foundation
+
+### Confirmed Foundations
+
+- [x] `BE-0001` Baseline backend scope against `project_requirement.md`.
+- [x] `BE-0002` Confirm a single Next.js full-stack repository rather than separate frontend and backend applications.
+- [x] `BE-0003` Confirm Next.js with TypeScript as the application framework.
+- [x] `BE-0004` Confirm MySQL as the production database.
+- [x] `BE-0005` Adopt the shared `[ ]`, `[~]`, and `[x]` task tracking convention.
+
+### Technical Decisions
+
+- [ ] `BE-0006` Inventory the implemented frontend mock queries, mutations, view models, validation shapes, pagination, sorting, filters, and permission outcomes.
+- [ ] `BE-0007` Select and record the MySQL ORM or query builder after validating transactions, compound indexes, migrations, decimal handling, date/time handling, and Next.js deployment compatibility.
+- [ ] `BE-0008` Select and record the authentication/session implementation after validating credentials, database sessions, 2FA, reset flows, revocation, and server-side authorization integration.
+- [ ] `BE-0009` Select and record the schema-validation library and establish shared server/client validation ownership.
+- [ ] `BE-0010` Select and record the durable job mechanism for exports, notifications, scheduled checks, and integration retries.
+- [ ] `BE-0011` Select and record file/object storage for profile photos, attachments, documents, and generated exports, including local development behavior.
+- [ ] `BE-0012` Select and record transactional email and any initial in-app notification delivery provider.
+- [ ] `BE-0013` Define whether the initial deployment uses a persistent Node server, containers, or another Next.js-compatible runtime and document runtime limitations.
+- [ ] `BE-0014` Record supported MySQL version, character set, collation, SQL mode, connection-pool strategy, and migration ownership.
+
+### Application Structure and Contracts
+
+- [ ] `BE-0015` Define module boundaries for access, organization, work, time, HR, evaluation, reporting, Finance, collaboration, notifications, integrations, files, and audit.
+- [ ] `BE-0016` Define shared layers for domain rules, application services, authorization policies, repositories, job handlers, Server Actions, and Route Handlers.
+- [ ] `BE-0017` Define canonical error codes for validation, unauthenticated, forbidden, not found, conflict, locked period, rate limit, dependency failure, and internal failure.
+- [ ] `BE-0018` Define request correlation, idempotency key, audit context, actor context, timezone, locale, and policy-version propagation.
+- [ ] `BE-0019` Define transaction boundaries for time entry, timers, corrections, approvals, overrides, period verification, evaluations, exports, and integration imports.
+- [ ] `BE-0020` Map frontend service interfaces to server-side use cases without exposing database records directly to UI components.
+- [ ] `BE-0021` Create a requirement-to-module and requirement-to-test traceability matrix for backend MVP requirements.
+- [ ] `BE-0022` Define development, test, staging, and production configuration ownership and secret handling.
+
+### Quality Gates
+
+- [ ] `BE-0023` Configure backend unit, database integration, API/action integration, authorization, and end-to-end test layers.
+- [ ] `BE-0024` Configure type-check, lint, test, migration validation, security scan, and production-build commands for continuous integration.
+- [ ] `BE-0025` Define code-review rules for schema changes, authorization changes, financial logic, time calculations, audit behavior, and integrations.
+
+### Phase 0 Exit Criteria
+
+- [ ] Every frontend mock operation has a named backend use case, owner, permission rule, and expected response/error contract.
+- [ ] ORM/query, authentication, validation, job, file-storage, email, runtime, and MySQL environment decisions are documented.
+- [ ] Module boundaries and automated quality gates are approved before schema implementation begins.
+
+## Phase 1 - MySQL Schema and Data Foundation
+
+### Database Tooling and Conventions
+
+- [ ] `BE-0101` Configure development and test MySQL connections with least-privilege database users.
+- [ ] `BE-0102` Configure the selected database library, connection pooling, health checks, timeouts, retry boundaries, and graceful shutdown.
+- [ ] `BE-0103` Establish versioned migration commands for create, apply, status, rollback/recovery, and CI validation.
+- [ ] `BE-0104` Define table/column naming, primary-key format, foreign keys, check constraints, unique constraints, timestamps, optimistic versioning, and soft-deactivation conventions.
+- [ ] `BE-0105` Define UTC instant, local date, local time, timezone, integer duration, fixed decimal, currency, and JSON usage conventions.
+- [ ] `BE-0106` Prohibit floating-point storage for durations, allocation percentages requiring precision, cost rates, and money.
+
+### Access and Organization Schema
+
+- [ ] `BE-0110` Create users, credentials/authentication identity, sessions, login history, roles, permissions, user roles, and scoped grants.
+- [ ] `BE-0111` Create employees, divisions, teams, employee-division assignments, work policies, policy versions, and holiday calendars.
+- [ ] `BE-0112` Add effective dates, active states, primary-division constraints, Team Lead relationships, allocation percentage, and expected weekly hours.
+- [ ] `BE-0113` Add constraints and service validation that protect historical users, employees, divisions, assignments, and policy versions from destructive deletion.
+
+### Work and Time Schema
+
+- [ ] `BE-0120` Create projects, project members, tasks, task members, checklist items, and work attachments.
+- [ ] `BE-0121` Create time entries, timer sessions, daily breaks, daily summaries, timesheet periods, period verifications, unlocks, and amendments.
+- [ ] `BE-0122` Store work date, UTC instants, timezone, entry method, location, integer duration, descriptions, completed work, status, and policy version needed for reproducibility.
+- [ ] `BE-0123` Add indexes supporting employee/date overlap checks, daily aggregation, division/project/task reporting, timer uniqueness, exception queries, and verified-period reads.
+- [ ] `BE-0124` Design the one-running-timer-per-employee invariant so concurrent requests cannot create multiple active timers.
+
+### HR, Finance, and Supporting Schema
+
+- [ ] `BE-0130` Create WFH requests, leave types, leave balances, leave requests, attendance days, evaluation periods, evaluations, responses, scores, and general remarks.
+- [ ] `BE-0131` Create workload allocation, cost rates, budgets, payroll periods, report definitions, export jobs, and export artifacts.
+- [ ] `BE-0132` Create notifications, delivery attempts, documents, document versions, messages, comments, announcements, attachments, and search metadata needed by enabled phases.
+- [ ] `BE-0133` Create integration connections, encrypted credential references, sync cursors, webhook endpoints, webhook deliveries, idempotency records, and job records.
+- [ ] `BE-0134` Create append-only audit event storage with actor, impersonator if applicable, action, resource, scope, timestamp, reason, correlation ID, and protected before/after representation.
+
+### Seed Data and Repository Foundation
+
+- [ ] `BE-0140` Seed the five initial divisions through an idempotent seed process.
+- [ ] `BE-0141` Seed development-only users for all six roles, representative assignments, projects, tasks, time scenarios, requests, evaluations, costs, and reports.
+- [ ] `BE-0142` Include deterministic complete, under-time, overtime, critical, missing, leave, WFH, correction, locked, and restricted-data scenarios.
+- [ ] `BE-0143` Implement repository interfaces and database adapters without returning unrestricted database rows to higher layers.
+- [ ] `BE-0144` Add factories/builders for test data and isolate every automated database test.
+- [ ] `BE-0145` Test clean migration, upgrade migration, seed idempotency, constraint failures, rollback/recovery guidance, and representative query plans.
+
+### Phase 1 Exit Criteria
+
+- [ ] A clean MySQL database can be migrated and seeded deterministically.
+- [ ] Required entities, effective dates, historical preservation, constraints, and indexes are represented.
+- [ ] Repository and transaction foundations pass isolated database integration tests.
+
+## Phase 2 - Authentication, Authorization, and Audit
+
+### Authentication
+
+- [ ] `BE-0201` Implement credential login using a modern password-hashing configuration and constant-time verification.
+- [ ] `BE-0202` Implement database-backed sessions with secure, HTTP-only, same-site cookies, rotation, expiration, revocation, and logout.
+- [ ] `BE-0203` Implement account active/inactive/locked state, failed-attempt throttling, lockout policy, and login history.
+- [ ] `BE-0204` Implement password reset tokens with single use, short expiry, secure storage, revocation, and non-enumerating responses.
+- [ ] `BE-0205` Implement two-factor enrollment, verification, recovery, reset, and audit behavior using the selected approach.
+- [ ] `BE-0206` Implement session-expiry and security-event responses expected by the frontend.
+- [ ] `BE-0207` Protect first-party mutations against cross-site request forgery and unsafe cross-origin access.
+- [ ] `BE-0208` Add per-account and per-origin rate limits for login, reset, 2FA, and other sensitive public endpoints.
+
+### Authorization
+
+- [ ] `BE-0210` Implement a central authorization policy API used by Server Components, Server Actions, Route Handlers, jobs, search, reports, and exports.
+- [ ] `BE-0211` Implement role permissions for Super Administrator, Team Lead, Employee, HR Manager, Finance Manager, and Management/View-Only.
+- [ ] `BE-0212` Implement division-, project-, team-, ownership-, date-effective-, workflow-state-, and field-level scope checks.
+- [ ] `BE-0213` Implement deny-by-default policies for government projects, salary, cost rate, labour cost, evaluations, exports, documents, attachments, and audit data.
+- [ ] `BE-0214` Ensure Management/View-Only cannot mutate records through any server boundary.
+- [ ] `BE-0215` Ensure Team Leads are limited to effective assigned scope and Employees to their own records unless an explicit grant applies.
+- [ ] `BE-0216` Prevent object-identifier guessing from revealing record existence through status codes, timings, search, counts, exports, or file URLs.
+- [ ] `BE-0217` Implement permission-aware response mapping so restricted fields are omitted rather than merely hidden by the frontend.
+
+### Audit and Security Operations
+
+- [ ] `BE-0220` Implement append-only audit recording for authentication, changes, decisions, overrides, verification, permissions, integration settings, file access, and exports.
+- [ ] `BE-0221` Redact secrets, password material, tokens, raw integration credentials, and disallowed sensitive values from audit payloads.
+- [ ] `BE-0222` Implement audited administrative impersonation only if explicitly approved; otherwise prohibit it.
+- [ ] `BE-0223` Implement encryption/key-management boundaries for application secrets, integration credentials, protected files, and backups.
+- [ ] `BE-0224` Add authorization matrix tests covering allow and deny cases across all roles, scopes, sensitive fields, record states, and server entry points.
+- [ ] `BE-0225` Add authentication tests for enumeration, brute force, session fixation, session revocation, reset replay, 2FA recovery, cookie flags, and CSRF.
+
+### Phase 2 Exit Criteria
+
+- [ ] All six roles can authenticate and receive server-enforced access matching the approved matrix.
+- [ ] Direct calls, identifiers, exports, search, jobs, and file access cannot bypass scope or protected-field rules.
+- [ ] Authentication and authorization security tests pass and material events are auditable.
+
+## Phase 3 - Organization, Projects, and Tasks
+
+### Employees, Divisions, and Assignments
+
+- [ ] `BE-0301` Implement division create, update, activate, and deactivate use cases with historical-reference protection.
+- [ ] `BE-0302` Implement employee create, update, activate, deactivate, profile read, and directory search use cases.
+- [ ] `BE-0303` Implement profile-photo attachment metadata and authorized delivery through the selected storage adapter.
+- [ ] `BE-0304` Implement employee-division assignment create, update, end, activate, deactivate, and history queries.
+- [ ] `BE-0305` Enforce one primary division for an active employee when required and validate effective assignment date ranges.
+- [ ] `BE-0306` Validate planned allocation and return a warning, rather than silently changing data, when concurrent allocation differs from 100 percent.
+- [ ] `BE-0307` Implement temporary assignments with required start/end dates and prevent new time outside their effective period.
+- [ ] `BE-0308` Implement role and Team Lead assignment changes with authorization, effective dates where required, and audit records.
+
+### Projects and Membership
+
+- [ ] `BE-0310` Implement project create, update, activate/close, membership, search, filtering, and scoped detail queries.
+- [ ] `BE-0311` Enforce exactly one division per project and validate manager/member access against effective assignments.
+- [ ] `BE-0312` Implement project estimates, deadlines, priority, budget visibility, completion percentage, client/stakeholder, notes, and attachment metadata.
+- [ ] `BE-0313` Calculate actual project hours from valid time entries rather than accepting a manually edited actual-hours total.
+- [ ] `BE-0314` Protect project deactivation/closure and preserve historical tasks, time, files, and audit references.
+
+### Tasks
+
+- [ ] `BE-0320` Implement task create, update, assign, support-member, checklist, attachment, and scoped query use cases.
+- [ ] `BE-0321` Enforce Pending, In Progress, and Completed as the initial task statuses and validate allowed transitions.
+- [ ] `BE-0322` Enforce task-project-division consistency and effective employee authorization.
+- [ ] `BE-0323` Calculate actual task time from valid linked time entries and derive overdue state from status and due date.
+- [ ] `BE-0324` Implement task list filters, pagination, sorting, due-date views, and employee/team scopes expected by the frontend.
+- [ ] `BE-0325` Add transaction, conflict, authorization, deactivation, and concurrency tests for organization, project, membership, and task workflows.
+
+### Phase 3 Exit Criteria
+
+- [ ] The frontend employee, division, project, and task mock adapters can be replaced by real services.
+- [ ] Effective assignments and project/task scope are enforced for reads and writes.
+- [ ] Actual project/task hours reconcile to stored valid time entries.
+
+## Phase 4 - Timesheet Calculation and Correction
+
+### Authoritative Calculation Engine
+
+- [ ] `BE-0401` Implement one framework-independent calculation engine used by entry validation, daily summaries, dashboards, reports, exports, evaluations, and APIs.
+- [ ] `BE-0402` Implement effective work-policy selection by employee, work date, and policy version.
+- [ ] `BE-0403` Calculate active time from valid entries across all divisions while retaining employee/division/project/task contribution breakdowns.
+- [ ] `BE-0404` Calculate recognized daily break separately and default a standard full day to one break hour.
+- [ ] `BE-0405` Restrict break overrides to the designated permission and require an override reason and audit event.
+- [ ] `BE-0406` Calculate daily total as active duration plus recognized break using integer duration arithmetic.
+- [ ] `BE-0407` Classify required days as Missing, Under-time, Complete, Overtime, or Critical using the approved thresholds.
+- [ ] `BE-0408` Require an overtime reason above eight total hours and a critical explanation above twelve total hours.
+- [ ] `BE-0409` Implement part-time, half-day leave, holiday, and other policy adjustments without changing the standard policy baseline.
+- [ ] `BE-0410` Implement business-timezone and cross-midnight attribution/splitting according to the configured policy.
+- [ ] `BE-0411` Persist the applied policy version so historical and verified results are reproducible after policy changes.
+
+### Time Entry and Timer Use Cases
+
+- [ ] `BE-0420` Implement manual clock entry and direct-duration entry create, update, read, list, and permitted delete/deactivate use cases.
+- [ ] `BE-0421` Implement copy-previous-entry as a new unverified draft with a new work date and full revalidation.
+- [ ] `BE-0422` Implement timer start with an atomic one-running-timer-per-employee invariant.
+- [ ] `BE-0423` Implement timer read/recovery and idempotent stop-to-draft behavior across refresh, retry, or duplicate submission.
+- [ ] `BE-0424` Validate required employee, date, division, project/task relationship, work location, description, completed work, and attachment/link information.
+- [ ] `BE-0425` Reject inactive projects, invalid tasks, unauthorized/effective-date divisions, invalid ranges, duplicates, and overlapping clock entries across divisions.
+- [ ] `BE-0426` Detect approved leave/holiday conflicts and return a field/record-level error or authorized exception workflow as specified.
+- [ ] `BE-0427` Recalculate affected daily, weekly, monthly, division, project, task, workload, and evaluation projections transactionally or through reliable invalidation/jobs.
+- [ ] `BE-0428` Return typed validation codes and corrective guidance matching frontend error states.
+- [ ] `BE-0429` Ensure saving a normal daily entry never creates a Team Lead approval requirement.
+
+### Remarks, Corrections, and Period Verification
+
+- [ ] `BE-0440` Implement the single general remark model linked to an employee and optionally a timesheet or task.
+- [ ] `BE-0441` Implement employee clarification, correction request, resolution state, notification trigger, and complete remark history.
+- [ ] `BE-0442` Implement correction authorization and immutable before/after history for changed time records.
+- [ ] `BE-0443` Implement HR reporting/payroll-period completeness checks and exception inventory.
+- [ ] `BE-0444` Implement HR period verification with transactionally fixed included records, calculation results, and applied policy versions.
+- [ ] `BE-0445` Implement authorized verified-period unlock or amendment with reason, audit, recalculation, and Finance visibility.
+- [ ] `BE-0446` Prevent ordinary mutations to verified records and return the frontend's locked-period conflict response.
+
+### Calculation and Concurrency Tests
+
+- [ ] `BE-0450` Add boundary tests for 0, 6:59, 7:00, 7:01 active hours and totals of 7:59, 8:00, above 8:00, 12:00, and above 12:00.
+- [ ] `BE-0451` Add the cross-division acceptance case of 3 hours PowerInAI, 2 hours Government Projects, 2 hours WesternCF, and a separate 1-hour break.
+- [ ] `BE-0452` Add overlap, duplicate, invalid range, inactive project, unassigned division, leave, holiday, half-day, cross-midnight, daylight-saving, and timezone tests.
+- [ ] `BE-0453` Add concurrent timer-start, duplicate timer-stop, simultaneous time edit, summary recalculation, verification, and amendment tests.
+- [ ] `BE-0454` Add reconciliation tests proving entry, dashboard, report, export, evaluation, and Finance calculations use identical results.
+
+### Phase 4 Exit Criteria
+
+- [ ] Employee and Team Lead frontend time/remark mock adapters can be replaced without changing approved UI behavior.
+- [ ] Calculation, validation, timer, correction, verification, amendment, and concurrency tests pass.
+- [ ] Daily totals are reproducible from source entries, break, leave/holiday context, timezone, and policy version.
+
+## Phase 5 - HR, Attendance, WFH, Leave, Workload, and Evaluation
+
+### WFH and Leave
+
+- [ ] `BE-0501` Implement employee WFH request create, update while draft, submit, cancel where allowed, history, and detail queries.
+- [ ] `BE-0502` Implement full-day/half-day, reason, planned tasks, division, availability, attachment, and request-date validation.
+- [ ] `BE-0503` Implement Team Lead approve, reject, and request-information decisions for effective assigned employees.
+- [ ] `BE-0504` Implement HR oversight and override with required reason, audit, and notification.
+- [ ] `BE-0505` Ensure approved WFH changes attendance context but never creates time automatically.
+- [ ] `BE-0506` Implement leave types, balances, request create/update/submit/cancel, Team Lead decision, HR override, and history.
+- [ ] `BE-0507` Implement full-day/half-day requirement adjustment, balance reservation/consumption, overlap checks, and transaction safety.
+- [ ] `BE-0508` Implement company, division-specific, and weekly holiday administration with effective calendars.
+
+### Attendance and Missing-Time Processing
+
+- [ ] `BE-0510` Implement authoritative attendance-day derivation from employee schedule, holidays, leave, WFH, duty location, and valid time.
+- [ ] `BE-0511` Distinguish Office, WFH, Official Travel, Field Duty, Training Duty, approved leave, absence, holiday, and missing timesheet.
+- [ ] `BE-0512` Ensure approved full-day leave and holidays do not create missing-timesheet exceptions.
+- [ ] `BE-0513` Implement scheduled daily/monthly missing-time and exception detection with idempotent results.
+- [ ] `BE-0514` Implement HR attendance, leave, WFH, pattern, and exception queries with permission-safe aggregation.
+
+### Workload Planning
+
+- [ ] `BE-0520` Implement weekly active capacity from effective work policy, leave, and holidays.
+- [ ] `BE-0521` Implement planned division/project allocation, actual time, remaining capacity, and over/under-allocation calculations.
+- [ ] `BE-0522` Keep the default 35 active hours distinct from the 40-hour scheduled week and exclude breaks from task capacity.
+- [ ] `BE-0523` Implement workload warnings, upcoming-deadline queries, and scoped workload-calendar data.
+
+### Evaluations
+
+- [ ] `BE-0530` Implement evaluation periods for monthly, quarterly, half-yearly, annual, project-based, and probation types.
+- [ ] `BE-0531` Implement eligible employee/reviewer assignment, lifecycle state, due dates, and reminder scheduling.
+- [ ] `BE-0532` Generate factual evaluation inputs from required/active/break/overtime time, missing records, task outcomes, estimates, division/project contribution, WFH, leave, and remarks.
+- [ ] `BE-0533` Implement employee self-evaluation drafts and submissions.
+- [ ] `BE-0534` Implement Team Lead scoring/comments for every required evaluation area.
+- [ ] `BE-0535` Implement versioned default weighting of 30/25/15/10/10/10 and validate that weights total 100 percent.
+- [ ] `BE-0536` Calculate evaluation results without treating hours as the sole performance measure.
+- [ ] `BE-0537` Implement HR review, publication, employee visibility, history, and restrictions on unpublished/private evaluation content.
+- [ ] `BE-0538` Add workflow, permission, effective-date, balance, capacity, weighting, publication, and concurrency tests for all Phase 5 modules.
+
+### Phase 5 Exit Criteria
+
+- [ ] WFH, leave, attendance, holiday, workload, and evaluation frontend adapters use authoritative services.
+- [ ] Attendance and workload results reconcile to time, assignments, policies, leave, and holidays.
+- [ ] Evaluation facts are reproducible and private/unpublished content is permission-safe.
+
+## Phase 6 - Reporting, Finance, and Exports
+
+### Reporting Foundation
+
+- [ ] `BE-0601` Implement a permission-aware report query layer that reuses authoritative calculation and authorization services.
+- [ ] `BE-0602` Implement validated filters for date/period, employee, division, project, task, Team Lead, employment type, work location, WFH/Office, overtime, and status.
+- [ ] `BE-0603` Implement daily, weekly, monthly, employee, division, project, task, overtime, under-time, missing, critical, and WFH reports.
+- [ ] `BE-0604` Implement HR attendance, leave, WFH, evaluation, performance history, workload, assignment, and remark reports.
+- [ ] `BE-0605` Implement pagination, stable sorting, grouping, totals, timezone, applied-policy version, and generated-at metadata.
+- [ ] `BE-0606` Prevent aggregates, counts, filters, and empty groups from revealing unauthorized records.
+
+### Finance
+
+- [ ] `BE-0610` Implement effective-dated employee/project cost rates with currency and separately protected access.
+- [ ] `BE-0611` Implement billable/non-billable classification and reconciliation to verified active hours.
+- [ ] `BE-0612` Implement employee, overtime, project, division, labour-cost, payroll-period, and budget-versus-actual reports.
+- [ ] `BE-0613` Default Finance reporting to HR-verified periods and clearly flag explicitly authorized unverified data.
+- [ ] `BE-0614` Implement payroll-ready data mapping with configurable approved fields and no implicit external payroll submission.
+- [ ] `BE-0615` Ensure salary, rate, budget, labour-cost, and payroll fields are omitted without the required financial permission.
+
+### Export Processing
+
+- [ ] `BE-0620` Implement durable asynchronous export jobs for Excel, CSV, and PDF plus a server-renderable print dataset.
+- [ ] `BE-0621` Capture requester, permission snapshot or revalidation strategy, filters, timezone, policy version, format, status, and timestamps.
+- [ ] `BE-0622` Generate exports with bounded memory, safe temporary storage, formula-injection protection, and consistent formatting.
+- [ ] `BE-0623` Store export artifacts with protected, expiring access and recheck authorization at download time.
+- [ ] `BE-0624` Implement queued, processing, ready, expired, cancelled, and failed states with idempotent retry.
+- [ ] `BE-0625` Audit export request, completion, failure, download, expiry, and deletion events.
+- [ ] `BE-0626` Add reconciliation, permission, large-data, injection, expiration, retry, and format-content tests.
+
+### Phase 6 Exit Criteria
+
+- [ ] Report and Finance frontend mock adapters are replaced by permission-safe services.
+- [ ] Report totals reconcile across grouping dimensions and to verified source records.
+- [ ] Excel, CSV, PDF, and print data are generated asynchronously or safely, audited, and access-controlled.
+
+## Phase 7 - Notifications, Documents, Search, and Integrations
+
+### Notifications and Scheduled Work
+
+- [ ] `BE-0701` Implement in-app notifications with recipient, type, safe payload, related-record reference, read state, and creation timestamp.
+- [ ] `BE-0702` Implement role-specific triggers for missing time, under-time, overtime, critical time, tasks, deadlines, remarks, corrections, WFH, leave, workload, and evaluations.
+- [ ] `BE-0703` Implement notification deduplication and idempotent scheduled generation.
+- [ ] `BE-0704` Implement delivery attempts, retry/backoff, dead-letter/failure handling, and provider-safe logging for configured external channels.
+- [ ] `BE-0705` Recheck access when opening related records and keep notification text free of unauthorized sensitive content.
+
+### Files, Documents, and Lightweight Communication
+
+- [ ] `BE-0710` Implement safe upload initiation/completion, size/type validation, malware-scanning integration point, integrity metadata, and storage adapter.
+- [ ] `BE-0711` Implement authorized download using short-lived or streamed access and audit protected downloads.
+- [ ] `BE-0712` Implement attachment ownership for profiles, time entries, WFH/leave, projects, tasks, remarks, evaluations, messages, and documents.
+- [ ] `BE-0713` Implement document create, version, metadata, company/division/project scope, search visibility, and deactivation.
+- [ ] `BE-0714` Implement Phase 3 division/project/direct messages, task comments, announcements, mentions, and pins when enabled.
+- [ ] `BE-0715` Enforce participant, division, project, government-project, and attachment permissions across documents and communication.
+
+### Search
+
+- [ ] `BE-0720` Implement authorized search across employees, divisions, projects, tasks, timesheets, remarks, and documents.
+- [ ] `BE-0721` Implement date, division, employee, project, status, location, and file-type filters with bounded pagination.
+- [ ] `BE-0722` Ensure indexes or a future search adapter cannot leak unauthorized titles, snippets, metadata, counts, or file names.
+- [ ] `BE-0723` Add relevance, permission, stale-index, special-character, large-result, and injection-resistance tests.
+
+### APIs, Webhooks, and Integrations
+
+- [ ] `BE-0730` Define and document versioned REST API conventions, authentication, scopes, pagination, errors, rate limits, and deprecation policy.
+- [ ] `BE-0731` Implement webhook endpoint registration, secret rotation, signed delivery, retry/backoff, idempotency, replay protection, and delivery logs.
+- [ ] `BE-0732` Implement calendar connection and sync boundaries for Google Calendar and Outlook when credentials are approved.
+- [ ] `BE-0733` Convert external calendar events only into draft time entries requiring employee confirmation before totals change.
+- [ ] `BE-0734` Implement secure OAuth/state/callback and credential storage patterns for approved providers.
+- [ ] `BE-0735` Define adapters for future email, storage, conferencing, Jira/Slack, biometric, HR, payroll, accounting, SSO, Zapier, and Make integrations.
+- [ ] `BE-0736` Ensure imported/external data passes the same authorization, validation, verification, calculation, and audit rules as interactive data.
+- [ ] `BE-0737` Add contract, signature, replay, idempotency, rate-limit, provider-failure, retry, and permission tests for enabled integrations.
+
+### Phase 7 Exit Criteria
+
+- [ ] Notifications, files, documents, and search are permission-safe and observable.
+- [ ] Enabled jobs and integration operations are durable, idempotent, and auditable.
+- [ ] Calendar imports remain drafts until employee confirmation and never bypass time-entry rules.
+
+## Phase 8 - Quality, Performance, Backup, and Security Hardening
+
+### Automated Quality
+
+- [ ] `BE-0801` Complete unit tests for domain rules, policy selection, classification, duration arithmetic, weighting, and financial calculations.
+- [ ] `BE-0802` Complete database integration tests for repositories, constraints, indexes, migrations, transactions, locks, and concurrency.
+- [ ] `BE-0803` Complete Server Action and Route Handler tests for validation, authentication, authorization, errors, idempotency, and response contracts.
+- [ ] `BE-0804` Complete end-to-end tests for primary Employee, Team Lead, HR, Finance, Management, and Administrator workflows.
+- [ ] `BE-0805` Complete traceability from MVP backend requirements to automated tests and record justified exceptions.
+
+### Performance and Reliability
+
+- [ ] `BE-0810` Define representative employee, entry, project, task, report, file, and concurrent-user volumes with stakeholders.
+- [ ] `BE-0811` Load-test normal reads against the two-second p95 target and writes against the three-second p95 target.
+- [ ] `BE-0812` Load-test dashboards and normal reports against the five-second target.
+- [ ] `BE-0813` Test large exports, job throughput, retry storms, scheduled exception detection, and provider outages.
+- [ ] `BE-0814` Review query plans and add or revise indexes based on measured slow queries rather than assumptions.
+- [ ] `BE-0815` Add safe caching only where authorization, invalidation, verification state, timezone, and policy version remain correct.
+- [ ] `BE-0816` Add health, readiness, dependency, job-queue, and migration-version checks.
+
+### Observability and Operations
+
+- [ ] `BE-0820` Implement structured logs with correlation ID, safe actor/resource references, severity, duration, and outcome.
+- [ ] `BE-0821` Implement error monitoring and alerting for authentication anomalies, authorization denials, job failures, export failures, integration failures, and database health.
+- [ ] `BE-0822` Implement metrics for request latency/error rate, connection-pool health, job lag, notification delivery, exports, and integration retries.
+- [ ] `BE-0823` Ensure observability data contains no credentials, session tokens, protected files, private evaluations, salary/cost details, or excessive personal data.
+
+### Backup, Recovery, and Security Review
+
+- [ ] `BE-0830` Define and obtain approval for availability, recovery-time objective, recovery-point objective, backup frequency, encryption, retention, and ownership.
+- [ ] `BE-0831` Automate and monitor MySQL and protected-file backups in the target environment.
+- [ ] `BE-0832` Restore a production-like backup into an isolated environment and reconcile records, files, permissions, and audit history.
+- [ ] `BE-0833` Document database, file, job, integration, credential, and application recovery order and responsibilities.
+- [ ] `BE-0834` Run dependency, secret, configuration, authorization, injection, file-upload, session, rate-limit, and common web security reviews.
+- [ ] `BE-0835` Resolve all critical/high findings and document accepted lower-risk findings with owner and review date.
+
+### Phase 8 Exit Criteria
+
+- [ ] Automated suites pass with stable, isolated data and no unexplained flaky tests.
+- [ ] Performance targets pass at approved representative load.
+- [ ] Backup restoration and operational recovery are demonstrated.
+- [ ] No unresolved critical/high security finding remains.
+
+## Phase 9 - Production Readiness and Frontend Cutover
+
+### Frontend Integration
+
+- [ ] `BE-0901` Replace frontend mock authentication with real server authentication while preserving approved UI states.
+- [ ] `BE-0902` Replace mock organization, project, task, timesheet, remark, WFH, leave, attendance, workload, evaluation, report, Finance, notification, search, document, and settings adapters incrementally.
+- [ ] `BE-0903` Remove direct fixture dependencies from production paths while retaining deterministic fixtures for tests and demos.
+- [ ] `BE-0904` Verify frontend error, permission, loading, locked, retry, job-progress, and success states against real backend responses.
+- [ ] `BE-0905` Reconcile dashboard, timesheet, report, evaluation, and Finance totals for the same seeded scenarios.
+
+### Data Migration and Release
+
+- [ ] `BE-0910` Inventory source employee, division, assignment, holiday, leave-balance, project, task, cost, and opening-period data supplied by business owners.
+- [ ] `BE-0911` Define mapping, validation, duplicate handling, rejection reporting, dry-run, approval, and rollback strategy for each imported dataset.
+- [ ] `BE-0912` Implement idempotent migration/import commands with audit records and no uncontrolled direct production edits.
+- [ ] `BE-0913` Run rehearsal migration against a production-like environment and obtain owner sign-off on totals and rejected records.
+- [ ] `BE-0914` Define deployment, migration order, maintenance mode if required, smoke tests, rollback triggers, and responsible owners.
+- [ ] `BE-0915` Configure production secrets, domains, TLS, cookies, database users, storage, email, jobs, monitoring, alerts, and backups.
+- [ ] `BE-0916` Run production smoke tests for authentication, role access, time entry, timer, correction, verification, reporting, export, file access, and audit.
+
+### Documentation and Handoff
+
+- [ ] `BE-0920` Document local setup, environment variables, migrations, seeds, tests, jobs, file storage, email, and integration configuration.
+- [ ] `BE-0921` Document domain calculations, authorization policies, period verification/amendment, evaluation weighting, and financial rules.
+- [ ] `BE-0922` Document API and webhook contracts, error codes, idempotency, rate limits, and integration recovery.
+- [ ] `BE-0923` Create operational runbooks for failed jobs, stuck exports, notification failure, database saturation, storage outage, integration outage, backup failure, and security incident.
+- [ ] `BE-0924` Train designated Super Administrator, HR, Finance, support, and operations users on sensitive workflows and recovery paths.
+- [ ] `BE-0925` Record stakeholder acceptance, known limitations, deferred items, owners, and post-launch review dates.
+
+### Phase 9 Exit Criteria
+
+- [ ] All production frontend flows use real backend services and no production route depends on mock data.
+- [ ] Migration, smoke, security, performance, and recovery gates pass in the target environment.
+- [ ] Business owners approve calculation, attendance, verification, evaluation, financial, and permission behavior.
+- [ ] Operations can monitor, support, back up, restore, and safely roll back the application.
+
+## 5. Backend Acceptance Scenarios
+
+### Time and Calculation
+
+- [ ] `BAC-TIME-01` Three valid entries totaling 3 hours for PowerInAI, 2 hours for Government Projects, and 2 hours for WesternCF plus one recognized break hour must produce 7 active hours, an 8-hour total, Complete status, and correct contribution totals.
+- [ ] `BAC-TIME-02` Active time of 6:59 plus one break hour must produce Under-time.
+- [ ] `BAC-TIME-03` Any total above 8:00 must require an overtime reason and produce Overtime until and including exactly 12:00.
+- [ ] `BAC-TIME-04` A total above 12:00 must require a critical explanation and enqueue Team Lead and HR notifications exactly once.
+- [ ] `BAC-TIME-05` Overlapping entries must be rejected across different divisions as well as within one division.
+- [ ] `BAC-TIME-06` Two concurrent timer-start requests must result in exactly one active timer.
+- [ ] `BAC-TIME-07` Repeated timer-stop or save requests with the same idempotency key must not duplicate time.
+- [ ] `BAC-TIME-08` A verified period must reject ordinary edits; an authorized amendment must preserve old/new values, reason, actor, and recalculated results.
+
+### Access and Privacy
+
+- [ ] `BAC-AUTH-01` An Employee must be unable to read or mutate another employee's private records through actions, routes, search, exports, jobs, or file identifiers.
+- [ ] `BAC-AUTH-02` A Team Lead must be limited to effective assigned employee, division, team, and project scope.
+- [ ] `BAC-AUTH-03` A Finance user without financial-detail permission must receive hours but no salary, rate, budget, or labour-cost fields.
+- [ ] `BAC-AUTH-04` Government-project data must not be discoverable by unauthorized users through counts, errors, timings, search, notifications, files, or exports.
+- [ ] `BAC-AUTH-05` Management/View-Only must be unable to mutate any protected business record.
+- [ ] `BAC-AUTH-06` Material authentication, permission, financial, evaluation, file, verification, override, and export events must produce protected audit evidence.
+
+### HR and Workflows
+
+- [ ] `BAC-HR-01` Approved full-day leave and holidays must not produce a missing-timesheet exception.
+- [ ] `BAC-HR-02` Half-day leave must proportionally adjust required active and scheduled durations.
+- [ ] `BAC-HR-03` Approved WFH must affect attendance context but must not create active time or a break record.
+- [ ] `BAC-HR-04` Team Lead request decisions and HR overrides must enforce effective scope, reason, audit, and notification rules.
+- [ ] `BAC-HR-05` Evaluation facts must reconcile to authoritative time, task, leave, WFH, assignment, and remark data for the period.
+- [ ] `BAC-HR-06` Unpublished evaluations must remain inaccessible to Employees until HR publication.
+
+### Reporting and Operations
+
+- [ ] `BAC-RPT-01` Employee-, division-, project-, and task-grouped reports must reconcile to the same authorized active-time total for identical filters.
+- [ ] `BAC-RPT-02` Dashboard, report, export, evaluation, and Finance results must agree for the same period, timezone, and policy version.
+- [ ] `BAC-RPT-03` Excel, CSV, PDF, and print data must contain only authorized fields and records and must record export history.
+- [ ] `BAC-RPT-04` Repeated export and webhook operations must be idempotent and recover safely after worker or provider failure.
+- [ ] `BAC-OPS-01` A production-like backup must restore database records, protected file references, permissions, jobs, and audit history within the approved recovery objectives.
+- [ ] `BAC-OPS-02` Normal reads, writes, dashboards, and reports must meet the approved p95 targets at representative load.
+
+## 6. Dependencies and Required Decisions
+
+| Dependency or decision | Needed by | Owner/approver |
+|---|---|---|
+| Final frontend service interfaces and view models | Phase 0 and frontend cutover | Frontend lead and backend lead |
+| ORM/query builder, migration approach, and MySQL runtime settings | Phase 1 | Backend lead |
+| Authentication/session and 2FA implementation | Phase 2 | Backend lead and security owner |
+| Job runner and scheduling model | Phases 4, 6, and 7 | Backend/operations leads |
+| File/object storage and malware-scanning approach | Phases 3 and 7 | Operations and security owners |
+| Email/notification provider | Phase 7 | Product and operations owners |
+| Authoritative employee, assignment, holiday, leave, and project data | Phases 1, 5, and 9 | HR and product owner |
+| Payroll periods, verification, retention, and amendment policy | Phases 4, 6, and 9 | HR and Finance |
+| Cost-rate, currency, billable, budget, and payroll-field rules | Phase 6 | Finance |
+| Availability, RTO, RPO, backup retention, and target deployment | Phases 0, 8, and 9 | Product and operations owners |
+| Government-project and sensitive-field access policy | Phases 2 onward | Security and business owners |
+| External provider credentials and API approvals | Phase 7 | Product, security, and provider owners |
+
+## 7. Risks and Required Mitigations
+
+| Risk | Impact | Required mitigation |
+|---|---|---|
+| Business logic implemented in UI or route handlers | Divergent calculations and hard-to-test behavior | Centralize rules in domain/application services and share them across every server boundary. |
+| Weak cross-division authorization | Exposure of employee or government-project data | Deny by default and test every role, scope, field, file, search, export, and job boundary. |
+| Floating-point duration or money storage | Incorrect time and payroll totals | Use integer durations and fixed-precision decimals with explicit currency. |
+| Timezone or cross-midnight ambiguity | Incorrect daily status and overtime | Store UTC instants plus local work date, timezone, and policy version; test boundaries. |
+| Race conditions in timers or verification | Duplicate time or changing payroll totals | Use database constraints, transactions, idempotency, locks/version checks, and concurrency tests. |
+| Policy edits alter history | Reports no longer reproduce | Version policies and bind verified calculations to the applied version. |
+| Async work inside request lifecycle | Timeouts and lost exports/notifications | Use a durable job mechanism with retries, idempotency, monitoring, and recovery. |
+| Export/search aggregation leaks data | Sensitive information exposure | Apply authorization before aggregation and recheck protected downloads. |
+| Direct deletion breaks history | Missing payroll and audit evidence | Use deactivation/versioning and restrict audited hard deletion to safe, unreferenced data. |
+| Frontend contracts drift during backend work | Rework and inconsistent errors | Version service contracts, add contract tests, and integrate feature by feature. |
+
+## 8. Current Progress Summary
+
+| Phase | Status | Completed/Total |
+|---:|---|---:|
+| Phase 0 - Architecture and Delivery Foundation | In progress | 5/25 |
+| Phase 1 - MySQL Schema and Data Foundation | Pending | 0/26 |
+| Phase 2 - Authentication, Authorization, and Audit | Pending | 0/23 |
+| Phase 3 - Organization, Projects, and Tasks | Pending | 0/21 |
+| Phase 4 - Timesheet Calculation and Correction | Pending | 0/32 |
+| Phase 5 - HR, Attendance, WFH, Leave, Workload, and Evaluation | Pending | 0/26 |
+| Phase 6 - Reporting, Finance, and Exports | Pending | 0/19 |
+| Phase 7 - Notifications, Documents, Search, and Integrations | Pending | 0/23 |
+| Phase 8 - Quality, Performance, Backup, and Security Hardening | Pending | 0/23 |
+| Phase 9 - Production Readiness and Frontend Cutover | Pending | 0/18 |
+
+Update this table whenever numbered tasks change status. Acceptance scenarios and phase exit criteria are tracked as gates and are not included in the numbered task totals.

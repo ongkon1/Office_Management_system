@@ -1,0 +1,393 @@
+@import "tailwindcss";
+
+/* ==========================================================================
+   Design tokens
+   FE-0107 semantic colour  ·  FE-0109 typography  ·  FE-0110 spacing, radius,
+   border, shadow, elevation, z-index, motion  ·  FE-0111 density
+   FE-0112 light mode is the product theme; dark values are defined but not
+   activated in the MVP.
+
+   Contrast results are recorded in docs/frontend/phase-1/contrast-audit.md
+   (FE-0108). Any change to a colour pair below must re-run that audit.
+   ========================================================================== */
+
+@theme {
+  /* --- Palette: warm off-white canvas, charcoal ink, restrained gold ------ */
+  --color-canvas: #f7f5f1;
+  --color-surface: #ffffff;
+  --color-surface-raised: #ffffff;
+  --color-surface-sunken: #f1eee8;
+  --color-surface-inverse: #1c1b19;
+
+  --color-ink: #1c1b19;
+  --color-ink-muted: #57534e;
+  --color-ink-subtle: #6e6760;
+  --color-ink-inverse: #faf9f7;
+  --color-ink-on-accent: #ffffff;
+
+  --color-border: #e2ddd4;
+  /* Control and input edges: non-text contrast must reach 3:1 (WCAG 1.4.11). */
+  --color-border-strong: #8b8070;
+  --color-border-inverse: #3f3d39;
+
+  --color-primary: #2b2a27;
+  --color-primary-hover: #1c1b19;
+  --color-primary-active: #131211;
+
+  --color-accent: #835e12;
+  --color-accent-hover: #694a0d;
+  --color-accent-subtle: #fdf6e6;
+  --color-accent-border: #e8d4a3;
+
+  /* --- Status: the five day classifications (REQ-TIME-016/017) ----------- */
+  --color-missing: #6b6560;
+  --color-missing-surface: #f2f0ed;
+  --color-missing-border: #d6d1cb;
+
+  --color-undertime: #8a6100;
+  --color-undertime-surface: #fdf5e3;
+  --color-undertime-border: #ecd9a8;
+
+  --color-complete: #1f6b45;
+  --color-complete-surface: #eaf5ef;
+  --color-complete-border: #b3ddc6;
+
+  --color-overtime: #9c4c11;
+  --color-overtime-surface: #fdf0e6;
+  --color-overtime-border: #f0cba9;
+
+  --color-critical: #a51f1f;
+  --color-critical-surface: #fdedec;
+  --color-critical-border: #f2bfbc;
+
+  /* --- Feedback ---------------------------------------------------------- */
+  --color-success: #1f6b45;
+  --color-success-surface: #eaf5ef;
+  --color-warning: #8a6100;
+  --color-warning-surface: #fdf5e3;
+  --color-danger: #a51f1f;
+  --color-danger-surface: #fdedec;
+  --color-info: #1d5c86;
+  --color-info-surface: #e9f2f8;
+
+  --color-focus: #1d5c86;
+
+  /* --- Charts ------------------------------------------------------------
+     Ordered so each series differs from its neighbour in lightness as well as
+     hue (adjacent luminance ratio >= 1.2). That is what keeps a chart legible
+     in greyscale and for a colour-blind viewer, which hue alone does not. */
+  --color-chart-1: #2f5d7c;
+  --color-chart-2: #9a6f16;
+  --color-chart-3: #43506b;
+  --color-chart-4: #a55a2a;
+  --color-chart-5: #1f6b45;
+  --color-chart-6: #9d5a86;
+
+  /* --- Typography (FE-0109) ---------------------------------------------- */
+  --font-sans: var(--font-dm-sans), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-numeric: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
+
+  --text-display: 2.25rem;
+  --text-display--line-height: 2.5rem;
+  --text-display--letter-spacing: -0.02em;
+  --text-display--font-weight: 600;
+
+  --text-h1: 1.75rem;
+  --text-h1--line-height: 2.125rem;
+  --text-h1--letter-spacing: -0.015em;
+  --text-h1--font-weight: 600;
+
+  --text-h2: 1.375rem;
+  --text-h2--line-height: 1.75rem;
+  --text-h2--letter-spacing: -0.01em;
+  --text-h2--font-weight: 600;
+
+  --text-h3: 1.125rem;
+  --text-h3--line-height: 1.5rem;
+  --text-h3--font-weight: 600;
+
+  --text-body: 0.9375rem;
+  --text-body--line-height: 1.5rem;
+
+  --text-body-sm: 0.875rem;
+  --text-body-sm--line-height: 1.375rem;
+
+  --text-label: 0.8125rem;
+  --text-label--line-height: 1.125rem;
+  --text-label--font-weight: 500;
+
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1rem;
+
+  --text-metric: 1.75rem;
+  --text-metric--line-height: 2rem;
+  --text-metric--letter-spacing: -0.02em;
+  --text-metric--font-weight: 600;
+
+  /* --- Radius (FE-0110) --------------------------------------------------- */
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-full: 9999px;
+
+  /* --- Shadow: a deliberately short scale --------------------------------- */
+  --shadow-xs: 0 1px 2px 0 rgb(28 27 25 / 0.05);
+  --shadow-sm: 0 1px 3px 0 rgb(28 27 25 / 0.08), 0 1px 2px -1px rgb(28 27 25 / 0.06);
+  --shadow-md: 0 4px 12px -2px rgb(28 27 25 / 0.1), 0 2px 6px -2px rgb(28 27 25 / 0.06);
+  --shadow-lg: 0 12px 28px -6px rgb(28 27 25 / 0.14), 0 4px 10px -4px rgb(28 27 25 / 0.08);
+
+  /* --- Motion ------------------------------------------------------------- */
+  --ease-standard: cubic-bezier(0.2, 0, 0.15, 1);
+  --ease-decelerate: cubic-bezier(0, 0, 0.15, 1);
+  --ease-accelerate: cubic-bezier(0.3, 0, 1, 1);
+}
+
+/* --- Scales Tailwind does not namespace -------------------------------- */
+:root {
+  /* 8-point spacing system; 4px half-steps for dense controls. */
+  --space-0: 0;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4rem;
+
+  /* Border widths. */
+  --border-width-thin: 1px;
+  --border-width-thick: 2px;
+
+  /* Elevation and z-index. */
+  --z-base: 0;
+  --z-sticky: 10;
+  --z-shell: 20;
+  --z-dropdown: 30;
+  --z-drawer: 40;
+  --z-dialog: 50;
+  --z-toast: 60;
+  --z-tooltip: 70;
+
+  /* Motion durations: 150-300ms for normal transitions. */
+  --duration-instant: 100ms;
+  --duration-fast: 150ms;
+  --duration-normal: 200ms;
+  --duration-slow: 300ms;
+
+  /* Density (FE-0111). Overridden by [data-density="dense"] below. */
+  --control-height: 2.5rem;
+  --control-height-sm: 2rem;
+  --control-padding-x: 0.875rem;
+  --row-height: 3rem;
+  --row-padding-y: 0.75rem;
+  --section-gap: 1.5rem;
+
+  /* Every interactive target reserves a 44px hit area regardless of density. */
+  --touch-target: 2.75rem;
+
+  --shell-sidebar-width: 16rem;
+  --shell-sidebar-width-collapsed: 4.5rem;
+  --shell-topbar-height: 3.5rem;
+  --shell-bottom-nav-height: 3.75rem;
+  --content-max-width: 90rem;
+
+  color-scheme: light;
+}
+
+/* Compact density for data-heavy screens; touch targets are unchanged. */
+[data-density="dense"] {
+  --control-height: 2.125rem;
+  --control-height-sm: 1.75rem;
+  --control-padding-x: 0.625rem;
+  --row-height: 2.25rem;
+  --row-padding-y: 0.375rem;
+  --section-gap: 1rem;
+}
+
+/* FE-0112: dark values are staged but not activated. The MVP ships light only,
+   so this block is opt-in via [data-theme="dark"] and no media query enables
+   it. Contrast for these pairs is audited before dark mode is ever released. */
+[data-theme="dark"] {
+  --color-canvas: #161513;
+  --color-surface: #1f1e1c;
+  --color-surface-raised: #262523;
+  --color-surface-sunken: #131211;
+  --color-ink: #f5f3ef;
+  --color-ink-muted: #b8b2a8;
+  --color-ink-subtle: #948d82;
+  --color-border: #35332f;
+  --color-border-strong: #4a4741;
+  color-scheme: dark;
+}
+
+/* ==========================================================================
+   Base
+   ========================================================================== */
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    /* Preserve browser zoom: never disable user scaling. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+    /* Page-level horizontal scrolling is never acceptable. */
+    overflow-x: hidden;
+  }
+
+  /* Numbers align in columns and never shift width as they tick. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+
+  :focus-visible {
+    outline: var(--border-width-thick) solid var(--color-focus);
+    outline-offset: 2px;
+    border-radius: var(--radius-xs);
+  }
+
+  /* Remove focus rings for pointer users only; keyboard focus always shows. */
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  ::selection {
+    background-color: var(--color-accent-subtle);
+    color: var(--color-ink);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    text-wrap: balance;
+  }
+}
+
+@layer utilities {
+  /* Skip link: visible only when focused. */
+  .skip-link {
+    position: absolute;
+    left: var(--space-4);
+    top: var(--space-4);
+    z-index: var(--z-toast);
+    transform: translateY(-200%);
+    transition: transform var(--duration-fast) var(--ease-standard);
+  }
+
+  .skip-link:focus-visible {
+    transform: translateY(0);
+  }
+
+  /* An intentional, labelled horizontal scroll region for wide tables. */
+  .table-scroll {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+  }
+
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+}
+
+/* ==========================================================================
+   Motion preferences
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slide-in-left {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: -200% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ==========================================================================
+   Print (report output keeps its meaning without application chrome)
+   ========================================================================== */
+
+@media print {
+  body {
+    background: #fff;
+  }
+
+  [data-print="hide"] {
+    display: none !important;
+  }
+
+  .table-scroll {
+    overflow: visible !important;
+  }
+}
