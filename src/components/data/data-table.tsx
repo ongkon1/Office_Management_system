@@ -178,10 +178,17 @@ export function DataTable<TRow>({
         </ul>
       )}
 
-      {/* Table. Wide content scrolls inside this region, never the page. */}
+      {/*
+        Table. Wide content scrolls inside this region, never the page.
+
+        `min-w-0` is load-bearing and only matters once a table is wide enough
+        to scroll: this is a flex child, whose default `min-width: auto` lets
+        it grow to the table's content width and silently defeats the
+        `overflow-x: auto` that `table-scroll` provides.
+      */}
       <div
         className={cn(
-          'table-scroll rounded-lg border border-border bg-surface',
+          'table-scroll min-w-0 rounded-lg border border-border bg-surface shadow-xs',
           renderMobileCard && 'hidden md:block',
         )}
         tabIndex={0}
@@ -191,7 +198,7 @@ export function DataTable<TRow>({
         <table className="w-full border-collapse text-body-sm">
           <caption className="sr-only">{caption}</caption>
           <thead>
-            <tr className="sticky top-0 z-10 bg-surface-sunken">
+            <tr className="sticky top-0 z-10 border-b-2 border-b-brand bg-surface-sunken">
               {selectable && (
                 <th scope="col" className="w-10 px-3 py-2">
                   <Checkbox

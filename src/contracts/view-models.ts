@@ -176,6 +176,17 @@ export interface QuickActionView {
 /* ------------------------------------------------------------------------- */
 
 export interface TimesheetDayView {
+  /** Present when the day is viewed in another employee's assigned scope. */
+  readonly employee?: EmployeeRef;
+  /** Team Lead-only comparison after an employee clarification/correction. */
+  readonly teamReview?: {
+    readonly clarification: string;
+    readonly correctedValues: readonly {
+      readonly label: string;
+      readonly before: string;
+      readonly after: string;
+    }[];
+  };
   readonly date: IsoDate;
   readonly dateLabel: string;
   readonly summary: TodaySummaryView;

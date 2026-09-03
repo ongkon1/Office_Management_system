@@ -1,46 +1,30 @@
-import Link from 'next/link';
-import { ArrowRight } from 'lucide-react';
-import { Card } from '@/components/feedback/card';
-import { Badge } from '@/components/ui/badge';
-import { PageContainer, PageHeader } from '@/components/layout/page';
+'use client';
+
+import * as React from 'react';
+import { useRouter } from 'next/navigation';
+import { Spinner } from '@/components/ui/progress';
+import { DEFAULT_ROUTE } from '@/components/shell/navigation';
+import { useSession } from '@/features/access/session-provider';
 
 /**
- * A temporary index for the Phase 1 build.
+ * The entry point.
  *
- * Phase 2 replaces this with `/login` and role-based redirection, at which
- * point the only routes reachable without a session are the access screens.
+ * Signed in, it forwards to the role's default route; signed out, to `/login`.
+ * It renders nothing of its own, so there is no landing page to keep in sync
+ * with the dashboards it forwards to.
  */
-export default function Home() {
-  return (
-    <PageContainer width="narrow">
-      <PageHeader
-        title="Multi-Division Timesheet"
-        description="Frontend milestone build. The design system and application shell are in place; feature screens arrive from Phase 2 onward."
-        meta={<Badge tone="accent">Phase 1 · Foundation and design system</Badge>}
-      />
+export default function RootPage() {
+  const { status, user } = useSession();
+  const router = useRouter();
 
-      <div className="mt-6 flex flex-col gap-3">
-        <Link
-          href="/showcase"
-          className="group rounded-lg transition-colors focus-visible:outline-2"
-        >
-          <Card className="transition-colors group-hover:border-border-strong group-hover:bg-surface-sunken">
-            <div className="flex items-center justify-between gap-4">
-              <div className="min-w-0">
-                <h2 className="text-h3 text-ink">Component showcase</h2>
-                <p className="mt-1 text-body-sm text-ink-muted">
-                  Every shared component in its normal, hover, focus, disabled, loading,
-                  empty, error, and dense states, inside the real application shell.
-                </p>
-              </div>
-              <ArrowRight
-                aria-hidden
-                className="size-5 shrink-0 text-ink-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-accent"
-              />
-            </div>
-          </Card>
-        </Link>
-      </div>
-    </PageContainer>
+  React.useEffect(() => {
+    if (status === 'loading') return;
+    router.replace(user ? DEFAULT_ROUTE[user.primaryRole] : '/login');
+  }, [status, user, router]);
+
+  return (
+    <div className="flex min-h-dvh items-center justify-center">
+      <Spinner label="Loading" />
+    </div>
   );
 }

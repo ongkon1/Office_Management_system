@@ -221,7 +221,7 @@ export function StepIndicator({
               <span
                 className={cn(
                   'grid size-7 shrink-0 place-items-center rounded-full border text-caption font-semibold',
-                  complete && 'border-complete bg-complete text-white',
+                  complete && 'border-complete bg-complete text-ink-on-accent',
                   current && 'border-accent bg-accent-subtle text-accent',
                   !complete && !current && 'border-border-strong bg-surface text-ink-subtle',
                 )}

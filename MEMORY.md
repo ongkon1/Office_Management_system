@@ -2,7 +2,7 @@
 
 Durable context for anyone — human or AI — picking up this codebase. It records what the plan files don't: why things are the way they are, what's decided versus assumed, and the rules that are easy to break by accident.
 
-Last updated: **2 September 2026** (end of frontend Phase 1).
+Last updated: **2 September 2026** (end of frontend Phase 3).
 
 ---
 
@@ -83,12 +83,20 @@ src/
     data/ charts/ layout/       Table, filters, charts, page scaffolding
     shell/                      Sidebar, top bar, mobile nav, navigation model
   lib/                          cn, formatters, status presentation
-  features/ services/ fixtures/ Empty placeholders — filled from Phase 2 onward
+  lib/calculation/              THE daily calculation engine and entry validation
+  features/access/              Session provider and store, route-access rules,
+                                auth forms, account-state screens, demo tools
+  features/timesheet/           Views, entry drawer, timer
+  features/tasks/               Task list/detail, divisions, remarks, profile
+  features/dashboard/           Employee dashboard
+  services/mock/                Accounts, auth, store, timesheet, organization
+  fixtures/                     The deterministic demo dataset
   test/                         Vitest setup
 
 scripts/
   contrast-audit.mjs            WCAG gate (reads tokens from globals.css)
   responsive-audit.mjs          Playwright gate at 375/768/1024/1440 px
+  phase2-flows.mjs              Auth and access-control flow gate
 ```
 
 ---
@@ -102,6 +110,12 @@ scripts/
 | `npm run typecheck` | Runs `next typegen` first — Next 16 generates the `LayoutProps` global |
 | `npm run audit:contrast` | WCAG 2.2 AA across every token pairing |
 | `npm run audit:responsive` | Needs a dev server already running |
+| `npm run audit:flows` | Phase 2 auth and access flows. Needs a dev server already running |
+| `npm run audit:flows3` | Phase 3 employee and calculation flows. Needs a dev server already running |
+| `npm run audit:flows4` | Phase 4 Team Lead flows. Needs a dev server already running |
+| `npm run audit:flows5` | Phase 5 HR flows. Needs a dev server already running |
+| `npm run audit:flows6` | Phase 6 Finance and Management flows. Needs a dev server already running |
+| `npm run audit:flows7` | Phase 7 reporting and supporting-module flows. Needs a dev server already running |
 | `npm run test` | Vitest |
 
 Environment: Windows + WAMP, PowerShell. **Not currently a git repository.**
@@ -118,6 +132,12 @@ Environment: Windows + WAMP, PowerShell. **Not currently a git repository.**
 
 > Tailwind scans source text, so an interpolated class (`` `text-${tone}` ``) is never generated and the style silently vanishes. Use an explicit static map — there's one in `src/components/ui/status-indicator.tsx`.
 
+**Mock state the calculation reads lives in the store.** Assignments, holidays and payroll periods are held in `src/services/mock/store.ts` rather than as fixture constants, because HR mutates them and the daily calculation reads them. Adding an assignment must immediately widen which divisions accept time; verifying a period must immediately lock its dates. `mockStore.isDateLocked` is the single lock check.
+
+**Money arithmetic is exact and centralised.** `src/lib/money.ts` is the only place a money value is computed — `bigint` minor units, rounded half-up once at the end, never per row, never `number`. Cost reaches the UI as `RedactableMoneyView`, whose restricted variant carries no value at all, so redaction is enforced by the type rather than by a component remembering to hide something.
+
+**Feature flags are runtime state.** `src/features/settings/flag-store.ts` is what the layout guard and shell read, not `DEMO_FEATURE_FLAGS`. Documents, messages, global search and integrations ship **off** — a screen that looks missing is usually a flag, and `/settings` toggles it.
+
 **Formatting is centralised.** `src/lib/format.ts` is the single implementation of every date, time, duration, money, and percentage rule. No component builds one of those strings by hand — a duration rendered two ways is a defect, and a rounded one is a calculation defect.
 
 **Quality gates are hard.** When an audit fails, fix the token or the component — never lower a threshold, add an exception, or narrow the checked set to make a run pass. The contrast script deliberately parses the real stylesheet rather than holding its own palette copy, so a colour changed without re-checking its pairings fails the build.
@@ -130,13 +150,19 @@ Environment: Windows + WAMP, PowerShell. **Not currently a git repository.**
 |---|---|---|
 | Frontend | 0 — Product and UX foundation | Done (19/19) |
 | Frontend | 1 — Next.js foundation and design system | Done (26/26) |
-| Frontend | 2 — Authentication and role-based shell | **Next** (0/10) |
-| Frontend | 3–9 | Pending |
+| Frontend | 2 — Authentication and role-based shell | Done (10/10) |
+| Frontend | 3 — Employee core experience | Done (28/28) |
+| Frontend | 4 — Team Lead experience | Done (21/21) |
+| Frontend | 5 — HR experience | Done (17/17) |
+| Frontend | 6 — Finance and Management experience | Done (11/11) |
+| Frontend | 7 — Shared reporting and supporting modules | Done (19/19) |
+| Frontend | 8 — Responsive, accessibility and quality hardening | **Next** (0/18) |
+| Frontend | 9 | Pending |
 | Backend | 0–9 | Pending — blocked on frontend contracts |
 
-Phase 2 replaces the temporary index at `/` with `/login` and role-based redirection.
+Gate results: contrast 48/48, responsive and rendered-contrast 268/268, Phase 2 flows 16/16, Phase 3 flows 18/18, Phase 4 flows 20/20, Phase 5 flows 51/51, Phase 6 flows 40/40, Phase 7 flows 55/55, `npm run verify` passing with 213 tests.
 
-Gate results at the end of Phase 1: contrast audit 47/47, responsive audit 8/8 route × width combinations, `npm run verify` passing with 23 tests.
+Sign in at `/login`; every demo account uses `Demo1234!` and the sign-in page carries a picker. Auth fixtures — 2FA code, reset tokens, lockout threshold — are in `docs/frontend/phase-0/demo-setup.md` §1.1.
 
 ---
 
@@ -164,3 +190,24 @@ Later phases harden screens and fixtures around these assumptions, so the cost o
 | Phase 1 | Hand-built charts (inline SVG) instead of a charting library | Full control of the colour-safe series and the always-present data-table equivalent |
 | Phase 1 | Added two custom audit gates | Both found real defects on first run — a 1.70:1 control border, two chart series 1.02 apart in luminance, 8 undersized touch targets, and a component stealing focus on mount |
 | Phase 1 | Native `<select>` rather than a custom listbox | Free platform keyboard behavior, mobile pickers, and screen-reader support |
+| Phase 2 | Session in an external store read via `useSyncExternalStore`, not React state | Hydration flag and user must move atomically; tracking them separately let the guard see "signed out" for one frame and bounce a signed-in user to login |
+| Phase 2 | Denied routes render in place instead of redirecting | Keeps the URL visible, which is the point of direct-route access testing |
+| Phase 2 | Registered placeholder screens for unbuilt destinations | An authorized user following a nav link should not hit a 404 that reads as a defect; unregistered paths still 404 |
+| Phase 3 | One pure calculation engine, materialised nowhere else | The only way `AC-RPT-001`/`-002` reconciliation is achievable; it is a pure function so results are reproducible and exhaustively testable at boundaries |
+| Phase 3 | Registered the type scale with `tailwind-merge` | `twMerge` read `text-body-sm` as a colour and stripped `text-ink-inverse`, shipping a 1.07:1 primary button — a class present in source, removed at runtime |
+| Phase 3 | Rendered-contrast check added to the responsive audit | The token audit proves the palette is sound but cannot see what a component actually renders; only opaque backgrounds are judged, and skipped elements are counted rather than hidden |
+| Phase 4 | `docs/frontend/phase-<n>/verification.md` per phase | Records what was built, which defects the gates caught, and the numbers — so a later phase can trust or re-check them rather than re-deriving |
+| Phase 5 | Assignments, holidays and periods moved from fixture constants into `mockStore` | HR mutates them and the calculation reads them; a copy on either side would let a new assignment or a verified period silently fail to take effect |
+| Phase 5 | `selfEvaluationState` distinguishes `restricted` from `not_submitted` | A single nullable field would let an unauthorized read render identically to an absent one, which is exactly the leak `REQ-NFR-SEC-004` forbids |
+| Phase 5 | `LinkButton` added beside `Button` | Navigation must be an anchor — openable in a new tab and announced as a link — while looking identical; both share one base-class constant so the 44 px hit area cannot drift |
+| Phase 5 | Routes branch by role where one audience is built and another is planned | `/wfh`, `/leave` and `/evaluations` are HR administration now and employee self-service in Phase 7; showing an employee a permission denial would be the wrong explanation |
+| Phase 6 | Money as `bigint` minor units in `src/lib/money.ts` | Rate x minutes / 60 in floating point drifts by fractions of a paisa and produces payroll disputes; one rounding at the end also stops a total being the sum of separately-rounded parts |
+| Phase 6 | `RedactableMoneyView`'s restricted variant carries no value | A nullable money field renders identically to "this cost nothing", and a component could still leak a value it was asked to hide |
+| Phase 6 | `/finance/payroll` and `/finance/reports` relaxed to role-only | `FE-0611` needs restricted-field behaviour *inside* a report; denying the screen makes it unreachable and withholds hours the role is entitled to. Screens wholly about money stay permission-gated |
+| Phase 6 | July 2026 enriched to 46 locked days | Finance defaults to the verified period; two days would have made every cost and billable figure trivially small and hidden the division mix the screens exist to show |
+| Phase 6 | `position: relative` on `.table-scroll` | `sr-only` text is absolutely positioned and escaped a static scroll container, stretching the document's scroll width even though the visible content clipped correctly |
+| Phase 7 | Feature flags moved to a runtime store | Four Phase 7 modules ship off; without a way to switch them on they would be unreachable, and a settings screen whose switches changed nothing would be worse than none. It is also how `FE-0006` is demonstrated rather than asserted |
+| Phase 7 | A report the viewer cannot run is absent, and `getReport` returns not-found | A disabled catalogue entry turns the catalogue into a directory of what other roles can see, which is the same disclosure as the data |
+| Phase 7 | `IntegrationPlaceholderView.state` has only a `not_configured` variant | A demo that appears to be posting to payroll is the specific failure the screen exists to avoid; the type makes the claim impossible |
+| Phase 7 | Print styles assert computed styles in the flow gate | Print behaviour is invisible to every other gate — chrome removal, repeating header rows and page-break avoidance can only be checked under `emulateMedia` |
+| Theme refresh | Full-white and aquatic light theme replaced the warm neutral and gold palette | Aligns the product with a clean enterprise SaaS direction; requested bright teal remains a brand/highlight token while dark teal is used under small white text for WCAG AA contrast |

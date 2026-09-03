@@ -1,4 +1,5 @@
 import * as React from 'react';
+import NextLink from 'next/link';
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
@@ -16,14 +17,22 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   primary:
     'bg-primary text-ink-inverse border border-primary hover:bg-primary-hover active:bg-primary-active',
   secondary:
-    'bg-surface text-ink border border-border-strong hover:bg-surface-sunken active:bg-surface-sunken',
+    'bg-surface text-primary border border-primary hover:border-highlight-hover hover:bg-accent-subtle active:bg-brand-light',
   ghost: 'bg-transparent text-ink border border-transparent hover:bg-surface-sunken',
   accent:
-    'bg-accent text-white border border-accent hover:bg-accent-hover active:bg-accent-hover',
+    'bg-accent text-ink-on-accent border border-accent hover:bg-accent-hover active:bg-primary-active',
   danger:
-    'bg-danger text-white border border-danger hover:brightness-110 active:brightness-95',
+    'bg-danger text-ink-on-accent border border-danger hover:brightness-110 active:brightness-95',
   link: 'bg-transparent text-accent border border-transparent underline underline-offset-2 hover:text-accent-hover',
 };
+
+/** Shared by `Button` and `LinkButton` so a link never drifts from a button. */
+const BASE_CLASSES =
+  'relative inline-flex shrink-0 items-center justify-center rounded-md font-medium ' +
+  'transition-colors duration-150 ease-[cubic-bezier(0.2,0,0.15,1)] ' +
+  'disabled:cursor-not-allowed disabled:opacity-55 ' +
+  // A 44px hit area without a 44px visual box.
+  'after:absolute after:inset-x-0 after:top-1/2 after:h-11 after:-translate-y-1/2 after:content-[""]';
 
 const SIZE_CLASSES: Record<ButtonSize, string> = {
   sm: 'h-8 px-3 text-caption gap-1.5',
@@ -73,11 +82,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         disabled={disabled || loading}
         aria-busy={loading || undefined}
         className={cn(
-          'relative inline-flex shrink-0 items-center justify-center rounded-md font-medium',
-          'transition-colors duration-150 ease-[cubic-bezier(0.2,0,0.15,1)]',
-          'disabled:cursor-not-allowed disabled:opacity-55',
-          // A 44px hit area without a 44px visual box.
-          'after:absolute after:inset-x-0 after:top-1/2 after:h-11 after:-translate-y-1/2 after:content-[""]',
+          BASE_CLASSES,
           VARIANT_CLASSES[variant],
           SIZE_CLASSES[size],
           fullWidth && 'w-full',
@@ -125,3 +130,50 @@ export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
     );
   },
 );
+
+export interface LinkButtonProps
+  extends Omit<React.ComponentProps<typeof NextLink>, 'className'> {
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  iconLeading?: React.ReactNode;
+  iconTrailing?: React.ReactNode;
+  fullWidth?: boolean;
+  className?: string;
+}
+
+/**
+ * A navigation control that looks like a button.
+ *
+ * It is an anchor, not a button with an `onClick` that routes: a destination
+ * must be openable in a new tab, reachable by the browser's own link handling,
+ * and announced as a link. Sharing `BASE_CLASSES` with `Button` keeps the two
+ * visually identical without duplicating the hit-area rule that carries them
+ * past the 24 px minimum target size.
+ */
+export function LinkButton({
+  variant = 'secondary',
+  size = 'md',
+  iconLeading,
+  iconTrailing,
+  fullWidth = false,
+  className,
+  children,
+  ...props
+}: LinkButtonProps) {
+  return (
+    <NextLink
+      className={cn(
+        BASE_CLASSES,
+        VARIANT_CLASSES[variant],
+        SIZE_CLASSES[size],
+        fullWidth && 'w-full',
+        className,
+      )}
+      {...props}
+    >
+      {iconLeading}
+      {children}
+      {iconTrailing}
+    </NextLink>
+  );
+}

@@ -54,6 +54,7 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
         { key: 'timesheets', label: 'My Timesheet', href: '/timesheets', iconKey: 'clock', inMobileBottomNav: true },
         { key: 'tasks', label: 'My Tasks', href: '/tasks', iconKey: 'check-square', inMobileBottomNav: true },
         { key: 'divisions', label: 'My Divisions', href: '/divisions', iconKey: 'building' },
+        { key: 'remarks', label: 'Remarks', href: '/remarks', iconKey: 'message-square' },
       ],
     },
     {
@@ -147,6 +148,13 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
       label: 'Costing',
       items: [
         {
+          key: 'billable',
+          label: 'Billable Analysis',
+          href: '/finance/billable',
+          iconKey: 'chart-pie',
+          permission: 'finance.cost.view',
+        },
+        {
           key: 'project-costs',
           label: 'Project Costs',
           href: '/finance/project-costs',
@@ -162,13 +170,14 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
           flag: 'projectCosting',
           permission: 'finance.cost.view',
         },
+        // Reachable without the cost permission: the money is redacted inside
+        // the screen, and the hours remain usable (`FE-0611`).
         {
           key: 'payroll',
           label: 'Payroll Reports',
           href: '/finance/payroll',
           iconKey: 'receipt',
           flag: 'financeReports',
-          permission: 'finance.cost.view',
         },
         {
           key: 'financial-reports',
@@ -176,7 +185,6 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
           href: '/finance/reports',
           iconKey: 'file-chart-column',
           flag: 'financeReports',
-          permission: 'finance.cost.view',
         },
       ],
     },

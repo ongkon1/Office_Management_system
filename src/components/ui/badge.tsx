@@ -76,7 +76,7 @@ export function CountBadge({
     <span
       className={cn(
         'inline-flex min-w-5 items-center justify-center rounded-full px-1.5',
-        'bg-accent text-caption font-semibold text-white tabular',
+        'bg-accent text-caption font-semibold text-ink-on-accent tabular',
         className,
       )}
       aria-label={label ? `${count} ${label}` : undefined}

@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { Bell, LogOut, Menu, Play, Search, Settings, User, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import type { AppShellView, NavGroupView, NavItemView } from '@/contracts/view-models';
@@ -73,8 +73,8 @@ function NavLink({
         'flex min-h-11 items-center gap-2.5 rounded-md px-2.5 py-2 text-body-sm',
         'transition-colors duration-150',
         active
-          ? 'bg-surface-sunken font-medium text-ink'
-          : 'text-ink-muted hover:bg-surface-sunken hover:text-ink',
+          ? 'border-l-2 border-l-primary bg-accent-subtle font-medium text-ink'
+          : 'border-l-2 border-l-transparent text-ink-muted hover:bg-surface-sunken hover:text-ink',
       )}
     >
       <NavIcon
@@ -119,18 +119,22 @@ function RunningTimerPill({ view }: { view: NonNullable<AppShellView['runningTim
 function TopBar({
   view,
   onOpenDrawer,
+  onOpenSearch,
   onSignOut,
 }: {
   view: AppShellView;
   onOpenDrawer: () => void;
+  onOpenSearch?: () => void;
   onSignOut?: () => void;
 }) {
+  const router = useRouter();
+
   return (
     <header
       data-print="hide"
       className={cn(
         'sticky top-0 z-20 flex h-[var(--shell-topbar-height)] items-center gap-2',
-        'border-b border-border bg-surface/85 px-3 backdrop-blur-md sm:px-4',
+        'border-b border-border bg-surface/95 px-3 shadow-xs backdrop-blur-md sm:px-4',
       )}
     >
       <IconButton
@@ -153,6 +157,7 @@ function TopBar({
         label="Search"
         variant="ghost"
         icon={<Search aria-hidden className="size-4.5" />}
+        onClick={onOpenSearch}
       />
 
       <Link
@@ -175,8 +180,18 @@ function TopBar({
       <DropdownMenu
         label="Account menu"
         items={[
-          { key: 'profile', label: 'Profile', icon: <User aria-hidden className="size-4" />, onSelect: () => {} },
-          { key: 'settings', label: 'Settings', icon: <Settings aria-hidden className="size-4" />, onSelect: () => {} },
+          {
+            key: 'profile',
+            label: 'Profile',
+            icon: <User aria-hidden className="size-4" />,
+            onSelect: () => router.push('/profile'),
+          },
+          {
+            key: 'settings',
+            label: 'Settings',
+            icon: <Settings aria-hidden className="size-4" />,
+            onSelect: () => router.push('/settings'),
+          },
           {
             key: 'sign-out',
             label: 'Sign out',
@@ -259,6 +274,8 @@ function BottomNav({
 export interface AppShellProps {
   view: AppShellView;
   children: React.ReactNode;
+  /** Opens the command palette. Omitted when global search is switched off. */
+  onOpenSearch?: () => void;
   onSignOut?: () => void;
 }
 
@@ -270,7 +287,7 @@ export interface AppShellProps {
  * skip link is the first focusable element on every page so a keyboard user is
  * never forced through the whole navigation to reach content.
  */
-export function AppShell({ view, children, onSignOut }: AppShellProps) {
+export function AppShell({ view, children, onOpenSearch, onSignOut }: AppShellProps) {
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = React.useState(false);
 
@@ -305,7 +322,7 @@ export function AppShell({ view, children, onSignOut }: AppShellProps) {
           data-print="hide"
           className={cn(
             'sticky top-0 hidden h-dvh w-[var(--shell-sidebar-width)] shrink-0 flex-col',
-            'border-r border-border bg-surface md:flex',
+            'border-r border-border bg-surface shadow-xs md:flex',
           )}
         >
           <div className="flex h-[var(--shell-topbar-height)] shrink-0 items-center gap-2.5 border-b border-border px-4">
@@ -372,6 +389,7 @@ export function AppShell({ view, children, onSignOut }: AppShellProps) {
           <TopBar
             view={view}
             onOpenDrawer={() => setDrawerOpen(true)}
+            onOpenSearch={onOpenSearch}
             onSignOut={onSignOut}
           />
           <main

@@ -41,7 +41,7 @@ Status rules:
 
 ### 2.2 Design Direction
 
-- Use a premium enterprise-dashboard style: warm off-white canvas, charcoal navigation and text, restrained gold accent, crisp borders, and controlled elevation.
+- Use a premium enterprise-dashboard style: full white canvas, very light aquatic sections, deep slate text, restrained teal accents, crisp borders, and controlled elevation.
 - Use DM Sans as the initial product typeface, with a system sans-serif fallback.
 - Use subtle translucent or glass surfaces only for navigation, overlays, and selected summary panels; data tables and forms must use solid, high-contrast surfaces.
 - Favor a compact dashboard density while preserving comfortable touch targets and readable forms.
@@ -165,12 +165,12 @@ The `contracts/` files move into the application's import alias during `FE-0102`
 
 ### Design Tokens
 
-- [x] `FE-0107` Create semantic tokens for background, surface, elevated surface, foreground, muted text, border, primary charcoal, gold accent, success, warning, overtime, destructive, critical, focus ring, and chart colours.
+- [x] `FE-0107` Create semantic tokens for white backgrounds, aquatic surfaces and actions, slate text, borders, success, warning, overtime, destructive, critical, focus ring, and chart colours.
 - [x] `FE-0108` Validate text and control contrast in every semantic colour pairing.
 - [x] `FE-0109` Configure DM Sans with a local/system fallback and define the display, heading, body, label, caption, and numeric type scale.
 - [x] `FE-0110` Define the spacing, radius, border, shadow, elevation, z-index, and motion token scales.
 - [x] `FE-0111` Define dense and comfortable control/table density options while keeping minimum touch targets.
-- [x] `FE-0112` Define light mode as the initial product theme and keep tokens ready for a future dark mode without including dark mode in the MVP.
+- [x] `FE-0112` Define the full-white aquatic light theme as the only current product theme; dark mode is outside the approved design scope.
 
 ### Reusable Components
 
@@ -203,7 +203,7 @@ Phase 1 deliverables:
 | Task group | Deliverable |
 |---|---|
 | `FE-0101`–`FE-0106` | Next.js 16 App Router + TypeScript + Tailwind v4; `src/` module folders; `.env.example`; `dev`/`build`/`lint`/`typecheck`/`test`/`verify` scripts; route-level `loading`, `error`, `not-found`; no-index metadata |
-| `FE-0107`–`FE-0112` | `src/app/globals.css` — semantic colour, typography, spacing, radius, shadow, z-index, motion, and density tokens; light theme with dark values staged but inactive |
+| `FE-0107`–`FE-0112` | `src/app/globals.css` — semantic white/aquatic colour system, typography, spacing, radius, shadow, z-index, motion, and density tokens; light theme only |
 | `FE-0113`–`FE-0121` | `src/components/{ui,forms,feedback,data,charts,layout}`; showcase at `/showcase` |
 | `FE-0122`–`FE-0126` | `src/components/shell` — sidebar, top bar, mobile drawer, bottom navigation, permission- and flag-aware navigation model |
 
@@ -211,7 +211,7 @@ Automated gates added in this phase:
 
 | Gate | Command | Result |
 |---|---|---|
-| Contrast audit (`FE-0108`) | `npm run audit:contrast` | 47/47 pass |
+| Contrast audit (`FE-0108`) | `npm run audit:contrast` | 48/48 pass |
 | Responsive audit | `npm run audit:responsive` | 8/8 route × width combinations pass |
 | Type check, lint, tests, build | `npm run verify` | pass (23 tests) |
 
@@ -221,212 +221,267 @@ The remaining exit criterion is a stakeholder sign-off on the showcase, which ca
 
 ### Access Screens
 
-- [ ] `FE-0201` Build the premium login screen with email/employee ID, password, remember-me, password visibility, and help states.
-- [ ] `FE-0202` Build forgot-password and reset-password screens with success, invalid, expired, and retry states.
-- [ ] `FE-0203` Build the two-factor verification screen with code entry, resend timer, recovery guidance, and validation states.
-- [ ] `FE-0204` Build locked, inactive-account, expired-session, unauthorized, and permission-denied screens.
-- [ ] `FE-0205` Ensure authentication forms support password managers, keyboard submission, autofill, and accessible error announcements.
+- [x] `FE-0201` Build the premium login screen with email/employee ID, password, remember-me, password visibility, and help states.
+- [x] `FE-0202` Build forgot-password and reset-password screens with success, invalid, expired, and retry states.
+- [x] `FE-0203` Build the two-factor verification screen with code entry, resend timer, recovery guidance, and validation states.
+- [x] `FE-0204` Build locked, inactive-account, expired-session, unauthorized, and permission-denied screens.
+- [x] `FE-0205` Ensure authentication forms support password managers, keyboard submission, autofill, and accessible error announcements.
 
 ### Mock Session and Role Switching
 
-- [ ] `FE-0206` Implement a local mock session provider using the same consumer interface expected from later server authentication.
-- [ ] `FE-0207` Provide development-only demo account selection for all six roles.
-- [ ] `FE-0208` Redirect each demo user to the correct role dashboard after mocked login.
-- [ ] `FE-0209` Hide unauthorized navigation and actions while retaining explicit permission-denied page states for direct-route testing.
-- [ ] `FE-0210` Build the profile menu, session expiry warning, sign-out confirmation, and recent-login presentation.
+- [x] `FE-0206` Implement a local mock session provider using the same consumer interface expected from later server authentication.
+- [x] `FE-0207` Provide development-only demo account selection for all six roles.
+- [x] `FE-0208` Redirect each demo user to the correct role dashboard after mocked login.
+- [x] `FE-0209` Hide unauthorized navigation and actions while retaining explicit permission-denied page states for direct-route testing.
+- [x] `FE-0210` Build the profile menu, session expiry warning, sign-out confirmation, and recent-login presentation.
 
 ### Phase 2 Exit Criteria
 
-- [ ] Every demo role can enter and leave a mock session and sees the correct shell and default dashboard route.
-- [ ] Restricted routes and actions have demonstrable denied states.
-- [ ] Authentication screens pass mobile, keyboard, validation, and contrast checks.
+- [x] Every demo role can enter and leave a mock session and sees the correct shell and default dashboard route.
+- [x] Restricted routes and actions have demonstrable denied states.
+- [x] Authentication screens pass mobile, keyboard, validation, and contrast checks.
+
+Phase 2 deliverables:
+
+| Task group | Deliverable |
+|---|---|
+| `FE-0201`–`FE-0205` | `src/features/access/` — `auth-layout`, `login-form`, `password-forms`, `two-factor-form`, `account-state`; routes under `src/app/(access)/` |
+| `FE-0206` | `session-provider` + `session-store` implementing the `AuthService` contract; `src/services/mock/auth.ts` |
+| `FE-0207` | `demo-account-picker` and the in-app demo tools panel, both gated by `demo-mode` |
+| `FE-0208` | `DEFAULT_ROUTE` redirection; landing routes `/dashboard`, `/hr`, `/finance` |
+| `FE-0209` | `route-access.ts` rule table plus the guard in `src/app/(app)/layout.tsx`; denied state renders in place, keeping the URL |
+| `FE-0210` | Profile menu wiring, session-expiry warning, sign-out confirmation, recent-login display |
+
+Automated gates:
+
+| Gate | Command | Result |
+|---|---|---|
+| Phase 2 flows | `npm run audit:flows` | 16/16 pass (role routing, denied states, 2FA, account states, sign-out, scoped navigation) |
+| Responsive audit | `npm run audit:responsive` | 28/28 route × width combinations pass |
+| Contrast audit | `npm run audit:contrast` | 48/48 pass |
+| Type check, lint, tests, build | `npm run verify` | pass (48 tests) |
+
+Two demo accounts were added for the locked and inactive sign-in states; both are recorded in `docs/frontend/phase-0/demo-setup.md` §1.1 along with the demo password, 2FA code, and reset-token fixtures.
+
+Routes navigation links to but a later phase builds resolve to a registered "planned screen" placeholder naming the phase and task ids. Unregistered paths still return not-found.
 
 ## Phase 3 - Employee Core Experience
 
 ### Employee Dashboard
 
-- [ ] `FE-0301` Build today's summary for active work, break, total, remaining active time, and progress toward the eight-hour schedule.
-- [ ] `FE-0302` Build today's divisions, active tasks, upcoming deadlines, active timer, and quick actions.
-- [ ] `FE-0303` Build weekly/monthly totals, overtime, missing dates, recent remarks, WFH/leave status, division contribution, and recently completed tasks.
-- [ ] `FE-0304` Add loading, empty, first-use, incomplete-day, complete-day, overtime, critical, and offline dashboard states.
-- [ ] `FE-0305` Make every dashboard metric open the corresponding filtered detail view.
+- [x] `FE-0301` Build today's summary for active work, break, total, remaining active time, and progress toward the eight-hour schedule.
+- [x] `FE-0302` Build today's divisions, active tasks, upcoming deadlines, active timer, and quick actions.
+- [x] `FE-0303` Build weekly/monthly totals, overtime, missing dates, recent remarks, WFH/leave status, division contribution, and recently completed tasks.
+- [x] `FE-0304` Add loading, empty, first-use, incomplete-day, complete-day, overtime, critical, and offline dashboard states.
+- [x] `FE-0305` Make every dashboard metric open the corresponding filtered detail view.
 
 ### Timesheet Views
 
-- [ ] `FE-0310` Build daily, weekly, monthly, calendar, and list view navigation.
-- [ ] `FE-0311` Build the daily timeline with entry blocks, division/project/task labels, locations, descriptions, and completed-work summaries.
-- [ ] `FE-0312` Build weekly and monthly summaries with active work, break, total, missing, under-time, overtime, and critical indicators.
-- [ ] `FE-0313` Build the calendar view with accessible status labels and a compact mobile agenda alternative.
-- [ ] `FE-0314` Build a timesheet filter and search bar for date, division, project, task, location, and status.
-- [ ] `FE-0315` Build empty, no-results, loading, error, locked/verified, and permission states for all timesheet views.
+- [x] `FE-0310` Build daily, weekly, monthly, calendar, and list view navigation.
+- [x] `FE-0311` Build the daily timeline with entry blocks, division/project/task labels, locations, descriptions, and completed-work summaries.
+- [x] `FE-0312` Build weekly and monthly summaries with active work, break, total, missing, under-time, overtime, and critical indicators.
+- [x] `FE-0313` Build the calendar view with accessible status labels and a compact mobile agenda alternative.
+- [x] `FE-0314` Build a timesheet filter and search bar for date, division, project, task, location, and status.
+- [x] `FE-0315` Build empty, no-results, loading, error, locked/verified, and permission states for all timesheet views.
 
 ### Time Entry and Timer
 
-- [ ] `FE-0320` Build a time-entry drawer or page supporting manual start/end entry and direct duration entry.
-- [ ] `FE-0321` Add date, division, project, task, work location, description, completed work, attachment/link, and break inputs.
-- [ ] `FE-0322` Dynamically constrain projects and tasks by the selected division and mock assignment dates.
-- [ ] `FE-0323` Show an immediate calculation preview for entry duration, daily active work, break, total, remaining time, and resulting status.
-- [ ] `FE-0324` Show field-level validation for invalid ranges, overlap, duplicates, inactive projects, unassigned divisions, approved leave, and missing information.
-- [ ] `FE-0325` Require and progressively reveal an overtime reason above eight total hours and a critical explanation above twelve hours.
-- [ ] `FE-0326` Build save-draft, save, cancel, discard-confirmation, and unsaved-change behavior.
-- [ ] `FE-0327` Build copy-previous-entry selection and present copied data as a clearly identified editable draft.
-- [ ] `FE-0328` Build the timer start flow with division/project/task/location context.
-- [ ] `FE-0329` Build global running-timer presentation, elapsed time, pause/stop behavior if approved, and stop-to-draft review.
-- [ ] `FE-0330` Prevent two visually active timers and show recovery UI for a timer restored after refresh.
+- [x] `FE-0320` Build a time-entry drawer or page supporting manual start/end entry and direct duration entry.
+- [x] `FE-0321` Add date, division, project, task, work location, description, completed work, attachment/link, and break inputs.
+- [x] `FE-0322` Dynamically constrain projects and tasks by the selected division and mock assignment dates.
+- [x] `FE-0323` Show an immediate calculation preview for entry duration, daily active work, break, total, remaining time, and resulting status.
+- [x] `FE-0324` Show field-level validation for invalid ranges, overlap, duplicates, inactive projects, unassigned divisions, approved leave, and missing information.
+- [x] `FE-0325` Require and progressively reveal an overtime reason above eight total hours and a critical explanation above twelve hours.
+- [x] `FE-0326` Build save-draft, save, cancel, discard-confirmation, and unsaved-change behavior.
+- [x] `FE-0327` Build copy-previous-entry selection and present copied data as a clearly identified editable draft.
+- [x] `FE-0328` Build the timer start flow with division/project/task/location context.
+- [x] `FE-0329` Build global running-timer presentation, elapsed time, pause/stop behavior if approved, and stop-to-draft review.
+- [x] `FE-0330` Prevent two visually active timers and show recovery UI for a timer restored after refresh.
 
 ### Tasks, Divisions, Remarks, and Profile
 
-- [ ] `FE-0340` Build employee task list views for assigned, pending, in progress, completed, overdue, and upcoming tasks.
-- [ ] `FE-0341` Build task detail with estimate versus actual time, due date, checklist, attachments, completed-work history, supporting members, and add-time action.
-- [ ] `FE-0342` Build My Divisions with primary/additional assignments, Team Lead, allocation, expected hours, dates, and current status.
-- [ ] `FE-0343` Build the employee remarks inbox and remark detail with linked record, correction state, history, and clarification response.
-- [ ] `FE-0344` Build correction editing with locked-field guidance, change summary, and successful resubmission state.
-- [ ] `FE-0345` Build the employee profile view and editable permitted fields, preferences, work mode, and accessibility settings.
+- [x] `FE-0340` Build employee task list views for assigned, pending, in progress, completed, overdue, and upcoming tasks.
+- [x] `FE-0341` Build task detail with estimate versus actual time, due date, checklist, attachments, completed-work history, supporting members, and add-time action.
+- [x] `FE-0342` Build My Divisions with primary/additional assignments, Team Lead, allocation, expected hours, dates, and current status.
+- [x] `FE-0343` Build the employee remarks inbox and remark detail with linked record, correction state, history, and clarification response.
+- [x] `FE-0344` Build correction editing with locked-field guidance, change summary, and successful resubmission state.
+- [x] `FE-0345` Build the employee profile view and editable permitted fields, preferences, work mode, and accessibility settings.
 
 ### Phase 3 Exit Criteria
 
-- [ ] A stakeholder can complete the employee journey from login through dashboard, time entry/timer, calculation, save, remark, correction, and updated summary using realistic mock data.
-- [ ] Cross-division totals and the 7-active-plus-1-break policy are visually unambiguous.
-- [ ] Employee workflows pass responsive and keyboard checks at all target widths.
+- [x] A stakeholder can complete the employee journey from login through dashboard, time entry/timer, calculation, save, remark, correction, and updated summary using realistic mock data.
+- [x] Cross-division totals and the 7-active-plus-1-break policy are visually unambiguous.
+- [x] Employee workflows pass responsive and keyboard checks at all target widths.
+
+Phase 3 deliverables:
+
+| Task group | Deliverable |
+|---|---|
+| Calculation core | `src/lib/calculation/engine.ts` — the single authoritative daily calculation; `validation.ts` for entry rules. 53 unit tests cover `AC-CALC-001`–`007`. |
+| `FE-0301`–`FE-0305` | `src/features/dashboard/employee-dashboard.tsx` |
+| `FE-0310`–`FE-0315` | `src/features/timesheet/timesheet-views.tsx` — week, month, calendar and list views with filters |
+| `FE-0320`–`FE-0327` | `src/features/timesheet/entry-drawer.tsx`, `day-view.tsx` |
+| `FE-0328`–`FE-0330` | `src/features/timesheet/timer-panel.tsx`, `use-timer.ts` |
+| `FE-0340`–`FE-0345` | `src/features/tasks/task-screens.tsx`, `divisions-remarks-profile.tsx` |
+| Data | `src/fixtures/index.ts` (deterministic dataset), `src/services/mock/{store,timesheet,organization,work}.ts` |
+
+Automated gates:
+
+| Gate | Command | Result |
+|---|---|---|
+| Phase 3 flows | `npm run audit:flows3` | 18/18 — DEMO-01, the under-time/overtime/12:00/critical boundaries, leave and holiday exemptions, cross-division overlap, progressive overtime reason, locked period, timer recovery, remark history |
+| Responsive + rendered contrast | `npm run audit:responsive` | 60/60 route × width combinations (now includes authenticated screens) |
+| Contrast tokens | `npm run audit:contrast` | 48/48 |
+| Type check, lint, tests, build | `npm run verify` | pass (101 tests) |
+
+The responsive audit gained a **rendered**-contrast check in this phase. It immediately found a primary button at 1.07:1: `tailwind-merge` treated the custom `text-body-sm` size class as a text *colour* and stripped `text-ink-inverse`, so a class present in the source was removed at runtime. Fixed in `src/lib/cn.ts` by registering the type scale as font sizes.
 
 ## Phase 4 - Team Lead Experience
 
 ### Team Dashboard and Timesheet Review
 
-- [ ] `FE-0401` Build Team Lead metrics for assigned employees, people working today, and Office/WFH/Field/Travel/Leave states.
-- [ ] `FE-0402` Build exception summaries for missing, under-time, overtime, and critical records.
-- [ ] `FE-0403` Build division-hours, project-progress, task, request, workload, recent-entry, and evaluation-status panels.
-- [ ] `FE-0404` Build team timesheet table and mobile cards with employee, date, active work, break, total, division contribution, location, and status.
-- [ ] `FE-0405` Add scoped filters, saved filter state, clear filters, detail navigation, and bulk-safe presentation without adding daily approval controls.
-- [ ] `FE-0406` Build timesheet detail with calculation breakdown, entries, completed work, attachments, anomalies, remarks, and change history.
+- [x] `FE-0401` Build Team Lead metrics for assigned employees, people working today, and Office/WFH/Field/Travel/Leave states.
+- [x] `FE-0402` Build exception summaries for missing, under-time, overtime, and critical records.
+- [x] `FE-0403` Build division-hours, project-progress, task, request, workload, recent-entry, and evaluation-status panels.
+- [x] `FE-0404` Build team timesheet table and mobile cards with employee, date, active work, break, total, division contribution, location, and status.
+- [x] `FE-0405` Add scoped filters, saved filter state, clear filters, detail navigation, and bulk-safe presentation without adding daily approval controls.
+- [x] `FE-0406` Build timesheet detail with calculation breakdown, entries, completed work, attachments, anomalies, remarks, and change history.
 
 ### Remarks and Corrections
 
-- [ ] `FE-0410` Build the one-general-remark composer for a timesheet, task, missing information, overtime, work quality, performance, or correction need.
-- [ ] `FE-0411` Build correction-request confirmation with linked employee/record, requested changes, and notification preview.
-- [ ] `FE-0412` Build open, responded, corrected, and resolved remark states.
-- [ ] `FE-0413` Build the Team Lead review of employee clarification and corrected values.
+- [x] `FE-0410` Build the one-general-remark composer for a timesheet, task, missing information, overtime, work quality, performance, or correction need.
+- [x] `FE-0411` Build correction-request confirmation with linked employee/record, requested changes, and notification preview.
+- [x] `FE-0412` Build open, responded, corrected, and resolved remark states.
+- [x] `FE-0413` Build the Team Lead review of employee clarification and corrected values.
 
 ### Projects and Tasks
 
-- [ ] `FE-0420` Build project list, filters, status/priority presentation, progress, estimate/actual, budget visibility state, and responsive cards.
-- [ ] `FE-0421` Build project create/edit forms with division, code, manager, members, stakeholder, dates, priority, estimate, budget, progress, files, and notes.
-- [ ] `FE-0422` Build project detail overview, team, tasks, time, progress, files, and activity tabs.
-- [ ] `FE-0423` Build task list/board views using only Pending, In Progress, and Completed statuses.
-- [ ] `FE-0424` Build task create/edit with assignee, supporting members, dates, estimate, description, checklist, and attachments.
-- [ ] `FE-0425` Build task detail with actual-time entries, work history, overdue state, comments placeholder, and status change feedback.
+- [x] `FE-0420` Build project list, filters, status/priority presentation, progress, estimate/actual, budget visibility state, and responsive cards.
+- [x] `FE-0421` Build project create/edit forms with division, code, manager, members, stakeholder, dates, priority, estimate, budget, progress, files, and notes.
+- [x] `FE-0422` Build project detail overview, team, tasks, time, progress, files, and activity tabs.
+- [x] `FE-0423` Build task list/board views using only Pending, In Progress, and Completed statuses.
+- [x] `FE-0424` Build task create/edit with assignee, supporting members, dates, estimate, description, checklist, and attachments.
+- [x] `FE-0425` Build task detail with actual-time entries, work history, overdue state, comments placeholder, and status change feedback.
 
 ### Requests, Workload, and Evaluations
 
-- [ ] `FE-0430` Build Team Lead WFH and leave request queues with pending, information-requested, approved, and rejected views.
-- [ ] `FE-0431` Build request detail and decision interfaces with general remark, information request, confirmation, and audited-override display.
-- [ ] `FE-0432` Build workload capacity cards/table showing weekly capacity, assigned, actual, remaining, overallocated, underallocated, and upcoming deadlines.
-- [ ] `FE-0433` Build a responsive workload calendar with division/project context and leave-adjusted capacity.
-- [ ] `FE-0434` Build Team Lead evaluation queue, evaluation form, weighted scoring summary, supporting facts, draft, submit, and read-only submitted states.
+- [x] `FE-0430` Build Team Lead WFH and leave request queues with pending, information-requested, approved, and rejected views.
+- [x] `FE-0431` Build request detail and decision interfaces with general remark, information request, confirmation, and audited-override display.
+- [x] `FE-0432` Build workload capacity cards/table showing weekly capacity, assigned, actual, remaining, overallocated, underallocated, and upcoming deadlines.
+- [x] `FE-0433` Build a responsive workload calendar with division/project context and leave-adjusted capacity.
+- [x] `FE-0434` Build Team Lead evaluation queue, evaluation form, weighted scoring summary, supporting facts, draft, submit, and read-only submitted states.
 
 ### Phase 4 Exit Criteria
 
-- [ ] A Team Lead can review team status, inspect exceptions, request a correction, manage projects/tasks, decide a request, and complete an evaluation with mock data.
-- [ ] The interface contains no daily timesheet approval action.
-- [ ] All Team Lead data and actions visually communicate assigned scope.
+- [x] A Team Lead can review team status, inspect exceptions, request a correction, manage projects/tasks, decide a request, and complete an evaluation with mock data.
+- [x] The interface contains no daily timesheet approval action.
+- [x] All Team Lead data and actions visually communicate assigned scope.
+
+Phase 4 evidence is recorded in `docs/frontend/phase-4/verification.md`: Team Lead flows 20/20, responsive route/width combinations 112/112, rendered contrast 6,628 elements checked, and the complete verification gate passing with 105 tests and a 26-route build.
 
 ## Phase 5 - HR Experience
 
 ### HR Dashboard and Employees
 
-- [ ] `FE-0501` Build the HR dashboard for active headcount, division count, attendance states, timesheet exceptions, monthly hours, evaluations, WFH trends, workload concerns, and assignments.
-- [ ] `FE-0502` Build employee directory with filters for status, division, Team Lead, employment type, work mode, and incomplete profile.
-- [ ] `FE-0503` Build employee create/edit with identity, employment, contact, office, schedule, work mode, skills, and status fields.
-- [ ] `FE-0504` Build employee detail tabs for overview, assignments, projects, time, attendance, WFH, leave, evaluations, remarks, documents, and audit history.
-- [ ] `FE-0505` Build multi-division assignment management with primary division, Team Lead, allocation, expected weekly hours, dates, active state, and allocation warning.
-- [ ] `FE-0506` Build temporary assignment creation and historical assignment timeline.
+- [x] `FE-0501` Build the HR dashboard for active headcount, division count, attendance states, timesheet exceptions, monthly hours, evaluations, WFH trends, workload concerns, and assignments.
+- [x] `FE-0502` Build employee directory with filters for status, division, Team Lead, employment type, work mode, and incomplete profile.
+- [x] `FE-0503` Build employee create/edit with identity, employment, contact, office, schedule, work mode, skills, and status fields.
+- [x] `FE-0504` Build employee detail tabs for overview, assignments, projects, time, attendance, WFH, leave, evaluations, remarks, documents, and audit history.
+- [x] `FE-0505` Build multi-division assignment management with primary division, Team Lead, allocation, expected weekly hours, dates, active state, and allocation warning.
+- [x] `FE-0506` Build temporary assignment creation and historical assignment timeline.
 
 ### Attendance, Leave, WFH, and Holidays
 
-- [ ] `FE-0510` Build attendance calendar/list views that distinguish Office, WFH, travel, field, training, leave, absence, holiday, and missing timesheet.
-- [ ] `FE-0511` Build WFH administration with scoped filters, employee history, division summary, decisions, completed-work preview, and override UI.
-- [ ] `FE-0512` Build leave administration with balances, request review, half-day display, conflict state, and audited override UI.
-- [ ] `FE-0513` Build company, division-specific, and weekly holiday management views.
-- [ ] `FE-0514` Demonstrate that approved leave/holidays do not appear as missing and half-day leave adjusts the visible requirement.
+- [x] `FE-0510` Build attendance calendar/list views that distinguish Office, WFH, travel, field, training, leave, absence, holiday, and missing timesheet.
+- [x] `FE-0511` Build WFH administration with scoped filters, employee history, division summary, decisions, completed-work preview, and override UI.
+- [x] `FE-0512` Build leave administration with balances, request review, half-day display, conflict state, and audited override UI.
+- [x] `FE-0513` Build company, division-specific, and weekly holiday management views.
+- [x] `FE-0514` Demonstrate that approved leave/holidays do not appear as missing and half-day leave adjusts the visible requirement.
 
 ### Period Verification and Evaluations
 
-- [ ] `FE-0520` Build monthly/payroll-period verification workspace with completeness, exceptions, unresolved corrections, and employee drill-down.
-- [ ] `FE-0521` Build verify-period confirmation showing included dates, policy version, exception count, and lock consequences.
-- [ ] `FE-0522` Build verified, locked, unlock-request, amendment, and amendment-history states.
-- [ ] `FE-0523` Build evaluation-period creation for monthly, quarterly, half-yearly, annual, project, and probation types.
-- [ ] `FE-0524` Build reviewer/employee assignment, progress tracking, reminders, review, and publication states.
-- [ ] `FE-0525` Build evaluation detail with automatic facts, self-evaluation, Team Lead scoring, default weighting, comments, final result, and publication history.
+- [x] `FE-0520` Build monthly/payroll-period verification workspace with completeness, exceptions, unresolved corrections, and employee drill-down.
+- [x] `FE-0521` Build verify-period confirmation showing included dates, policy version, exception count, and lock consequences.
+- [x] `FE-0522` Build verified, locked, unlock-request, amendment, and amendment-history states.
+- [x] `FE-0523` Build evaluation-period creation for monthly, quarterly, half-yearly, annual, project, and probation types.
+- [x] `FE-0524` Build reviewer/employee assignment, progress tracking, reminders, review, and publication states.
+- [x] `FE-0525` Build evaluation detail with automatic facts, self-evaluation, Team Lead scoring, default weighting, comments, final result, and publication history.
+
+Phase 5 evidence is recorded in `docs/frontend/phase-5/verification.md`: HR flows 51/51, responsive route/width combinations 156/156, rendered contrast 10,353 elements checked, and the complete verification gate passing with 126 tests and a 37-route build.
 
 ### Phase 5 Exit Criteria
 
-- [ ] HR can manage a realistic employee assignment, review attendance and requests, verify a period, and publish an evaluation in the frontend demo.
-- [ ] Locked and amended period states are clear and cannot be mistaken for daily approval.
-- [ ] Sensitive evaluation content has explicit loading, unauthorized, unpublished, and read-only states.
+- [x] HR can manage a realistic employee assignment, review attendance and requests, verify a period, and publish an evaluation in the frontend demo.
+- [x] Locked and amended period states are clear and cannot be mistaken for daily approval.
+- [x] Sensitive evaluation content has explicit loading, unauthorized, unpublished, and read-only states.
 
 ## Phase 6 - Finance and Management Experience
 
 ### Finance Dashboard and Analysis
 
-- [ ] `FE-0601` Build Finance metrics for verified employee, division, project, and overtime hours.
-- [ ] `FE-0602` Build protected metric states for project labour cost, division labour cost, billable/non-billable hours, payroll, and budget variance.
-- [ ] `FE-0603` Build employee-hours and overtime tables with payroll-period, employee, division, project, and status filters.
-- [ ] `FE-0604` Build project-cost and division-cost analysis with totals, trends, estimate/budget variance, drill-down, and permission-redacted states.
-- [ ] `FE-0605` Build billable versus non-billable analysis with reconciliation to total verified hours.
-- [ ] `FE-0606` Build payroll-period summary with verification status, exception visibility, export readiness, and audit/export history.
+- [x] `FE-0601` Build Finance metrics for verified employee, division, project, and overtime hours.
+- [x] `FE-0602` Build protected metric states for project labour cost, division labour cost, billable/non-billable hours, payroll, and budget variance.
+- [x] `FE-0603` Build employee-hours and overtime tables with payroll-period, employee, division, project, and status filters.
+- [x] `FE-0604` Build project-cost and division-cost analysis with totals, trends, estimate/budget variance, drill-down, and permission-redacted states.
+- [x] `FE-0605` Build billable versus non-billable analysis with reconciliation to total verified hours.
+- [x] `FE-0606` Build payroll-period summary with verification status, exception visibility, export readiness, and audit/export history.
 
 ### Finance Reports and Management Read-Only Views
 
-- [ ] `FE-0610` Build payroll-ready report preview and export configuration without performing a real export during the frontend phase.
-- [ ] `FE-0611` Build financial report filters, saved presentation state, loading, no-results, unverified warning, and restricted-field behavior.
-- [ ] `FE-0612` Build management dashboard with authorized company, division, employee-summary, time-allocation, and project-progress views.
-- [ ] `FE-0613` Ensure management screens expose no edit, approve, verify, override, or destructive action.
-- [ ] `FE-0614` Add accessible chart alternatives and tabular reconciliation for every financial visualization.
+- [x] `FE-0610` Build payroll-ready report preview and export configuration without performing a real export during the frontend phase.
+- [x] `FE-0611` Build financial report filters, saved presentation state, loading, no-results, unverified warning, and restricted-field behavior.
+- [x] `FE-0612` Build management dashboard with authorized company, division, employee-summary, time-allocation, and project-progress views.
+- [x] `FE-0613` Ensure management screens expose no edit, approve, verify, override, or destructive action.
+- [x] `FE-0614` Add accessible chart alternatives and tabular reconciliation for every financial visualization.
+
+Phase 6 evidence is recorded in `docs/frontend/phase-6/verification.md`: Finance and Management flows 40/40, responsive route/width combinations 200/200, and the complete verification gate passing with 164 tests and a 47-route build.
 
 ### Phase 6 Exit Criteria
 
-- [ ] Finance can move from verified hours to project/division analysis and a payroll-ready preview using mock data.
-- [ ] Cost and salary content can be visibly included or redacted based on mock permissions.
-- [ ] Management can explore authorized summaries through a completely read-only experience.
+- [x] Finance can move from verified hours to project/division analysis and a payroll-ready preview using mock data.
+- [x] Cost and salary content can be visibly included or redacted based on mock permissions.
+- [x] Management can explore authorized summaries through a completely read-only experience.
 
 ## Phase 7 - Shared Reporting and Supporting Modules
 
 ### Reports and Export Experience
 
-- [ ] `FE-0701` Build a report catalogue grouped into Timesheet, HR, Finance, Attendance, WFH, Evaluation, Workload, and Remarks.
-- [ ] `FE-0702` Build a reusable report builder with date, employee, division, project, task, Team Lead, employment type, location, overtime, and status filters.
-- [ ] `FE-0703` Build report preview with applied-filter summary, timezone, policy version, generated timestamp, totals, table, and chart when useful.
-- [ ] `FE-0704` Build export-format selection for Excel, CSV, PDF, and Print with mocked queued, processing, ready, expired, and failed states.
-- [ ] `FE-0705` Build export history with requester, filters, format, timestamp, status, retry, and download permission states.
-- [ ] `FE-0706` Create print styles that remove application chrome and preserve report titles, filters, table headers, totals, and page-break behavior.
+- [x] `FE-0701` Build a report catalogue grouped into Timesheet, HR, Finance, Attendance, WFH, Evaluation, Workload, and Remarks.
+- [x] `FE-0702` Build a reusable report builder with date, employee, division, project, task, Team Lead, employment type, location, overtime, and status filters.
+- [x] `FE-0703` Build report preview with applied-filter summary, timezone, policy version, generated timestamp, totals, table, and chart when useful.
+- [x] `FE-0704` Build export-format selection for Excel, CSV, PDF, and Print with mocked queued, processing, ready, expired, and failed states.
+- [x] `FE-0705` Build export history with requester, filters, format, timestamp, status, retry, and download permission states.
+- [x] `FE-0706` Create print styles that remove application chrome and preserve report titles, filters, table headers, totals, and page-break behavior.
 
 ### Notifications and Search
 
-- [ ] `FE-0710` Build notification centre with role-aware groups, unread count, read/unread behavior, related-record links, loading, empty, and permission-safe content.
-- [ ] `FE-0711` Build global search command and full results page for employees, divisions, projects, tasks, timesheets, remarks, and documents.
-- [ ] `FE-0712` Add search filters, recent searches stored locally for the demo, keyboard navigation, no-results guidance, and protected-result behavior.
+- [x] `FE-0710` Build notification centre with role-aware groups, unread count, read/unread behavior, related-record links, loading, empty, and permission-safe content.
+- [x] `FE-0711` Build global search command and full results page for employees, divisions, projects, tasks, timesheets, remarks, and documents.
+- [x] `FE-0712` Add search filters, recent searches stored locally for the demo, keyboard navigation, no-results guidance, and protected-result behavior.
 
 ### WFH, Leave, Evaluations, Documents, and Messages for Employees
 
-- [ ] `FE-0720` Build employee WFH history, request form, detail, information-requested, approved, rejected, and cancelled presentation.
-- [ ] `FE-0721` Build employee leave balance, history, request form, half-day choice, conflicts, detail, and decision presentation.
-- [ ] `FE-0722` Build employee evaluation list, self-evaluation form, draft state, submitted state, and published-result view.
-- [ ] `FE-0723` Build document library with company/division/project grouping, search, filters, file metadata, preview placeholder, download action, and denied state.
-- [ ] `FE-0724` Build lightweight division/project/direct message and task-comment prototypes for Phase 3, clearly separated from the MVP navigation when disabled.
+- [x] `FE-0720` Build employee WFH history, request form, detail, information-requested, approved, rejected, and cancelled presentation.
+- [x] `FE-0721` Build employee leave balance, history, request form, half-day choice, conflicts, detail, and decision presentation.
+- [x] `FE-0722` Build employee evaluation list, self-evaluation form, draft state, submitted state, and published-result view.
+- [x] `FE-0723` Build document library with company/division/project grouping, search, filters, file metadata, preview placeholder, download action, and denied state.
+- [x] `FE-0724` Build lightweight division/project/direct message and task-comment prototypes for Phase 3, clearly separated from the MVP navigation when disabled.
 
 ### Settings and Administration
 
-- [ ] `FE-0730` Build Super Administrator division management screens and deactivation safeguards.
-- [ ] `FE-0731` Build user/role/permission screens with clear scope and sensitive-permission warnings.
-- [ ] `FE-0732` Build work-hour, break, overtime, holiday, notification, and feature-flag settings screens as frontend prototypes.
-- [ ] `FE-0733` Build audit-log viewer with actor, action, resource, date, scope, filter, before/after detail, and restricted values.
-- [ ] `FE-0734` Build integration settings placeholders for calendars, email, storage, conferencing, biometric, payroll, accounting, SSO, API, and webhooks without simulating a connected service as real.
+- [x] `FE-0730` Build Super Administrator division management screens and deactivation safeguards.
+- [x] `FE-0731` Build user/role/permission screens with clear scope and sensitive-permission warnings.
+- [x] `FE-0732` Build work-hour, break, overtime, holiday, notification, and feature-flag settings screens as frontend prototypes.
+- [x] `FE-0733` Build audit-log viewer with actor, action, resource, date, scope, filter, before/after detail, and restricted values.
+- [x] `FE-0734` Build integration settings placeholders for calendars, email, storage, conferencing, biometric, payroll, accounting, SSO, API, and webhooks without simulating a connected service as real.
+
+Phase 7 evidence is recorded in `docs/frontend/phase-7/verification.md`: shared reporting and supporting-module flows 55/55, responsive route/width combinations 268/268, and the complete verification gate passing with 213 tests and a 61-route build.
 
 ### Phase 7 Exit Criteria
 
-- [ ] Shared reports, export states, notifications, search, and profile/settings patterns are consistent across roles.
-- [ ] Deferred collaboration and integrations are demonstrable without being represented as production-connected features.
-- [ ] All navigation destinations have an intentional page, coming-later state, or feature-flag exclusion.
+- [x] Shared reports, export states, notifications, search, and profile/settings patterns are consistent across roles.
+- [x] Deferred collaboration and integrations are demonstrable without being represented as production-connected features.
+- [x] All navigation destinations have an intentional page, coming-later state, or feature-flag exclusion.
 
 ## Phase 8 - Responsive, Accessibility, and Quality Hardening
 
@@ -510,8 +565,8 @@ A frontend task may be marked `[x]` only when all applicable conditions are true
 - [ ] `DEMO-01` An Employee records time across three divisions and sees 7 active hours plus 1 break hour as a complete 8-hour day.
 - [ ] `DEMO-02` An Employee creates an overtime entry, sees the required reason field, and sees the resulting status throughout the UI.
 - [ ] `DEMO-03` A critical entry above 12 hours shows a required explanation and Team Lead/HR notification previews.
-- [ ] `DEMO-04` A Team Lead finds an exception, adds one general remark, requests correction, and reviews the employee's response.
-- [ ] `DEMO-05` A Team Lead creates a project/task, reviews actual time, decides a WFH request, and inspects workload.
+- [x] `DEMO-04` A Team Lead finds an exception, adds one general remark, requests correction, and reviews the employee's response.
+- [x] `DEMO-05` A Team Lead creates a project/task, reviews actual time, decides a WFH request, and inspects workload.
 - [ ] `DEMO-06` HR manages a multi-division assignment, reviews attendance, verifies a period, and publishes an evaluation.
 - [ ] `DEMO-07` Finance reviews verified hours, protected cost data, project/division totals, and a payroll export preview.
 - [ ] `DEMO-08` Management views authorized summaries without seeing any editing control.
@@ -524,12 +579,12 @@ A frontend task may be marked `[x]` only when all applicable conditions are true
 |---:|---|---:|
 | Phase 0 - Product and UX Foundation | Done | 19/19 |
 | Phase 1 - Next.js Foundation and Design System | Done | 26/26 |
-| Phase 2 - Authentication and Role-Based Shell | Pending | 0/10 |
-| Phase 3 - Employee Core Experience | Pending | 0/28 |
-| Phase 4 - Team Lead Experience | Pending | 0/21 |
-| Phase 5 - HR Experience | Pending | 0/17 |
-| Phase 6 - Finance and Management Experience | Pending | 0/11 |
-| Phase 7 - Shared Reporting and Supporting Modules | Pending | 0/19 |
+| Phase 2 - Authentication and Role-Based Shell | Done | 10/10 |
+| Phase 3 - Employee Core Experience | Done | 28/28 |
+| Phase 4 - Team Lead Experience | Done | 21/21 |
+| Phase 5 - HR Experience | Done | 17/17 |
+| Phase 6 - Finance and Management Experience | Done | 11/11 |
+| Phase 7 - Shared Reporting and Supporting Modules | Done | 19/19 |
 | Phase 8 - Responsive, Accessibility, and Quality Hardening | Pending | 0/18 |
 | Phase 9 - Demo Packaging and Backend Handoff | Pending | 0/14 |
 

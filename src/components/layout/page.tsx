@@ -82,7 +82,7 @@ export function PageHeader({
       {backHref && (
         <Link
           href={backHref}
-          className="inline-flex w-fit items-center gap-1 rounded-xs text-caption text-ink-muted hover:text-ink md:hidden"
+          className="inline-flex min-h-6 w-fit items-center gap-1 rounded-xs text-caption text-ink-muted hover:text-ink md:hidden"
         >
           <ChevronRight aria-hidden className="size-3.5 rotate-180" />
           {backLabel}
@@ -98,7 +98,12 @@ export function PageHeader({
           {meta && <div className="mt-2 flex flex-wrap items-center gap-2">{meta}</div>}
         </div>
         {actions && (
-          <div className="flex shrink-0 flex-wrap items-center gap-2" data-print="hide">
+          // Not `shrink-0`: a header with several actions must be able to
+          // shrink and wrap, or it pushes the document wider than the viewport.
+          <div
+            className="flex min-w-0 flex-wrap items-center gap-2 sm:justify-end"
+            data-print="hide"
+          >
             {actions}
           </div>
         )}

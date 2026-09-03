@@ -63,9 +63,14 @@ describe('buildNavigation', () => {
     });
 
     expect(withoutPermission).not.toContain('/finance/project-costs');
-    expect(withoutPermission).not.toContain('/finance/payroll');
-    // Verified hours remain available either way.
+    expect(withoutPermission).not.toContain('/finance/division-costs');
+    expect(withoutPermission).not.toContain('/finance/billable');
+    // Verified hours remain available either way, and so do payroll and
+    // reports: those screens redact the money inside rather than disappearing,
+    // which is what `FE-0611` requires.
     expect(withoutPermission).toContain('/finance/hours');
+    expect(withoutPermission).toContain('/finance/payroll');
+    expect(withoutPermission).toContain('/finance/reports');
 
     expect(withPermission).toContain('/finance/project-costs');
     expect(withPermission).toContain('/finance/payroll');
@@ -74,7 +79,10 @@ describe('buildNavigation', () => {
   it('drops a group entirely once all of its items are filtered out', () => {
     const groups = buildNavigation({
       role: 'finance_manager',
-      flags: DEMO_FEATURE_FLAGS,
+      // Every costing destination is either permission-gated or behind a
+      // feature flag, so switching both off must remove the group rather than
+      // leaving an empty heading.
+      flags: { ...DEMO_FEATURE_FLAGS, financeReports: false, projectCosting: false },
       permissions: [],
     });
     expect(groups.every((group) => group.items.length > 0)).toBe(true);

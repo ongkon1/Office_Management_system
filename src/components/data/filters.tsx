@@ -121,7 +121,7 @@ export function MultiSelectFilter({
                     className={cn(
                       'grid size-4 shrink-0 place-items-center rounded-xs border',
                       checked
-                        ? 'border-primary bg-primary text-white'
+                        ? 'border-primary bg-primary text-ink-inverse'
                         : 'border-border-strong bg-surface',
                     )}
                   >

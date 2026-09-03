@@ -1,121 +1,101 @@
 # Contrast Audit
 
-Covers `FE-0108`. Verifies every semantic colour pairing in `src/app/globals.css` against WCAG 2.2 AA.
+Covers `FE-0108` and the full-white aquatic theme refresh. It verifies semantic colour pairings in `src/app/globals.css` against WCAG 2.2 AA.
 
 | Field | Value |
 |---|---|
-| Standard | WCAG 2.2 AA — 1.4.3 (text 4.5:1), 1.4.11 (non-text 3:1) |
-| Theme audited | Light (the MVP product theme) |
+| Standard | WCAG 2.2 AA - 1.4.3 (text 4.5:1), 1.4.11 (non-text 3:1) |
+| Theme audited | Full-white aquatic light theme |
 | Command | `npm run audit:contrast` |
 | Script | `scripts/contrast-audit.mjs` |
-| Result | **47/47 pass** |
+| Result | **48/48 pass** |
 
-## 1. How This Is Enforced
+## 1. Enforcement
 
-The audit script parses the colour tokens directly out of `src/app/globals.css` rather than holding its own copy of the palette. A token changed without re-checking its pairings therefore fails the audit instead of shipping silently. The check runs as part of `npm run verify`, so it gates the same pipeline as type checking, linting, tests, and the production build.
+The audit parses colour tokens directly from `src/app/globals.css`. A token change therefore affects the audit automatically. The check runs inside `npm run verify` alongside type checking, linting, tests, and the production build.
 
-Two thresholds are applied:
+Thresholds:
 
-- **4.5:1** for any pairing where the foreground carries text.
-- **3:1** for control borders, focus rings, and chart series — WCAG 1.4.11 non-text contrast.
+- Body text and small control labels require at least 4.5:1.
+- Control borders, focus rings, brand indicators, and chart series require at least 3:1.
+- Adjacent chart series require at least 1.2 luminance separation so charts remain distinguishable when printed or viewed without reliable hue perception.
+- Day status remains shape + text + colour; passing contrast never makes colour the only status signal.
 
-A third check, not required by WCAG but required by this product, is described in section 4.
+## 2. Aquatic Colour Strategy
 
-## 2. Corrections Made During the Audit
+| Purpose | Token | Value | Usage decision |
+|---|---|---:|---|
+| Primary canvas | `--color-canvas` | `#FFFFFF` | Full-white application background |
+| Secondary surface | `--color-surface-sunken` | `#F2FBFA` | Table headers, hover states, secondary sections, disabled surfaces |
+| Brand teal | `--color-brand` | `#0F9D8A` | Indicators, borders, and graphical brand accents |
+| Brand dark | `--color-brand-dark` | `#087F73` | Accessible action and text foundation |
+| Brand light | `--color-brand-light` | `#D9F5F1` | Soft selected and pressed treatment |
+| Highlight | `--color-highlight` | `#14B8A6` | Decorative highlights and input focus border |
+| Highlight hover | `--color-highlight-hover` | `#0D9488` | Aquatic graphical hover state |
+| Soft highlight | `--color-accent-subtle` | `#ECFEFA` | Active navigation, selected rows, subtle callouts |
+| Primary text | `--color-ink` | `#0F172A` | Headings and body text |
+| Secondary text | `--color-ink-muted` | `#475569` | Supporting text |
+| Muted text | `--color-ink-subtle` | `#64748B` | Captions and low-emphasis metadata |
+| Border | `--color-border` | `#E2E8F0` | Cards, tables, separators, and navbar/sidebar edges |
 
-The first run failed five checks. Each was fixed by changing the token, not by lowering the threshold or granting an exception.
+The requested `#0F9D8A` and `#14B8A6` produce only 3.38:1 and 2.49:1 respectively against white, so they cannot carry small white text at the required 4.5:1. Primary and accent buttons therefore use the requested dark aquatic `#087F73`, which gives white labels 4.89:1. The brighter colours remain present for brand indicators, borders, and highlights.
 
-| Token | Before | After | Failure corrected |
-|---|---|---|---|
-| `--color-ink-subtle` | `#78716c` | `#6e6760` | 4.41:1 on canvas — below the 4.5:1 text minimum |
-| `--color-accent` | `#9a6f16` | `#835e12` | 4.14:1 on canvas and 4.19:1 on its own subtle surface |
-| `--color-accent-hover` | `#835e12` | `#694a0d` | Had to move darker to stay distinct from the new accent |
-| `--color-border-strong` | `#cdc6b9` | `#8b8070` | 1.70:1 on surface — control edges were far below 3:1 |
-| `--color-chart-3` … `-6` | reordered | reordered | Chart 3 and 4 differed by only 1.02 in luminance |
+## 3. Audit Results
 
-The border correction is the most visible: a control edge at 1.70:1 is decorative, not perceivable, and every input, select, and table border in the system depended on it. Enterprise dashboards routinely ship this failure because the border still *looks* present to a designer on a calibrated display.
-
-## 3. Results
-
-### 3.1 Text on surfaces
-
-| Pairing | Ratio | Minimum |
-|---|---:|---:|
-| Body text on canvas | 15.81:1 | 4.5 |
-| Body text on surface | 17.21:1 | 4.5 |
-| Body text on sunken surface | 14.86:1 | 4.5 |
-| Muted text on canvas | 7.01:1 | 4.5 |
-| Muted text on surface | 7.63:1 | 4.5 |
-| Muted text on sunken surface | 6.59:1 | 4.5 |
-| Subtle text on canvas | 5.11:1 | 4.5 |
-| Subtle text on surface | 5.57:1 | 4.5 |
-| Inverse text on primary button | 13.64:1 | 4.5 |
-| Inverse text on primary hover | 16.36:1 | 4.5 |
-| Inverse text on inverse surface | 16.36:1 | 4.5 |
-
-### 3.2 Accent
+### Text and Actions
 
 | Pairing | Ratio | Minimum |
 |---|---:|---:|
-| Accent text on surface | 5.87:1 | 4.5 |
-| Accent text on canvas | 5.39:1 | 4.5 |
-| Accent text on accent subtle | 5.46:1 | 4.5 |
-| Accent button label | 5.87:1 | 4.5 |
-| Accent button label on hover | 8.12:1 | 4.5 |
+| Primary text on white canvas/surface | 17.85:1 | 4.5 |
+| Primary text on aquatic-tint surface | 16.96:1 | 4.5 |
+| Secondary text on white | 7.58:1 | 4.5 |
+| Secondary text on aquatic tint | 7.20:1 | 4.5 |
+| Muted text on white | 4.76:1 | 4.5 |
+| White text on primary action | 4.89:1 | 4.5 |
+| White text on primary hover | 6.85:1 | 4.5 |
+| Aquatic link text on white | 4.89:1 | 4.5 |
+| Aquatic link text on soft highlight | 4.69:1 | 4.5 |
 
-### 3.3 Day status
+### Status and Feedback
 
-Each status is checked both on its own tinted surface (badge) and on plain surface (inline text).
+| Status | Text colour | Surface | Ratio | Minimum |
+|---|---:|---:|---:|---:|
+| Missing | `#64748B` | `#F8FAFC` | 4.55:1 | 4.5 |
+| Under-time / Warning | `#92400E` | `#FFFBEB` | 6.84:1 | 4.5 |
+| Complete / Success | `#166534` | `#F0FDF4` | 6.81:1 | 4.5 |
+| Overtime | `#9A3412` | `#FFF7ED` | 6.88:1 | 4.5 |
+| Critical / Error | `#DC2626` | `#FFF7F7` | 4.58:1 | 4.5 |
+| Info | `#075985` | `#F0F9FF` | 7.09:1 | 4.5 |
 
-| Status | On its surface | On surface | Minimum |
+The requested success `#16A34A`, warning `#F59E0B`, error `#DC2626`, and info `#0284C7` remain represented as semantic brand/status tokens. Darker text companions are used where the requested colour does not meet text contrast on a light status surface.
+
+### Controls and Focus
+
+| Pairing | Ratio | Minimum |
+|---|---:|---:|
+| Strong control border on white | 3.20:1 | 3.0 |
+| Strong control border on aquatic tint | 3.04:1 | 3.0 |
+| Dark aquatic focus ring on white | 4.89:1 | 3.0 |
+| Dark aquatic focus ring on aquatic tint | 4.65:1 | 3.0 |
+| Brand indicator on white | 3.38:1 | 3.0 |
+
+Inputs use the requested bright teal focus border plus a dark aquatic outer focus ring. The paired treatment preserves the visual specification and a clearly perceivable keyboard focus indicator.
+
+### Chart Series
+
+| Series | Value | Contrast on white | Separation from previous |
 |---|---:|---:|---:|
-| Missing | 5.05:1 | 5.74:1 | 4.5 |
-| Under-time | 5.10:1 | 5.54:1 | 4.5 |
-| Complete | 5.79:1 | 6.47:1 | 4.5 |
-| Overtime | 5.44:1 | 6.08:1 | 4.5 |
-| Critical | 6.57:1 | 7.46:1 | 4.5 |
+| Chart 1 | `#087F73` | 4.89:1 | - |
+| Chart 2 | `#0F9D8A` | 3.38:1 | 1.45 |
+| Chart 3 | `#0F4C5C` | 9.51:1 | 2.81 |
+| Chart 4 | `#0D9488` | 3.74:1 | 2.54 |
+| Chart 5 | `#155E75` | 7.27:1 | 1.94 |
+| Chart 6 | `#0284C7` | 4.10:1 | 1.77 |
 
-Contrast alone does not satisfy the requirement here. `REQ-TIME-017` forbids communicating these five states by colour at all, so `StatusIndicator` renders a distinct shape and a text label alongside the colour, and `src/components/ui/status-indicator.test.tsx` asserts that every status has both.
+Chart colours stay within teal, cyan, and aquatic blue. A visible legend and complete data table remain available, so colour is not the only route to chart values.
 
-### 3.4 Feedback
+## 4. Scope and Limits
 
-| Pairing | Ratio | Minimum |
-|---|---:|---:|
-| Success text on its surface | 5.79:1 | 4.5 |
-| Warning text on its surface | 5.10:1 | 4.5 |
-| Danger text on its surface | 6.57:1 | 4.5 |
-| Info text on its surface | 6.33:1 | 4.5 |
-
-### 3.5 Non-text (WCAG 1.4.11)
-
-| Pairing | Ratio | Minimum |
-|---|---:|---:|
-| Control border on surface | 3.87:1 | 3.0 |
-| Control border on canvas | 3.56:1 | 3.0 |
-| Control border on sunken surface | 3.35:1 | 3.0 |
-| Focus ring on canvas | 6.59:1 | 3.0 |
-| Focus ring on surface | 7.17:1 | 3.0 |
-| Focus ring on sunken surface | 6.20:1 | 3.0 |
-
-The focus ring is a blue that appears nowhere else in the palette. That is deliberate: focus must never be confused with a status, a selection, or an accent, and it must remain visible on every surface a control can sit on.
-
-## 4. Chart Series Separation
-
-| Series | Hex | On surface | Separation from previous |
-|---|---|---:|---:|
-| chart-1 | `#2f5d7c` | 7.05:1 | — |
-| chart-2 | `#9a6f16` | 4.51:1 | 1.56 |
-| chart-3 | `#43506b` | 8.08:1 | 1.79 |
-| chart-4 | `#a55a2a` | 5.13:1 | 1.58 |
-| chart-5 | `#1f6b45` | 6.47:1 | 1.26 |
-| chart-6 | `#9d5a86` | 4.95:1 | 1.31 |
-
-Adjacent series must differ in **lightness** by at least 1.2, not only in hue. A palette that separates by hue alone collapses into a single grey band when printed, projected, or viewed by someone with a colour-vision deficiency — and division-contribution charts are exactly the sort of thing that gets printed for a payroll meeting. The original order placed a green and a purple 1.02 apart, which is indistinguishable; the series were reordered so each neighbour alternates lighter and darker.
-
-Series colour is still never the only encoding: `ChartContainer` always renders a legend with values and keeps a full data table in the DOM.
-
-## 5. Scope and Limits
-
-- **Light theme only.** Dark values are staged under `[data-theme="dark"]` in `globals.css` but are not activated in the MVP (`FE-0112`), and are not audited here. Auditing them is a prerequisite of ever enabling dark mode.
-- **Token pairings, not rendered screens.** This audit proves the palette is sound. It does not prove that every screen uses the right pairing — for example, placing muted text on an accent surface would be a real failure this script cannot see. Rendered-screen verification is `FE-0813` in Phase 8.
-- **Opacity is not modelled.** Where a component composites a translucent surface (the top bar's `bg-surface/85`, dialog backdrops), the effective ratio differs from the token pair. These are navigation and overlay surfaces carrying no body text; any translucent surface that later carries text must be re-checked against its composited value.
+- This project currently supports only the approved light theme. There is no active or staged dark-theme token override.
+- The token audit verifies declared colour pairings. The responsive browser audit separately checks rendered opaque backgrounds and interactive targets.
+- Translucent overlay scrims are not modelled as text surfaces; their foreground panels remain opaque white.

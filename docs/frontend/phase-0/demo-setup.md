@@ -19,6 +19,22 @@ All values below are **development-only fixtures**. They must never be seeded in
 | 9 | Ayesha Siddika | `EMP-5001` | `ayesha.siddika@demo.local` | Management / View-Only | — | No mutating control anywhere. Drives `DEMO-08`. |
 | 10 | Arif Mahmud | `EMP-9001` | `arif.mahmud@demo.local` | Super Administrator | — | Divisions, users, roles, policies, holidays, audit. |
 | 11 | Sumaiya Noor | `EMP-1004` | `sumaiya.noor@demo.local` | Employee | WesternCF | Temporary assignment plus expired-assignment validation case. |
+| 12 | Rafiq Chowdhury | `EMP-1090` | `rafiq.chowdhury@demo.local` | Employee | Computer Jagat | **Locked** account. Added in Phase 2 so the locked sign-in state is demonstrable. |
+| 13 | Nusrat Jahan | `EMP-1091` | `nusrat.jahan@demo.local` | Employee | Computer Jagat | **Inactive** account. Added in Phase 2 so the deactivated sign-in state is demonstrable. |
+
+### 1.1 Credentials and Auth Fixtures (added in Phase 2)
+
+| Item | Value | Purpose |
+|---|---|---|
+| Password, every account | `Demo1234!` | Shown in the demo account picker on `/login`. |
+| Two-factor code | `123456` | Only Arif Mahmud (Super Administrator) has 2FA enabled, so the verification step is reachable without forcing it on every sign-in. |
+| Failed-attempt lockout | 5 attempts | Demonstrates the lockout path without a fixture account. |
+| Session length | 30 minutes | Long enough to work, short enough to demo. The expiry warning appears at 5 minutes remaining; the demo tools panel can shorten it on demand. |
+| Reset link, valid | `/reset-password?token=demo-valid-token` | Successful reset. |
+| Reset link, expired | `/reset-password?token=demo-expired-token` | Expired-link state. |
+| Reset link, invalid | `/reset-password?token=demo-invalid-token` | Invalid or already-used link state. |
+
+Accounts 12 and 13 are additions to the original Phase 0 set. They exist only to make the locked and inactive sign-in screens (`FE-0204`) demonstrable, and they hold no time, task, or request data.
 
 Rules:
 
@@ -83,7 +99,7 @@ Nadia Rahman's concurrent allocation totals exactly 100%. Sadia Karim's totals 1
 
 | Period | Range | State |
 |---|---|---|
-| July 2026 payroll period | 2026-07-01 – 2026-07-31 | **Verified and locked** by HR, with one audited amendment on 2026-07-14 |
+| July 2026 payroll period | 2026-07-01 – 2026-07-31 | **Verified and locked** by HR, with one audited amendment on 2026-07-14. Carries 46 locked complete days across all four reported employees and five projects, so Finance has a substantive verified period to analyse (`FE-0601`–`FE-0606`) |
 | August 2026 payroll period | 2026-08-01 – 2026-08-31 | Closed for entry, pending HR verification, 4 open exceptions |
 | September 2026 payroll period | 2026-09-01 – 2026-09-30 | **Current and open** |
 

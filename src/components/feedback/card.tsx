@@ -29,7 +29,7 @@ export function Card({
   return (
     <div
       className={cn(
-        'rounded-lg border border-border bg-surface',
+        'rounded-lg border border-border bg-surface shadow-xs',
         elevation === 'raised' && 'shadow-sm',
         PADDING_CLASSES[padding],
         className,
@@ -149,8 +149,8 @@ export function MetricCard({ tile, loading = false, className }: MetricCardProps
       <Link
         href={tile.href}
         className={cn(
-          'group flex flex-col rounded-lg border border-border bg-surface p-4',
-          'transition-colors duration-150 hover:border-border-strong hover:bg-surface-sunken',
+          'group flex flex-col rounded-lg border border-border border-l-2 border-l-brand bg-surface p-4 shadow-xs',
+          'transition-colors duration-150 hover:border-highlight-hover hover:bg-surface-sunken hover:shadow-sm',
           className,
         )}
       >
@@ -161,7 +161,10 @@ export function MetricCard({ tile, loading = false, className }: MetricCardProps
 
   return (
     <div
-      className={cn('flex flex-col rounded-lg border border-border bg-surface p-4', className)}
+      className={cn(
+        'flex flex-col rounded-lg border border-border border-l-2 border-l-brand bg-surface p-4 shadow-xs',
+        className,
+      )}
     >
       {body}
     </div>

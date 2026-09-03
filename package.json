@@ -13,6 +13,12 @@
     "test:watch": "vitest",
     "audit:contrast": "node scripts/contrast-audit.mjs",
     "audit:responsive": "node scripts/responsive-audit.mjs",
+    "audit:flows": "node scripts/phase2-flows.mjs",
+    "audit:flows3": "node scripts/phase3-flows.mjs",
+    "audit:flows4": "node scripts/phase4-flows.mjs",
+    "audit:flows5": "node scripts/phase5-flows.mjs",
+    "audit:flows6": "node scripts/phase6-flows.mjs",
+    "audit:flows7": "node scripts/phase7-flows.mjs",
     "verify": "npm run typecheck && npm run lint && npm run audit:contrast && npm run test && npm run build"
   },
   "dependencies": {

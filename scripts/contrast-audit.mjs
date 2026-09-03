@@ -63,6 +63,7 @@ const PAIRS = [
   ['Accent text on accent subtle', 'accent', 'accent-subtle', 4.5],
   ['Accent button label', 'ink-on-accent', 'accent', 4.5],
   ['Accent button label on hover', 'ink-on-accent', 'accent-hover', 4.5],
+  ['Brand indicator on surface', 'brand', 'surface', 3.0],
   ['Missing status on its surface', 'missing', 'missing-surface', 4.5],
   ['Under-time status on its surface', 'undertime', 'undertime-surface', 4.5],
   ['Complete status on its surface', 'complete', 'complete-surface', 4.5],
