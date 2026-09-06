@@ -284,6 +284,19 @@ export const NOTIFICATIONS: readonly NotificationFixture[] = [
     createdAt: '2026-08-28T08:50:00+06:00',
     isRead: false,
   },
+
+  /* Task review (`FE-0783`), on the same notification type. */
+  {
+    id: 'ntf-60',
+    recipientUserId: 'usr-2001',
+    type: 'request_submitted',
+    title: 'Task raised for your review',
+    body: 'Nadia Rahman raised "Refactor the annotation import script" and cannot record time against it until you approve.',
+    href: '/tasks/tsk-10',
+    relatedLabel: 'Task review',
+    createdAt: '2026-09-01T08:15:00+06:00',
+    isRead: false,
+  },
 ];
 
 /* -------------------------------------------------------------------------- */

@@ -25,6 +25,7 @@ import {
   projectById,
 } from './organization';
 import { summaryFor, weekStart } from './timesheet';
+import { toReviewStateView } from './task-review';
 import { aggregateSummaries } from '@/lib/calculation/engine';
 
 const LATENCY_MS = 200;
@@ -84,6 +85,7 @@ export function toTaskSummary(task: Task): TaskSummaryView {
     isOverdue,
     estimated: toDurationView(task.estimatedMinutes),
     actual: toDurationView(actual),
+    review: toReviewStateView(task),
     variancePercent:
       task.estimatedMinutes > 0
         ? Math.round(((actual - task.estimatedMinutes) / task.estimatedMinutes) * 100)

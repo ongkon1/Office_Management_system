@@ -8,6 +8,7 @@
  * (`REQ-DASH-009`, `REQ-NFR-OPS-003`).
  */
 
+import type { TaskReviewStateView } from './task-review';
 import type {
   AttendanceState,
   DayStatus,
@@ -320,6 +321,12 @@ export interface TaskSummaryView {
   readonly estimated: DurationView;
   readonly actual: DurationView;
   readonly variancePercent: number | null;
+  /**
+   * Present on every task. `not_required` for one a Team Lead assigned; the
+   * other states belong to a task an employee raised for themselves
+   * (`FE-0780`).
+   */
+  readonly review: TaskReviewStateView;
   readonly href: string;
 }
 

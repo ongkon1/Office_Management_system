@@ -254,11 +254,25 @@ A backend task may be marked `[x]` only when all applicable conditions are true:
 - [ ] `BE-0324` Implement task list filters, pagination, sorting, due-date views, and employee/team scopes expected by the frontend.
 - [ ] `BE-0325` Add transaction, conflict, authorization, deactivation, and concurrency tests for organization, project, membership, and task workflows.
 
+### Employee-Raised Tasks
+
+An employee raises a task for themselves and their Team Lead endorses it. Frontend behaviour is built (`FE-0780`-`FE-0784`); this is the server half.
+
+- [ ] `BE-0316` Add the task review state, reviewer, decided-at and note columns, with a constraint that a task created by a non-Team-Lead cannot be persisted as needing no review.
+- [ ] `BE-0317` Enforce that only the creator's own current Team Lead may decide, and that nobody may endorse a task they raised.
+- [ ] `BE-0318` **Refuse a time entry against a task that is not approved**, in the same server-side validation that already refuses an inactive project. This is the rule the whole feature rests on: a filtered task list is a convenience, and the entry endpoint is the control.
+- [ ] `BE-0319` Make the decision idempotent and conflict-safe, and keep it append-only so who endorsed what stays reproducible.
+- [ ] `BE-0320` Handle the Team Lead mapping changing while a task is pending, so a raised task can never become unreviewable.
+- [ ] `BE-0321` Restrict the employee's create payload to their own assigned divisions and active projects, ignoring any assignee or supporting members it carries.
+- [ ] `BE-0322` Audit raise, approve and refuse with actor, role, before/after and reason, and notify the Team Lead on raise and the employee on decision.
+- [ ] `BE-0323` Test the time-entry refusal at every review state, review by the wrong Team Lead, self-endorsement, concurrent decisions, and Team Lead reassignment mid-review.
+
 ### Phase 3 Exit Criteria
 
 - [ ] The frontend employee, division, project, and task mock adapters can be replaced by real services.
 - [ ] Effective assignments and project/task scope are enforced for reads and writes.
 - [ ] Actual project/task hours reconcile to stored valid time entries.
+- [ ] A task an employee raised accepts no time until their own Team Lead has approved it, enforced at the time-entry endpoint.
 
 ## Phase 4 - Timesheet Calculation and Correction
 
@@ -708,8 +722,13 @@ A travel-expense claim. The approval chain is **identical to Phase 10's**, which
 |---:|---|---:|
 | Phase 0 - Architecture and Delivery Foundation | Done | 25/25 |
 | Phase 1 - MySQL Schema and Data Foundation | Done | 26/26 |
+<<<<<<< HEAD
 | Phase 2 - Authentication, Authorization, and Audit | Done | 23/23 |
 | Phase 3 - Organization, Projects, and Tasks | Pending | 0/21 |
+=======
+| Phase 2 - Authentication, Authorization, and Audit | Pending | 0/23 |
+| Phase 3 - Organization, Projects, and Tasks | Pending | 0/29 |
+>>>>>>> 3e21a4f454c265035a95b163addb220dcaa965c9
 | Phase 4 - Timesheet Calculation and Correction | Pending | 0/32 |
 | Phase 5 - HR, Attendance, WFH, Leave, Workload, and Evaluation | Pending | 0/26 |
 | Phase 6 - Reporting, Finance, and Exports | Pending | 0/19 |

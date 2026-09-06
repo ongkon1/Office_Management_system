@@ -502,6 +502,10 @@ export const mockTeamLeadService: TeamLeadService = {
       priority: input.priority, startDate: input.startDate, dueDate: input.dueDate,
       completedDate: existing?.completedDate ?? null, estimatedMinutes: input.estimatedMinutes,
       description: input.description || null, status: existing?.status ?? 'pending',
+      reviewState: existing?.reviewState ?? 'not_required',
+      reviewerEmployeeId: existing?.reviewerEmployeeId ?? null,
+      reviewedAt: existing?.reviewedAt ?? null,
+      reviewNote: existing?.reviewNote ?? null,
       createdAt: existing?.createdAt ?? now, createdBy: existing?.createdBy ?? actorFor(userId), updatedAt: now, updatedBy: actorFor(userId),
     };
     if (existing) mockStore.updateTask(task.id, task as ReturnType<typeof mockStore.tasks>[number]);

@@ -7,6 +7,7 @@
  * incomplete implementation of that requirement, not a style choice.
  */
 
+import { taskAcceptsTime } from '@/contracts/domain';
 import type {
   DurationMinutes,
   IsoDate,
@@ -201,6 +202,27 @@ export function validateEntry(
         code: 'TASK_PROJECT_MISMATCH',
         message: 'That task belongs to a different project.',
         guidance: 'Choose a task from the selected project.',
+      });
+    } else if (!taskAcceptsTime(task.reviewState)) {
+      /*
+       * A task an employee raised for themselves accepts no time until their
+       * Team Lead has endorsed it. Without this, someone could invent a task,
+       * record a full day against it, and have the review happen after the
+       * hours already exist — the same reason an inactive project refuses time
+       * (`REQ-WORK-008`). Filtering the dropdown is not the control; this is.
+       */
+      errors.push({
+        field: 'taskId',
+        code:
+          task.reviewState === 'rejected' ? 'TASK_REVIEW_REJECTED' : 'TASK_AWAITING_REVIEW',
+        message:
+          task.reviewState === 'rejected'
+            ? 'That task was not approved by your Team Lead.'
+            : 'That task is still waiting for your Team Lead to review it.',
+        guidance:
+          task.reviewState === 'rejected'
+            ? 'Choose a different task, or raise a new one.'
+            : 'Record this time once the task is approved, or choose another task.',
       });
     }
   }

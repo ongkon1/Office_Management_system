@@ -2,11 +2,7 @@
 
 Durable context for anyone — human or AI — picking up this codebase. It records what the plan files don't: why things are the way they are, what's decided versus assumed, and the rules that are easy to break by accident.
 
-<<<<<<< HEAD
-Last updated: **6 September 2026** (Backend Phase 1 complete).
-=======
-Last updated: **2 September 2026** (end of frontend Phase 3).
->>>>>>> f5f666db5e9bd3731019b7c923cdc803306a5a16
+Last updated: **6 September 2026** (frontend Phases 0–8 complete including requisition and conveyance; Backend Phase 1 complete).
 
 ---
 
@@ -163,25 +159,22 @@ Environment: Windows + WAMP, PowerShell. **Not currently a git repository.**
 |---|---|---|
 | Frontend | 0 — Product and UX foundation | Done (19/19) |
 | Frontend | 1 — Next.js foundation and design system | Done (26/26) |
-<<<<<<< HEAD
-| Frontend | 2 — Authentication and role-based shell | Pending (0/10) |
-| Frontend | 3–9 | Pending |
-| Backend | 0 — Architecture and delivery foundation | Done (25/25) |
-| Backend | 1 — MySQL schema and data foundation | Next (0/26) |
-| Backend | 2–9 | Pending |
-=======
 | Frontend | 2 — Authentication and role-based shell | Done (10/10) |
 | Frontend | 3 — Employee core experience | Done (28/28) |
 | Frontend | 4 — Team Lead experience | Done (21/21) |
 | Frontend | 5 — HR experience | Done (17/17) |
 | Frontend | 6 — Finance and Management experience | Done (11/11) |
-| Frontend | 7 — Shared reporting and supporting modules | Done (19/19) |
+| Frontend | 7 — Shared reporting and supporting modules | Done (52/52 · requisition, conveyance and employee-raised tasks included) |
 | Frontend | 8 — Responsive, accessibility and quality hardening | Done (17/18 · `FE-0825` awaiting visual review) |
 | Frontend | 9 — Demo packaging and backend handoff | **Next** (0/14) |
-| Backend | 0–9 | Pending — blocked on frontend contracts |
->>>>>>> f5f666db5e9bd3731019b7c923cdc803306a5a16
+| Backend | 0 — Architecture and delivery foundation | Done (25/25) |
+| Backend | 1 — MySQL schema and data foundation | Done (26/26) |
+| Backend | 2 — Authentication, authorization, and audit | **Next** (0/23) |
+| Backend | 3–9 | Pending |
+| Backend | 10 — Requisition | Pending (0/20) — new milestone |
+| Backend | 11 — Conveyance | Pending (0/22) — new milestone, depends on 10 |
 
-Gate results: contrast 48/48, responsive and rendered-contrast 268/268, accessibility 217/217, content-stress 63/63, role journeys 41/41, performance 16/16, Phase 2–7 flows 16/18/20/51/40/55, `npm run verify` passing with 264 tests.
+Gate results: contrast 48/48, responsive and rendered-contrast 300/300 (24,600 elements), accessibility 279/279, content-stress 73/73, role journeys 41/41, performance 16/16, Phase 2–7 flows 16/18/20/51/40/55, requisition 45/45, conveyance 45/45, `npm run verify` passing with 366 tests over a 67-route build.
 
 Sign in at `/login`; every demo account uses `Demo1234!` and the sign-in page carries a picker. Auth fixtures — 2FA code, reset tokens, lockout threshold — are in `docs/frontend/phase-0/demo-setup.md` §1.1.
 
@@ -211,13 +204,6 @@ Later phases harden screens and fixtures around these assumptions, so the cost o
 | Phase 1 | Hand-built charts (inline SVG) instead of a charting library | Full control of the colour-safe series and the always-present data-table equivalent |
 | Phase 1 | Added two custom audit gates | Both found real defects on first run — a 1.70:1 control border, two chart series 1.02 apart in luminance, 8 undersized touch targets, and a component stealing focus on mount |
 | Phase 1 | Native `<select>` rather than a custom listbox | Free platform keyboard behavior, mobile pickers, and screen-reader support |
-<<<<<<< HEAD
-| Backend Phase 0 | Contract inventory maps every current `ServiceRegistry` operation to a server use-case family | Preserves the frontend boundary and exposes missing later-phase contracts before database work |
-| Backend Phase 0 | Domain/application/infrastructure/delivery/composition dependency direction | Keeps calculations, authorization and transactions framework-independent and testable |
-| Backend Phase 0 | Drizzle/mysql2, Better Auth, Zod, BullMQ/Redis, private S3, Resend, Node 24 containers and MySQL 8.4 | Satisfies the documented transaction, security, durable-work, protected-file and deployment criteria while keeping providers behind ports |
-
-Backend Phases 0 and 1 are complete. Architecture evidence lives in `docs/backend/phase-0/`; four checksum-protected MySQL migrations, least-privilege runtime/migrator separation, deterministic development seeds, scoped repository adapters, isolated database builders, and verification evidence live in `drizzle/`, `src/server/`, `scripts/`, and `docs/backend/phase-1/`. Backend Phase 2 is next. Seed identities and organization data are demonstrations, not authoritative production inputs; provider credentials, production domains, capacity sizing, and RTO/RPO remain deployment/business inputs.
-=======
 | Phase 2 | Session in an external store read via `useSyncExternalStore`, not React state | Hydration flag and user must move atomically; tracking them separately let the guard see "signed out" for one frame and bounce a signed-in user to login |
 | Phase 2 | Denied routes render in place instead of redirecting | Keeps the URL visible, which is the point of direct-route access testing |
 | Phase 2 | Registered placeholder screens for unbuilt destinations | An authorized user following a nav link should not hit a 404 that reads as a defect; unregistered paths still 404 |
@@ -236,6 +222,9 @@ Backend Phases 0 and 1 are complete. Architecture evidence lives in `docs/backen
 | Phase 6 | `position: relative` on `.table-scroll` | `sr-only` text is absolutely positioned and escaped a static scroll container, stretching the document's scroll width even though the visible content clipped correctly |
 | Phase 7 | Feature flags moved to a runtime store | Four Phase 7 modules ship off; without a way to switch them on they would be unreachable, and a settings screen whose switches changed nothing would be worse than none. It is also how `FE-0006` is demonstrated rather than asserted |
 | Phase 7 | A report the viewer cannot run is absent, and `getReport` returns not-found | A disabled catalogue entry turns the catalogue into a directory of what other roles can see, which is the same disclosure as the data |
+| Post-8 | An employee-raised task accepts no time until endorsed, enforced in three places | The dropdown, the entry validation and the review service each leave a gap the others cover; without the validation rule someone could raise a task, log a full day and be reviewed afterwards |
+| Post-8 | Task review deliberately does *not* use the shared approval chain | One endorser, and the record stops being a request afterwards. Forcing it in would add a reviewer stage and three roles to a shape with neither, plus a branch in four transition functions for one workflow |
+| Post-8 | Backend suites excluded from the frontend vitest config | The backend config gives integration tests 60s and serial execution; the frontend pattern also matched them and ran them in jsdom at 5s concurrent, so they passed alone and timed out under load |
 | Post-8 | The approval chain extracted to `approval.ts` + `approval-chain.ts` before conveyance was built | Two copies of one workflow drift, and the drift surfaces as a record reaching a reviewer it should not have. The requisition suite was re-run unchanged to prove the extraction preserved behaviour |
 | Post-8 | Conveyance added to frontend Phase 7 and as backend Phase 11 | Requested by the user. It travels the *identical* chain to requisition, so the first task on both sides is to extract that chain into one shared implementation rather than copy it — two copies of one workflow drift, and the drift shows up as a claim reaching a reviewer it should not have |
 | Post-8 | A conveyance receipt is deny-by-default attachment data | `AGENTS.md` §2 lists attachments among the deny-by-default categories, so a receipt must be reachable by exactly the people who can see its claim — including against a direct file id, which is the access path a UI check never covers |
@@ -253,5 +242,9 @@ Backend Phases 0 and 1 are complete. Architecture evidence lives in `docs/backen
 | Phase 8 | `CardHeader` defaults to `h2` | Defaulting to `h3` under the page `h1` skipped a heading level on 14 routes, leaving heading navigation unusable |
 | Phase 8 | The script-transfer budget was removed, not tuned | It measured dev-server compilation order — identical code read 5 MB cold and 1 KB warm. A check that flips with cache state is worse than none; bundle size moves to Phase 9 packaging |
 | Phase 8 | `FE-0825` left at `[~]` | Its measurable half is automated and passing; spacing, alignment and hierarchy need a person to look, and that is the same walkthrough the Phase 1 showcase criterion awaits |
-| Theme refresh | Full-white and aquatic light theme replaced the warm neutral and gold palette | Aligns the product with a clean enterprise SaaS direction; requested bright teal remains a brand/highlight token while dark teal is used under small white text for WCAG AA contrast |
->>>>>>> f5f666db5e9bd3731019b7c923cdc803306a5a16
+| Theme refresh | Full-white and aquatic light theme replaced the warm neutral and gold palette | Superseded by the PowerInAI re-skin above; kept because it records why a brand colour is split by job rather than used at one strength |
+| Backend Phase 0 | Contract inventory maps every current `ServiceRegistry` operation to a server use-case family | Preserves the frontend boundary and exposes missing later-phase contracts before database work |
+| Backend Phase 0 | Domain/application/infrastructure/delivery/composition dependency direction | Keeps calculations, authorization and transactions framework-independent and testable |
+| Backend Phase 0 | Drizzle/mysql2, Better Auth, Zod, BullMQ/Redis, private S3, Resend, Node 24 containers and MySQL 8.4 | Satisfies the documented transaction, security, durable-work, protected-file and deployment criteria while keeping providers behind ports |
+
+Backend Phases 0 and 1 are complete. Architecture evidence lives in `docs/backend/phase-0/`; four checksum-protected MySQL migrations, least-privilege runtime/migrator separation, deterministic development seeds, scoped repository adapters, isolated database builders, and verification evidence live in `drizzle/`, `src/server/`, `scripts/`, and `docs/backend/phase-1/`. Backend Phase 2 is next. Seed identities and organization data are demonstrations, not authoritative production inputs; provider credentials, production domains, capacity sizing, and RTO/RPO remain deployment/business inputs.
