@@ -205,6 +205,85 @@ export const NOTIFICATIONS: readonly NotificationFixture[] = [
     createdAt: '2026-08-05T10:13:20+06:00',
     isRead: true,
   },
+
+  /*
+   * Requisition (`FE-0749`). These reuse `request_submitted` rather than
+   * introducing a type of their own: it is already in `ACTION_TYPES`, so a
+   * requisition waiting on someone lands in "Action required" without a new
+   * grouping rule, and the notification centre needs no change at all.
+   *
+   * Each recipient matches the stage of its requisition. HR, Finance and the
+   * administrator are notified about `req-2` because it has reached them;
+   * nobody is notified about it before the Team Lead approved it.
+   */
+  {
+    id: 'ntf-40',
+    recipientUserId: 'usr-2001',
+    type: 'request_submitted',
+    title: 'Requisition waiting for your review',
+    body: 'Nadia Rahman raised an in-house requisition for a Dell Latitude charger.',
+    href: '/requisitions/req-1',
+    relatedLabel: 'Requisition RQ-2026-001',
+    createdAt: '2026-09-01T10:12:00+06:00',
+    isRead: false,
+  },
+  {
+    id: 'ntf-41',
+    recipientUserId: 'usr-3001',
+    type: 'request_submitted',
+    title: 'Requisition reached HR review',
+    body: 'Second monitor for Tanvir Ahmed, approved by the Team Lead on 28 August.',
+    href: '/requisitions/req-2',
+    relatedLabel: 'Requisition RQ-2026-002',
+    createdAt: '2026-08-28T09:05:00+06:00',
+    isRead: false,
+  },
+  {
+    id: 'ntf-42',
+    recipientUserId: 'usr-4001',
+    type: 'request_submitted',
+    title: 'Requisition reached Finance review',
+    body: 'Second monitor for Tanvir Ahmed, approved by the Team Lead on 28 August.',
+    href: '/requisitions/req-2',
+    relatedLabel: 'Requisition RQ-2026-002',
+    createdAt: '2026-08-28T09:05:00+06:00',
+    isRead: false,
+  },
+  {
+    id: 'ntf-43',
+    recipientUserId: 'usr-9001',
+    type: 'request_submitted',
+    title: 'Requisition reached administrator review',
+    body: 'Standing desk converter raised by Imran Hossain, a Team Lead, so no Team Lead review applies.',
+    href: '/requisitions/req-4',
+    relatedLabel: 'Requisition RQ-2026-004',
+    createdAt: '2026-08-31T17:25:00+06:00',
+    isRead: false,
+  },
+
+  /* Conveyance (`FE-0769`), on the same notification type as requisition. */
+  {
+    id: 'ntf-50',
+    recipientUserId: 'usr-2001',
+    type: 'request_submitted',
+    title: 'Conveyance claim waiting for your review',
+    body: 'Nadia Rahman claimed a journey to Meghna Group on 31 August.',
+    href: '/conveyance/cnv-1',
+    relatedLabel: 'Conveyance CV-2026-001',
+    createdAt: '2026-09-01T09:40:00+06:00',
+    isRead: false,
+  },
+  {
+    id: 'ntf-51',
+    recipientUserId: 'usr-4001',
+    type: 'request_submitted',
+    title: 'Conveyance claim reached Finance review',
+    body: 'Bengal Institute of Technology visit claimed by Tanvir Ahmed, with a receipt attached.',
+    href: '/conveyance/cnv-2',
+    relatedLabel: 'Conveyance CV-2026-002',
+    createdAt: '2026-08-28T08:50:00+06:00',
+    isRead: false,
+  },
 ];
 
 /* -------------------------------------------------------------------------- */

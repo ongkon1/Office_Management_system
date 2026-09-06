@@ -34,7 +34,7 @@ export interface TeamProjectView {
   readonly division: DivisionRef;
   readonly manager: EmployeeRef;
   readonly memberCount: number;
-  readonly stakeholder: string | null;
+  readonly client: string | null;
   readonly startDateLabel: string;
   readonly endDateLabel: string | null;
   readonly priority: Priority;
@@ -126,7 +126,7 @@ export interface ProjectFormInput {
   readonly divisionId: string;
   readonly managerEmployeeId: string;
   readonly memberIds: readonly string[];
-  readonly stakeholder: string;
+  readonly client: string;
   readonly startDate: IsoDate;
   readonly endDate: IsoDate | null;
   readonly priority: Priority;

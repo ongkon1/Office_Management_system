@@ -77,14 +77,15 @@ export function MoneyValue({
   if (!value.visible) {
     return <RestrictedValue reason="Cost values need the financial-detail permission." className={className} />;
   }
+  const classes = `tabular whitespace-nowrap ${emphasis ? 'font-semibold' : ''} ${className ?? ''}`;
+
+  // Only the abbreviated form needs a second representation. Rendering both
+  // when they are identical is redundant markup a screen reader has to skip.
+  if (!compact) return <span className={classes}>{value.display}</span>;
+
   return (
-    <span
-      className={`tabular whitespace-nowrap ${emphasis ? 'font-semibold' : ''} ${className ?? ''}`}
-      // The exact figure stays available to assistive technology and on hover
-      // even where the visible form is abbreviated.
-      title={compact ? value.display : undefined}
-    >
-      <span aria-hidden>{compact ? value.compact : value.display}</span>
+    <span className={classes} title={value.display}>
+      <span aria-hidden>{value.compact}</span>
       <span className="sr-only">{value.display}</span>
     </span>
   );

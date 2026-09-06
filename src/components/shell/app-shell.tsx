@@ -328,7 +328,7 @@ export function AppShell({ view, children, onOpenSearch, onSignOut }: AppShellPr
           <div className="flex h-[var(--shell-topbar-height)] shrink-0 items-center gap-2.5 border-b border-border px-4">
             <span
               aria-hidden
-              className="grid size-7 shrink-0 place-items-center rounded-md bg-primary text-caption font-bold text-ink-inverse"
+              className="brand-mark grid size-7 shrink-0 place-items-center rounded-md text-caption font-bold"
             >
               T
             </span>

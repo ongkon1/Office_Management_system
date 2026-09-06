@@ -118,6 +118,7 @@ Every status renders as **text plus a shape or icon plus colour** — never colo
 | Context | Format | Example |
 |---|---|---|
 | Division, full | Name as configured | `Government Projects` |
+| Client | The project's recorded client name, verbatim | `Meghna Group` — `Not recorded` where the project stores none |
 | Division, dense | Code | `GOV` — with the full name as an accessible name and tooltip |
 | Employee, full | `{Full name}` | `Nadia Rahman` |
 | Employee, with identifier | `{Full name} · {Employee ID}` | `Nadia Rahman · EMP-1001` |

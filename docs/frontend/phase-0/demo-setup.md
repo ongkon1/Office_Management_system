@@ -72,16 +72,31 @@ Nadia Rahman's concurrent allocation totals exactly 100%. Sadia Karim's totals 1
 
 ## 4. Projects
 
-| Project | Code | Division | Manager | Status | Estimated hours | Budget visible to |
-|---|---|---|---|---|---:|---|
-| Vision Platform v2 | `PIA-VP2` | PowerInAI | Imran Hossain | Active | 640 | Finance with `F` |
-| AI Literacy Bootcamp | `PIT-ALB` | PowerInAI Training | Imran Hossain | Active | 220 | Finance with `F` |
-| National Records Digitisation | `GOV-NRD` | Government Projects | Farhana Islam | Active | 900 | Finance with `F`, restricted otherwise |
-| Monthly Issue Production | `CJG-MIP` | Computer Jagat | Imran Hossain | Active | 160 | Finance with `F` |
-| Westbridge Portal Rollout | `WCF-WPR` | WesternCF | Farhana Islam | Active | 380 | Finance with `F` |
-| Legacy Site Maintenance | `PIA-LSM` | PowerInAI | Imran Hossain | **Inactive** | 90 | — |
+| Project | Code | Division | Client | Manager | Status | Estimated hours | Budget visible to |
+|---|---|---|---|---|---|---:|---|
+| Vision Platform v2 | `PIA-VP2` | PowerInAI | Meghna Group | Imran Hossain | Active | 640 | Finance with `F` |
+| AI Literacy Bootcamp | `PIT-ALB` | PowerInAI Training | Bengal Institute of Technology | Imran Hossain | Active | 220 | Finance with `F` |
+| National Records Digitisation | `GOV-NRD` | Government Projects | Ministry of Public Administration | Farhana Islam | Active | 900 | Finance with `F`, restricted otherwise |
+| Monthly Issue Production | `CJG-MIP` | Computer Jagat | *None recorded* | Imran Hossain | Active | 160 | Finance with `F` |
+| Westbridge Portal Rollout | `WCF-WPR` | WesternCF | Westbridge Capital | Farhana Islam | Active | 380 | Finance with `F` |
+| Legacy Site Maintenance | `PIA-LSM` | PowerInAI | Meghna Group | Imran Hossain | **Inactive** | 90 | — |
 
 `PIA-LSM` is inactive so `REQ-WORK-008` (no new time against an inactive project) is demonstrable.
+
+The client column is deliberately uneven, because the client filter on **My
+Timesheet** has to survive all three shapes:
+
+- **Meghna Group** is on two projects in the same division, so a client total
+  that spans projects is demonstrable rather than assumed.
+- **`CJG-MIP` records no client**, so time that cannot be attributed appears
+  under `Not recorded` instead of quietly disappearing from the split.
+- **`GOV-NRD`'s client is a government body**, so a viewer without
+  government-project access never sees that client offered as a filter option —
+  the options are built from the viewer's own recorded time, not from the
+  project list.
+
+Like the rest of this dataset the client names are **invented** and await
+business confirmation (`AGENTS.md` §7).
 
 ## 5. Tasks
 

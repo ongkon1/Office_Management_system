@@ -10,6 +10,8 @@
  * demonstrable rather than described.
  */
 
+import type { ConveyanceClaim } from '@/contracts/conveyance';
+import type { Requisition } from '@/contracts/requisition';
 import type {
   EmployeeDivisionAssignment,
   GeneralRemark,
@@ -32,6 +34,8 @@ import {
   WFH_REQUESTS,
   DAY_REASONS,
 } from '@/fixtures';
+import { REQUISITIONS } from '@/fixtures/requisition';
+import { CONVEYANCE_CLAIMS } from '@/fixtures/conveyance';
 
 const TIMER_KEY = 'oms.timer';
 
@@ -53,6 +57,8 @@ interface MockState {
   assignments: EmployeeDivisionAssignment[];
   holidays: Holiday[];
   periods: TimesheetPeriod[];
+  requisitions: Requisition[];
+  conveyanceClaims: ConveyanceClaim[];
   timer: TimerSession | null;
 }
 
@@ -69,6 +75,8 @@ function seed(): MockState {
     assignments: [...ASSIGNMENTS],
     holidays: [...HOLIDAYS],
     periods: [...PERIODS],
+    requisitions: [...REQUISITIONS],
+    conveyanceClaims: [...CONVEYANCE_CLAIMS],
     timer: null,
   };
 }
@@ -397,6 +405,50 @@ export const mockStore = {
         request.state === 'approved' &&
         request.wfhDate === date,
     );
+  },
+
+  /* --- Requisitions ------------------------------------------------------ */
+
+  requisitions(): readonly Requisition[] {
+    return state.requisitions;
+  },
+
+  findRequisition(id: string): Requisition | undefined {
+    return state.requisitions.find((requisition) => requisition.id === id);
+  },
+
+  addRequisition(requisition: Requisition): void {
+    state.requisitions = [requisition, ...state.requisitions];
+    notify();
+  },
+
+  updateRequisition(id: string, next: Requisition): void {
+    state.requisitions = state.requisitions.map((requisition) =>
+      requisition.id === id ? next : requisition,
+    );
+    notify();
+  },
+
+  /* --- Conveyance --------------------------------------------------------- */
+
+  conveyanceClaims(): readonly ConveyanceClaim[] {
+    return state.conveyanceClaims;
+  },
+
+  findConveyanceClaim(id: string): ConveyanceClaim | undefined {
+    return state.conveyanceClaims.find((claim) => claim.id === id);
+  },
+
+  addConveyanceClaim(claim: ConveyanceClaim): void {
+    state.conveyanceClaims = [claim, ...state.conveyanceClaims];
+    notify();
+  },
+
+  updateConveyanceClaim(id: string, next: ConveyanceClaim): void {
+    state.conveyanceClaims = state.conveyanceClaims.map((claim) =>
+      claim.id === id ? next : claim,
+    );
+    notify();
   },
 
   /** Test seam: restores the fixture state. */

@@ -1,0 +1,12 @@
+import { chromium } from 'playwright';
+const b = await chromium.launch();
+const p = await (await b.newContext({viewport:{width:1400,height:1000}})).newPage();
+await p.goto('http://localhost:3000/login', { waitUntil: 'networkidle' });
+await p.fill('input[name="identifier"]', 'imran.hossain@demo.local');
+await p.fill('input[name="password"]', 'Demo1234!');
+await p.click('button[type="submit"]');
+await p.waitForURL((u) => !new URL(u).pathname.startsWith('/login'));
+await p.goto('http://localhost:3000/team/timesheets/emp-1002/2026-08-24', { waitUntil: 'networkidle' });
+await p.waitForTimeout(1400);
+const t = await p.locator('main').innerText();
+console.log(t.slice(0, 1400));

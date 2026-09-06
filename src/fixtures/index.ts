@@ -208,7 +208,14 @@ function project(
   divisionId: string,
   managerEmployeeId: string,
   estimatedHours: number,
-  options: { active?: boolean; completion?: number; budget?: string } = {},
+  options: {
+    active?: boolean;
+    completion?: number;
+    budget?: string;
+    /** Absent leaves the project without a recorded client, which the client
+     *  filter has to handle rather than hide. */
+    client?: string;
+  } = {},
 ): Project {
   const active = options.active ?? true;
   return {
@@ -217,7 +224,7 @@ function project(
     code,
     divisionId,
     managerEmployeeId,
-    clientOrStakeholder: null,
+    client: options.client ?? null,
     startDate: '2026-01-05',
     endDate: null,
     priority: 'medium',
@@ -239,14 +246,17 @@ export const PROJECTS: readonly Project[] = [
   project('prj-vp2', 'Vision Platform v2', 'PIA-VP2', 'pia', 'emp-2001', 640, {
     completion: 42,
     budget: '3200000.00',
+    client: 'Meghna Group',
   }),
   project('prj-alb', 'AI Literacy Bootcamp', 'PIT-ALB', 'pit', 'emp-2001', 220, {
     completion: 68,
     budget: '900000.00',
+    client: 'Bengal Institute of Technology',
   }),
   project('prj-nrd', 'National Records Digitisation', 'GOV-NRD', 'gov', 'emp-2002', 900, {
     completion: 31,
     budget: '7500000.00',
+    client: 'Ministry of Public Administration',
   }),
   project('prj-mip', 'Monthly Issue Production', 'CJG-MIP', 'cjg', 'emp-2001', 160, {
     completion: 80,
@@ -255,11 +265,15 @@ export const PROJECTS: readonly Project[] = [
   project('prj-wpr', 'Westbridge Portal Rollout', 'WCF-WPR', 'wcf', 'emp-2002', 380, {
     completion: 55,
     budget: '1800000.00',
+    client: 'Westbridge Capital',
   }),
   // Inactive, so `REQ-WORK-008` is demonstrable.
+  // Same client as `prj-vp2`, so a client that spans two projects is
+  // demonstrable rather than assumed.
   project('prj-lsm', 'Legacy Site Maintenance', 'PIA-LSM', 'pia', 'emp-2001', 90, {
     active: false,
     completion: 100,
+    client: 'Meghna Group',
   }),
 ];
 

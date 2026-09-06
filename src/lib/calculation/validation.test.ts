@@ -27,7 +27,7 @@ const ACTIVE_PROJECT: Project = {
   code: 'PIA-VP2',
   divisionId: 'pia',
   managerEmployeeId: 'emp-2001',
-  clientOrStakeholder: null,
+  client: null,
   startDate: '2026-01-01',
   endDate: null,
   priority: 'high',

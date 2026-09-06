@@ -80,6 +80,8 @@ The final route names may be refined without changing the feature ownership belo
 | HR | `/hr`, `/employees`, `/employees/[id]`, `/attendance`, `/hr/timesheets`, `/wfh`, `/leave`, `/evaluations`, `/reports` |
 | Finance | `/finance`, `/finance/hours`, `/finance/overtime`, `/finance/project-costs`, `/finance/division-costs`, `/finance/payroll`, `/finance/reports` |
 | Administration | `/admin/divisions`, `/admin/users`, `/admin/roles`, `/admin/policies`, `/admin/holidays`, `/admin/audit` |
+| Requisition | `/requisitions`, `/requisitions/new`, `/requisitions/[id]` |
+| Conveyance | `/conveyance`, `/conveyance/new`, `/conveyance/[id]` |
 | Collaboration | `/documents`, `/messages` |
 
 ## 4. Milestone Overview
@@ -93,7 +95,7 @@ The final route names may be refined without changing the feature ownership belo
 | 4 | Team Lead experience | Team review, projects/tasks, remarks, corrections, requests, and workload views are demonstrable. |
 | 5 | HR experience | Employees, assignments, attendance, WFH/leave, verification, and evaluation screens are demonstrable. |
 | 6 | Finance and management experience | Hours, overtime, costing, payroll, reports, and read-only management views are demonstrable. |
-| 7 | Shared reporting and supporting modules | Reports, exports, notifications, search, documents, messages, profile, and settings are represented. |
+| 7 | Shared reporting and supporting modules | Reports, exports, notifications, search, documents, messages, profile, settings, requisition, and conveyance are represented. |
 | 8 | Responsive, accessibility, and quality hardening | All agreed flows pass responsive, accessibility, visual, and interaction QA. |
 | 9 | Demo packaging and backend handoff | Stakeholders can review the product, and backend implementation can begin without UI restructuring. |
 
@@ -475,6 +477,100 @@ Phase 6 evidence is recorded in `docs/frontend/phase-6/verification.md`: Finance
 - [x] `FE-0733` Build audit-log viewer with actor, action, resource, date, scope, filter, before/after detail, and restricted values.
 - [x] `FE-0734` Build integration settings placeholders for calendars, email, storage, conferencing, biometric, payroll, accounting, SSO, API, and webhooks without simulating a connected service as real.
 
+### Requisition
+
+Added after Phase 7 was first completed, so the phase is reopened. `FE-0701`-`FE-0734` remain done and are not re-verified by this work.
+
+**Scope.** One screen carrying two request forms, an approval chain, and a role-aware queue. Only an Employee or a Team Lead may submit. An Employee's requisition goes to their Team Lead first; a Team Lead's own requisition skips that step. After the Team Lead stage (or immediately, for a Team Lead's own), it reaches HR, Finance, and the Super Administrator for review.
+
+| Form | Fields (in order) |
+|---|---|
+| In-house | Name · Purpose (repair/lost) · Last recover date · Model name · Approx amount · Urgency |
+| New | Name · Purpose · Urgency · Approx amount · Model |
+
+- [x] `FE-0740` Define requisition contracts in `src/contracts/requisition.ts`: the two form shapes, the shared record, review-stage and decision enums, list/detail view models, and the `RequisitionService` interface returning `Result<T>`.
+- [x] `FE-0741` Add requisition fixtures and a mock service adapter covering every stage of the chain, including a Team Lead's own submission that bypasses the Team Lead stage.
+- [x] `FE-0742` Add the `Requisition` navigation entry, route registration, and feature flag; the entry appears only for roles that may submit or review, and never for Management/view-only.
+- [x] `FE-0743` Build `/requisitions` as a role-aware list: an Employee sees only their own, a Team Lead sees their own plus their team's awaiting review, and HR/Finance/Super Administrator see everything that has reached them.
+- [x] `FE-0744` Build the In-house form with Name, Purpose (repair/lost), Last recover date, Model name, Approx amount, and Urgency.
+- [x] `FE-0745` Build the New form with Name, Purpose, Urgency, Approx amount, and Model.
+- [x] `FE-0746` Present the two forms as one create screen with a labelled choice between In-house and New, preserving entered values when the choice changes only where fields are shared.
+- [x] `FE-0747` Implement submission validation at the service boundary with a field, a message, and corrective guidance for every failure (`REQ-TIME-025` pattern), including the amount and date normalisation described in the open questions below.
+- [x] `FE-0748` Build `/requisitions/[id]` with the submitted values, the current stage, and a review timeline recording who decided what, when, and why.
+- [x] `FE-0749` Build the Team Lead review action and the dashboard queue tile plus notification that tells a Team Lead an Employee requisition is waiting.
+- [x] `FE-0750` Build the HR, Finance, and Super Administrator review action, reachable only once the requisition has actually reached that stage.
+- [x] `FE-0751` Cover the full state set on every requisition screen: loading, empty, validation, permission-denied, not-found, conflict (already decided), and success.
+- [x] `FE-0752` Add unit tests for the review chain and scope rules, and a `npm run audit:flows-requisition` browser gate walking Employee submit through Team Lead review to HR/Finance/Super Administrator review.
+
+**Rules this feature must not break.**
+
+- *Deny by default.* A requisition is visible only to its submitter, that submitter's Team Lead, and the reviewers it has reached. An Employee must not be able to discover another Employee's requisition through the list, a count, a search result, or an id in the URL — an unauthorised id returns the same not-found response as a nonexistent one.
+- *Approval wording stays here.* A requisition is a genuine decision, so review and approval language is correct on these screens — the same licence WFH requests, leave requests, and HR period verification already have. It must never appear on a daily time record (`AGENTS.md` §2). `docs/frontend/phase-0/terminology-and-formats.md` needs the requisition vocabulary added alongside those.
+- *Money is money.* `src/lib/money.ts` is still the only place an amount is computed and `formatMoney` the only place one is rendered.
+
+**Open questions — do not implement past these without an answer.**
+
+1. **No `REQ-*` backs this feature.** `project_requirement.md` is the source of truth and contains no requisition requirement. One needs to be written and numbered before build, or this ships as scope no acceptance criterion covers.
+2. **Do HR, Finance, and the Super Administrator each have to decide, or does any one of them settle it?** This changes the state machine, the queue counts, and what "decided" means. Assumed for now: all three review in parallel and the requisition is decided when the last of them has, with any rejection ending the chain immediately.
+3. **Approx amount is specified as a text field**, but the project stores money as a fixed-precision decimal string plus a currency code and never as a bare number. Assumed for now: the input stays a text field as specified, and the service normalises it to `Money` in BDT, rejecting anything it cannot parse with field-level guidance.
+4. **Last recover date is specified as a text field**, but every other date in the product is an `IsoDate`. Assumed for now: text input, normalised and stored as `IsoDate`, rendered through `src/lib/format.ts`.
+5. **Purpose and Urgency are specified as text fields**, yet "repair/lost" reads as a choice and urgency is what a reviewer would sort and filter a queue by. Free text supports neither. Assumed for now: free text as specified, with the queue ordered by submission date rather than urgency.
+6. **What happens after a decision?** No fulfilment, purchase, or asset-handover step was described. Assumed out of scope.
+
+### Conveyance
+
+Added after the requisition work, so Phase 7 is reopened a second time. `FE-0701`-`FE-0752` remain done and are not re-verified by this work.
+
+**Scope.** A travel-expense claim. One form, the same approval chain as requisition, and an optional receipt upload. Only an Employee or a Team Lead may submit. An Employee's claim goes to their Team Lead first; a Team Lead's own skips that step; after that it reaches HR, Finance and the Super Administrator.
+
+| Field | Control | Note |
+|---|---|---|
+| Date/time | Read-only | When the claim was submitted. Not editable. |
+| Business name | Text | |
+| Client name | Text | |
+| Visited date | Date | |
+| Time | Time | |
+| Mode | Self / Uber / Other | |
+| Amount | Money | |
+| Receipt | File upload | **Optional** |
+
+- [x] `FE-0760` **Extract the shared review chain before building this.** Conveyance travels the identical path to requisition, and a second hand-written copy of the stage machine is how the two silently drift apart. Lift the stage/outcome model, the `canView`/`canDecide` rules and the timeline view model out of `src/services/mock/requisition.ts` into a shared module, re-run the requisition gates unchanged to prove the extraction was behaviour-preserving, then build conveyance on it.
+- [x] `FE-0761` Define conveyance contracts in `src/contracts/conveyance.ts`: the record, the form input, the travel-mode enum, the attachment reference, list/detail view models, and the `ConveyanceService` interface returning `Result<T>`.
+- [x] `FE-0762` Add conveyance fixtures and a mock service adapter covering every stage, including a Team Lead's own claim, a claim with a receipt and a claim without one.
+- [x] `FE-0763` Add the `Conveyance` navigation entry, route registration, and feature flag, for the same audiences as requisition and never for Management/view-only.
+- [x] `FE-0764` Build `/conveyance` as a role-aware list with the same scope rules as the requisition list, showing visited date, business, client, mode and amount.
+- [x] `FE-0765` Build the claim form. The submitted date/time is rendered read-only from the service, never from a clock in the component.
+- [x] `FE-0766` Build the optional receipt upload with file name, size, type and remove control, plus the states an upload actually has: none, selected, too large, wrong type, and failed.
+- [x] `FE-0767` Implement submission validation at the service boundary with a field, a message and corrective guidance for every failure, including the amount and the visited date/time rules in the open questions below.
+- [x] `FE-0768` Build `/conveyance/[id]` with the claimed journey, the receipt when present and permitted, and the same review timeline the requisition detail uses.
+- [x] `FE-0769` Build the Team Lead review action, dashboard queue tile and notification, sharing one queue presentation with requisition rather than adding a second unrelated tile.
+- [x] `FE-0770` Build the HR, Finance and Super Administrator review action, reachable only once the claim has reached that stage.
+- [x] `FE-0771` Enforce attachment access: a receipt is deny-by-default like every other attachment (`AGENTS.md` §2, `REQ-WORK-009`), visible only to the people the claim itself is visible to, and absent from the view model rather than hidden in the UI when it is not.
+- [x] `FE-0772` Cover the full state set on every conveyance screen: loading, empty, validation, permission-denied, not-found, conflict (already decided), and success.
+- [x] `FE-0773` Add unit tests for the chain, the scope rules, attachment access and money handling, and extend the shared flow gate to walk an Employee claim through Team Lead review to HR/Finance/Super Administrator review.
+- [x] `FE-0774` Add the three conveyance routes to the responsive, accessibility and content-stress route lists. A gate that does not visit a screen says nothing about it.
+
+**Rules this feature must not break.**
+
+- *Deny by default, receipts included.* A receipt is attachment data, which `AGENTS.md` §2 lists as deny-by-default. It is omitted from the view model for a viewer who may not see it — never rendered blank, and never merely hidden with CSS.
+- *Money is money.* The amount reaches the record as a fixed-precision decimal plus a currency code through `src/lib/money.ts`, and is rendered only through `formatMoney`.
+- *Time is stored, not guessed.* The submitted instant is UTC plus the local date, timezone and applied policy version, as every other timestamp in this product is.
+- *Approval wording is correct here*, for the same reason it is on requisition: a real decision exists. It must never appear on a daily time record.
+
+**Open questions — do not implement past these without an answer.**
+
+1. **No `REQ-*` backs this feature either.** As with requisition, `project_requirement.md` contains no conveyance requirement. Both now need writing and numbering.
+2. **"Date/time is the current time" conflicts with the pinned demo clock.** Demo "today" is fixed at 2026-09-02 (`docs/frontend/phase-0/demo-setup.md`), and a component reading `new Date()` would also produce a hydration mismatch. Assumed: the field shows the submission instant supplied by the service, which uses the demo clock — so the demo stays reproducible and the value is real rather than rendered client-side.
+3. **What does "Other" mean without a description?** A mode of Self, Uber or Other is unusable for Finance if "Other" carries no detail. Assumed: selecting Other reveals a required free-text description. Confirm, because the alternative is a claim nobody can check.
+4. **Visited date and time are separate controls but one instant.** Assumed: combined in Asia/Dhaka, and rejected when in the future — you cannot claim for a journey that has not happened.
+5. **Is the amount reimbursable, and does Finance need it in a payroll or expense total?** Nothing was said about what happens after approval. Assumed: the claim records an amount and no total anywhere else consumes it, exactly as requisition does. If Finance expects conveyance to reach an export, that is additional scope.
+6. **Is "client name" the same client as `Project.client`?** The product now has client names on projects and a client filter on the timesheet. Assumed: free text, unlinked, because no Client entity exists — but if these are meant to be the same clients, that is an argument for creating one rather than typing the name twice.
+7. **File storage is undecided.** `BE-0007`-`BE-0014` have not chosen a storage provider, and no size or type limits have been approved. Assumed for the frontend: a mock upload with an in-memory reference, presented as a prototype and never as a stored file.
+
+Conveyance evidence is recorded in `docs/frontend/phase-7/conveyance-verification.md`: the shared approval chain extracted first and proven behaviour-preserving by re-running the requisition gates unchanged, then 45/45 conveyance flow checks, 50 unit tests, accessibility 279/279 and content stress 73/73.
+
+Requisition evidence is recorded in `docs/frontend/phase-7/requisition-verification.md`: 44/44 requisition flow checks, 40 unit tests, accessibility 248/248 and content stress 68/68 with the three new routes added to those gates.
+
 Phase 7 evidence is recorded in `docs/frontend/phase-7/verification.md`: shared reporting and supporting-module flows 55/55, responsive route/width combinations 268/268, and the complete verification gate passing with 213 tests and a 61-route build.
 
 ### Phase 7 Exit Criteria
@@ -482,41 +578,47 @@ Phase 7 evidence is recorded in `docs/frontend/phase-7/verification.md`: shared 
 - [x] Shared reports, export states, notifications, search, and profile/settings patterns are consistent across roles.
 - [x] Deferred collaboration and integrations are demonstrable without being represented as production-connected features.
 - [x] All navigation destinations have an intentional page, coming-later state, or feature-flag exclusion.
+- [x] A requisition can be submitted by an Employee and a Team Lead, routed through the correct review chain, and is invisible to every role it has not reached.
+- [x] A conveyance claim travels the same chain on the same shared implementation, and its receipt is subject to the same access rule as the claim.
 
 ## Phase 8 - Responsive, Accessibility, and Quality Hardening
 
 ### Responsive QA
 
-- [ ] `FE-0801` Test every primary route at 375, 768, 1024, and 1440 px.
-- [ ] `FE-0802` Correct navigation, table, form, chart, dialog, drawer, sticky-action, and safe-area issues at every target width.
-- [ ] `FE-0803` Test long employee names, long project/task titles, many divisions, large currency values, translated-length labels, and empty values.
-- [ ] `FE-0804` Verify there is no unintentional page-level horizontal scrolling.
-- [ ] `FE-0805` Verify timer and primary actions remain reachable on small screens and with the on-screen keyboard visible.
+- [x] `FE-0801` Test every primary route at 375, 768, 1024, and 1440 px.
+- [x] `FE-0802` Correct navigation, table, form, chart, dialog, drawer, sticky-action, and safe-area issues at every target width.
+- [x] `FE-0803` Test long employee names, long project/task titles, many divisions, large currency values, translated-length labels, and empty values.
+- [x] `FE-0804` Verify there is no unintentional page-level horizontal scrolling.
+- [x] `FE-0805` Verify timer and primary actions remain reachable on small screens and with the on-screen keyboard visible.
 
 ### Accessibility QA
 
-- [ ] `FE-0810` Complete keyboard-only testing for login, navigation, time entry, timer, requests, remarks, reports, dialogs, and tables.
-- [ ] `FE-0811` Verify visible focus, logical focus order, dialog focus trapping/restoration, skip link, headings, landmarks, and page titles.
-- [ ] `FE-0812` Verify labels, descriptions, live regions, validation announcements, table semantics, chart summaries, and icon accessible names.
-- [ ] `FE-0813` Verify WCAG AA colour contrast and ensure status, charts, validation, and links do not rely on colour alone.
-- [ ] `FE-0814` Verify 200% zoom, text resizing, reduced motion, touch targets, and screen-reader use on primary flows.
+- [x] `FE-0810` Complete keyboard-only testing for login, navigation, time entry, timer, requests, remarks, reports, dialogs, and tables.
+- [x] `FE-0811` Verify visible focus, logical focus order, dialog focus trapping/restoration, skip link, headings, landmarks, and page titles.
+- [x] `FE-0812` Verify labels, descriptions, live regions, validation announcements, table semantics, chart summaries, and icon accessible names.
+- [x] `FE-0813` Verify WCAG AA colour contrast and ensure status, charts, validation, and links do not rely on colour alone.
+- [x] `FE-0814` Verify 200% zoom, text resizing, reduced motion, touch targets, and screen-reader use on primary flows.
 
 ### Functional and Visual QA
 
-- [ ] `FE-0820` Add automated component tests for status classification presentation, duration formatting, filters, responsive navigation, forms, dialogs, and permission-aware controls.
-- [ ] `FE-0821` Add end-to-end frontend tests for each role's primary demo journey using mock services.
-- [ ] `FE-0822` Test loading, empty, error, denied, conflict, locked, offline, retry, and success states across all feature modules.
-- [ ] `FE-0823` Verify fixture totals reconcile across dashboard, timesheet, reports, evaluation, and Finance screens.
-- [ ] `FE-0824` Run type checks, lint checks, tests, and a production build with no unresolved errors.
-- [ ] `FE-0825` Perform visual review for spacing, alignment, hierarchy, typography, colour consistency, clipping, overflow, and layout shift.
-- [ ] `FE-0826` Check that all clickable elements provide hover/focus/pressed/loading feedback and that non-interactive elements do not show misleading pointer behavior.
-- [ ] `FE-0827` Optimize images, icons, fonts, client component boundaries, route loading, and large-list rendering.
+- [x] `FE-0820` Add automated component tests for status classification presentation, duration formatting, filters, responsive navigation, forms, dialogs, and permission-aware controls.
+- [x] `FE-0821` Add end-to-end frontend tests for each role's primary demo journey using mock services.
+- [x] `FE-0822` Test loading, empty, error, denied, conflict, locked, offline, retry, and success states across all feature modules.
+- [x] `FE-0823` Verify fixture totals reconcile across dashboard, timesheet, reports, evaluation, and Finance screens.
+- [x] `FE-0824` Run type checks, lint checks, tests, and a production build with no unresolved errors.
+- [~] `FE-0825` Perform visual review for spacing, alignment, hierarchy, typography, colour consistency, clipping, overflow, and layout shift.
+- [x] `FE-0826` Check that all clickable elements provide hover/focus/pressed/loading feedback and that non-interactive elements do not show misleading pointer behavior.
+- [x] `FE-0827` Optimize images, icons, fonts, client component boundaries, route loading, and large-list rendering.
+
+Phase 8 evidence is recorded in `docs/frontend/phase-8/verification.md`: accessibility 217/217, content-stress and interaction 63/63, role journeys 41/41, performance 16/16, responsive route/width combinations 268/268, and the complete verification gate passing with 264 tests and a 61-route build.
+
+`FE-0825` stays `[~]`: its measurable half — type-scale consistency, clipping, overflow, layout shift and colour contrast — is automated and passing, but spacing, alignment and hierarchy judgement needs a person to look at the screens. That review is the same stakeholder walkthrough the Phase 1 showcase criterion is waiting on.
 
 ### Phase 8 Exit Criteria
 
-- [ ] Primary flows meet the responsive and WCAG 2.2 AA targets.
-- [ ] Automated checks and the production build pass.
-- [ ] No critical visual, navigation, permission-presentation, or calculation-presentation defect remains open.
+- [x] Primary flows meet the responsive and WCAG 2.2 AA targets.
+- [x] Automated checks and the production build pass.
+- [x] No critical visual, navigation, permission-presentation, or calculation-presentation defect remains open.
 
 ## Phase 9 - Demo Packaging and Backend Handoff
 
@@ -572,6 +674,10 @@ A frontend task may be marked `[x]` only when all applicable conditions are true
 - [ ] `DEMO-08` Management views authorized summaries without seeing any editing control.
 - [ ] `DEMO-09` An unauthorized role receives a safe denied state and cannot discover restricted information through navigation or search.
 - [ ] `DEMO-10` The primary Employee, Team Lead, HR, and Finance flows remain usable at mobile and desktop widths.
+- [x] `DEMO-11` An Employee submits an in-house requisition, their Team Lead is notified and reviews it, and it then appears for HR, Finance, and the Super Administrator — while a second Employee cannot see it at all.
+- [x] `DEMO-13` An Employee submits a conveyance claim with a receipt, their Team Lead reviews it, and it then reaches HR, Finance and the Super Administrator — while a second Employee can see neither the claim nor the receipt.
+- [x] `DEMO-14` A conveyance claim submitted without a receipt is accepted, because the upload is optional.
+- [x] `DEMO-12` A Team Lead submits a new-item requisition and it reaches HR, Finance, and the Super Administrator without a Team Lead review step.
 
 ## 8. Current Progress Summary
 
@@ -584,8 +690,8 @@ A frontend task may be marked `[x]` only when all applicable conditions are true
 | Phase 4 - Team Lead Experience | Done | 21/21 |
 | Phase 5 - HR Experience | Done | 17/17 |
 | Phase 6 - Finance and Management Experience | Done | 11/11 |
-| Phase 7 - Shared Reporting and Supporting Modules | Done | 19/19 |
-| Phase 8 - Responsive, Accessibility, and Quality Hardening | Pending | 0/18 |
+| Phase 7 - Shared Reporting and Supporting Modules | Done | 47/47 |
+| Phase 8 - Responsive, Accessibility, and Quality Hardening | Done | 17/18 · 1 awaiting review |
 | Phase 9 - Demo Packaging and Backend Handoff | Pending | 0/14 |
 
 Update this table whenever tasks change status. Exit-criteria checkboxes are gates and are not included in the task totals above.

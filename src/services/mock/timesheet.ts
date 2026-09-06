@@ -41,6 +41,7 @@ import {
   formatTimeRange,
 } from '@/lib/format';
 import { toDayStatusView, toDurationView, WORK_LOCATION_LABEL } from '@/lib/status';
+import { toClientContributions } from '@/lib/client-time';
 import {
   PROJECTS,
   STANDARD_POLICY,
@@ -168,6 +169,8 @@ function toTodaySummary(summary: DailySummary) {
     status: toDayStatusView(summary.status),
     attendance: summary.attendance,
     isLocked: summary.isLocked,
+    overtimeReason: summary.overtimeReason,
+    criticalExplanation: summary.criticalExplanation,
   };
 }
 
@@ -263,6 +266,29 @@ function rangeSummaries(
   return summaries;
 }
 
+/** Project id to the client it is delivered for; `null` when none is recorded. */
+const PROJECT_CLIENT = new Map<string, string | null>(
+  PROJECTS.map((project) => [project.id, project.client]),
+);
+
+/**
+ * The client split for one day.
+ *
+ * Reads the minutes the calculation engine already assigned to each project and
+ * regroups them; it never recomputes a duration. Time on a project with no
+ * client, and time on no project at all, both land in the unattributed bucket
+ * so the split still sums to the day's active total.
+ */
+function clientContributionViews(summary: DailySummary) {
+  return toClientContributions(
+    summary.activeMinutes,
+    summary.projectContributions.map((contribution) => ({
+      clientId: PROJECT_CLIENT.get(contribution.projectId) ?? null,
+      activeMinutes: contribution.activeMinutes,
+    })),
+  );
+}
+
 function toRowView(summary: DailySummary) {
   return {
     date: summary.workDate,
@@ -277,6 +303,7 @@ function toRowView(summary: DailySummary) {
     divisionCodes: summary.divisionContributions.map(
       (contribution) => divisionRef(contribution.divisionId).code,
     ),
+    clientContributions: clientContributionViews(summary),
     isLocked: summary.isLocked,
     href: `/timesheets/${summary.workDate}`,
   };

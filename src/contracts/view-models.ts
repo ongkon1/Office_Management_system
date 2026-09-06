@@ -123,6 +123,16 @@ export interface TodaySummaryView {
   readonly status: DayStatusView;
   readonly attendance: AttendanceState;
   readonly isLocked: boolean;
+  /**
+   * The reason recorded for a day above eight hours, and the explanation
+   * required above twelve (`REQ-TIME-018`, `REQ-TIME-019`).
+   *
+   * Carried on the summary because whoever reads the classification needs the
+   * stated cause with it — a reviewer shown "Critical" and nothing else has no
+   * basis on which to review.
+   */
+  readonly overtimeReason: string | null;
+  readonly criticalExplanation: string | null;
 }
 
 export interface RunningTimerView {
@@ -153,6 +163,23 @@ export interface PeriodTotalsView {
 
 export interface DivisionContributionView {
   readonly division: DivisionRef;
+  readonly active: DurationView;
+  readonly sharePercent: number;
+}
+
+/**
+ * Active time regrouped by the client its project is delivered for
+ * (`REQ-WORK-001`).
+ *
+ * A client is a label on a project, not an entity, so `clientId` is the client
+ * name itself and `null` means the project records no client. Absent and
+ * "no time" stay distinct: a client with no work simply does not appear, and a
+ * project without a client is reported under the `null` bucket rather than
+ * dropped, because dropping it would make the parts stop summing to the day.
+ */
+export interface ClientContributionView {
+  readonly clientId: string | null;
+  readonly clientLabel: string;
   readonly active: DurationView;
   readonly sharePercent: number;
 }
@@ -252,6 +279,8 @@ export interface TimesheetDayRowView {
   readonly attendance: AttendanceState;
   readonly attendanceLabel: string;
   readonly divisionCodes: readonly string[];
+  /** Active minutes on this day split by client; sums to `active`. */
+  readonly clientContributions: readonly ClientContributionView[];
   readonly isLocked: boolean;
   readonly href: string;
 }

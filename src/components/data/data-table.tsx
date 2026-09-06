@@ -165,11 +165,30 @@ export function DataTable<TRow>({
             return (
               <li
                 key={id}
+                /*
+                 * A clickable row must be operable by keyboard, not only by
+                 * mouse. `tabIndex` puts it in the tab order and the key
+                 * handler activates it, so `cursor-pointer` is not a promise
+                 * only a mouse can collect.
+                 */
+                tabIndex={onRowClick ? 0 : undefined}
+                onClick={onRowClick ? () => onRowClick(row) : undefined}
+                onKeyDown={
+                  onRowClick
+                    ? (event) => {
+                        if (event.target !== event.currentTarget) return;
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          onRowClick(row);
+                        }
+                      }
+                    : undefined
+                }
                 className={cn(
                   'rounded-lg border border-border bg-surface p-3',
-                  onRowClick && 'cursor-pointer transition-colors hover:bg-surface-sunken',
+                  onRowClick &&
+                    'cursor-pointer transition-colors hover:bg-surface-sunken focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
                 )}
-                onClick={onRowClick ? () => onRowClick(row) : undefined}
               >
                 {renderMobileCard(row)}
               </li>
@@ -271,11 +290,26 @@ export function DataTable<TRow>({
                 <tr
                   key={id}
                   aria-selected={selectable ? isSelected : undefined}
+                  tabIndex={onRowClick ? 0 : undefined}
                   onClick={onRowClick ? () => onRowClick(row) : undefined}
+                  onKeyDown={
+                    onRowClick
+                      ? (event) => {
+                          // Only the row itself; a control inside it keeps its
+                          // own Enter and Space behaviour.
+                          if (event.target !== event.currentTarget) return;
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            onRowClick(row);
+                          }
+                        }
+                      : undefined
+                  }
                   className={cn(
                     'border-b border-border last:border-b-0 transition-colors duration-150',
                     isSelected ? 'bg-accent-subtle' : 'hover:bg-surface-sunken',
-                    onRowClick && 'cursor-pointer',
+                    onRowClick &&
+                      'cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus',
                   )}
                 >
                   {selectable && (

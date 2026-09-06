@@ -5,14 +5,16 @@ import { useRouter } from 'next/navigation';
 import { AlertTriangle, ArrowRight, MapPin, MessageSquareText, Users } from 'lucide-react';
 import type { TeamTimesheetRowView } from '@/contracts/view-models';
 import { mockTeamLeadService } from '@/services/mock/team-lead';
+import { mockRequisitionService } from '@/services/mock/requisition';
+import { mockConveyanceService } from '@/services/mock/conveyance';
 import { useAsync } from '@/lib/use-async';
 import { useSession } from '@/features/access/session-provider';
 import { PageContainer, PageHeader, DashboardGrid, SectionHeader } from '@/components/layout/page';
 import { Card, CardHeader, MetricCard } from '@/components/feedback/card';
-import { EmptyState } from '@/components/feedback/alert';
+import { Alert, EmptyState } from '@/components/feedback/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Button, LinkButton } from '@/components/ui/button';
 import { Duration } from '@/components/ui/misc';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import { ProgressBar } from '@/components/ui/progress';
@@ -48,6 +50,20 @@ export function TeamLeadDashboard() {
     () => mockTeamLeadService.getDashboard(user?.userId ?? ''),
     [user?.userId],
   );
+  /*
+   * The requisition queue is loaded separately rather than folded into the
+   * dashboard view model: it belongs to a different service with its own
+   * visibility rule, and merging the two would let a dashboard failure hide a
+   * decision that is genuinely waiting.
+   */
+  const requisitions = useAsync(
+    () => mockRequisitionService.queue(user?.userId ?? ''),
+    [user?.userId],
+  );
+  const conveyance = useAsync(
+    () => mockConveyanceService.queue(user?.userId ?? ''),
+    [user?.userId],
+  );
   if (state.status === 'loading') return <LoadingPage label="Team Lead dashboard" />;
   if (state.status !== 'success') return <PageContainer><EmptyState variant="error" title="Dashboard unavailable" description={state.failure.message} /></PageContainer>;
 
@@ -59,12 +75,57 @@ export function TeamLeadDashboard() {
     { key: 'overdue_tasks', label: 'Overdue tasks', value: String(view.overdueTasks), tone: 'negative' as const, href: '/tasks?overdue=true' },
   ];
 
+  /*
+   * One queue presentation, not two (`FE-0769`). Requisitions and conveyance
+   * claims are both "a decision only you can make"; a Team Lead with one of
+   * each wants a single prompt, not two competing banners saying the same
+   * thing about different nouns.
+   */
+  const pendingDecisions = [
+    {
+      key: 'requisitions',
+      count: requisitions.state.status === 'success' ? requisitions.state.data.awaitingCount : 0,
+      singular: 'requisition',
+      plural: 'requisitions',
+      href: '/requisitions',
+    },
+    {
+      key: 'conveyance',
+      count: conveyance.state.status === 'success' ? conveyance.state.data.awaitingCount : 0,
+      singular: 'conveyance claim',
+      plural: 'conveyance claims',
+      href: '/conveyance',
+    },
+  ].filter((item) => item.count > 0);
+
   return (
     <PageContainer>
       <PageHeader title="Team Lead dashboard" description="Today’s team status, exceptions, delivery, requests, and capacity." meta={<ScopeBadge />} />
       <DashboardGrid className="mt-5">
         {metricTiles.map((tile) => <MetricCard key={tile.key} tile={tile} />)}
       </DashboardGrid>
+
+      {pendingDecisions.length > 0 && (
+        <Alert
+          tone="warning"
+          className="mt-5"
+          title={`${pendingDecisions
+            .map((item) => `${item.count} ${item.count === 1 ? item.singular : item.plural}`)
+            .join(' and ')} waiting for you`}
+          actions={
+            <span className="flex flex-wrap gap-2">
+              {pendingDecisions.map((item) => (
+                <LinkButton key={item.key} href={item.href} variant="secondary" size="sm">
+                  Review {item.plural}
+                </LinkButton>
+              ))}
+            </span>
+          }
+        >
+          An employee cannot move these past you. They reach HR, Finance and the Super
+          Administrator only after your review.
+        </Alert>
+      )}
 
       <section className="mt-7" aria-labelledby="attendance-heading">
         <SectionHeader title="Working today" description="Presence states for employees assigned to you." />
@@ -262,7 +323,39 @@ export function TeamTimesheetDetail({ employeeId, date }: { employeeId: string; 
       <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(20rem,0.75fr)]">
         <div className="space-y-5">
           <Card><CardHeader title="Calculation breakdown" description={`Policy v${day.policyVersion} · ${day.timezone}`} /><dl className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4"><div><dt className="text-caption text-ink-muted">Active work</dt><dd className="text-metric text-ink"><Duration value={day.summary.active} /></dd></div><div><dt className="text-caption text-ink-muted">Separate break</dt><dd className="text-metric text-ink"><Duration value={day.summary.break} /></dd></div><div><dt className="text-caption text-ink-muted">Total</dt><dd className="text-metric text-ink"><Duration value={day.summary.total} /></dd></div><div><dt className="text-caption text-ink-muted">Required active</dt><dd className="text-metric text-ink"><Duration value={day.summary.requiredActive} /></dd></div></dl></Card>
-          {(day.summary.status.status === 'critical' || day.summary.status.status === 'overtime' || day.summary.status.status === 'missing' || day.summary.status.status === 'under_time') && <Card className="border-undertime-border bg-undertime-surface"><CardHeader title="Anomaly detected" description={`This record is classified ${day.summary.status.label}. Review the entries and add a general remark when follow-up is needed.`} actions={<AlertTriangle aria-hidden className="size-5 text-warning" />} /></Card>}
+          {(day.summary.status.status === 'critical' || day.summary.status.status === 'overtime' || day.summary.status.status === 'missing' || day.summary.status.status === 'under_time') && (
+            <Card className="border-undertime-border bg-undertime-surface">
+              <CardHeader
+                title="Anomaly detected"
+                description={`This record is classified ${day.summary.status.label}. Review the entries and add a general remark when follow-up is needed.`}
+                actions={<AlertTriangle aria-hidden className="size-5 text-warning" />}
+              />
+              {/*
+                The stated cause, not just the classification. A day above eight
+                hours requires a reason and a day above twelve requires an
+                explanation; a reviewer shown neither has no basis on which to
+                review (`REQ-TIME-018`, `REQ-TIME-019`).
+              */}
+              {(day.summary.criticalExplanation || day.summary.overtimeReason) && (
+                <div className="mt-3 rounded-md border border-border bg-surface p-3">
+                  <p className="text-label text-ink-muted">
+                    {day.summary.criticalExplanation
+                      ? 'Explanation recorded by the employee'
+                      : 'Reason recorded by the employee'}
+                  </p>
+                  <p className="mt-1 text-body-sm text-ink">
+                    {day.summary.criticalExplanation ?? day.summary.overtimeReason}
+                  </p>
+                </div>
+              )}
+              {day.summary.status.status === 'critical' && !day.summary.criticalExplanation && (
+                <p className="mt-3 text-body-sm text-undertime">
+                  No explanation is recorded for this critical day. Request one before the period
+                  is verified.
+                </p>
+              )}
+            </Card>
+          )}
           <Card><CardHeader title="Time entries and completed work" description="All divisions are combined for the day while each source remains visible." />
             <ul className="mt-3 divide-y divide-border">{day.entries.map((entry) => <li key={entry.id} className="py-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold text-ink">{entry.project?.name ?? entry.division.name}</p><p className="text-caption text-ink-muted">{entry.division.code} · {entry.task?.title ?? 'No task'} · {entry.workLocationLabel}</p></div><Duration value={entry.duration} emphasis /></div><p className="mt-2 text-body-sm text-ink-muted">{entry.completedWork}</p><div className="mt-2 flex flex-wrap gap-2"><Badge tone="neutral">{entry.attachmentCount} attachment{entry.attachmentCount === 1 ? '' : 's'}</Badge>{entry.supportingLink && <a className="text-caption text-accent underline" href={entry.supportingLink}>Supporting link</a>}</div></li>)}</ul>
           </Card>

@@ -86,6 +86,8 @@ A backend task may be marked `[x]` only when all applicable conditions are true:
 | 7 | Notifications, documents, search, and integrations | Supporting services and controlled external interfaces operate reliably. |
 | 8 | Quality, performance, backup, and security hardening | The system passes automated, load, recovery, and security gates. |
 | 9 | Production readiness and frontend cutover | Mock services are removed, data is migrated, operations are documented, and release is approved. |
+| 10 | Requisition | Employees and Team Leads raise requisitions that route through the correct review chain, visible only to the roles they have reached. |
+| 11 | Conveyance | Travel claims with optional receipts travel the same review chain, with attachment access bound to the claim's own visibility. |
 
 ## 4. Detailed Phase Tasks
 
@@ -515,6 +517,103 @@ A backend task may be marked `[x]` only when all applicable conditions are true:
 - [ ] Business owners approve calculation, attendance, verification, evaluation, financial, and permission behavior.
 - [ ] Operations can monitor, support, back up, restore, and safely roll back the application.
 
+## Phase 10 - Requisition
+
+Added after the original ten phases were planned. It is written as a self-contained milestone because it introduces a new entity, a new approval chain, and a new notification trigger, none of which the earlier phases cover.
+
+**Depends on** Phase 1 (schema conventions), Phase 2 (authentication, authorization, audit), Phase 3 (employees and Team Lead mapping), and Phase 7 (notifications). It does not depend on Phase 4-6 and can be built in parallel with them once Phase 3 is done.
+
+### Schema and Domain
+
+- [ ] `BE-1001` Create the `requisition` table with submitter, submitter role at submission time, kind (`in_house` | `new`), the shared fields, stage, outcome, timestamps, and standard audit columns.
+- [ ] `BE-1002` Store the two form variants without nullable-field sprawl: in-house-only fields (last recover date, model name) must be representable as required for that kind and absent for the other, so an invalid combination cannot be persisted.
+- [ ] `BE-1003` Store the approximate amount as a fixed-precision decimal plus a currency code, never a float and never free text, matching the money rules in §2.2.
+- [ ] `BE-1004` Store the last recover date as a date, and the requisition's submitted instant as UTC plus the local work date and timezone, matching the time rules in §2.2.
+- [ ] `BE-1005` Create the `requisition_review` table recording one row per reviewer decision: reviewer, reviewer role, stage, outcome, reason, and decided-at — appended, never updated in place, so the chain stays reproducible.
+- [ ] `BE-1006` Add migrations, indexes for the queue queries (by submitter, by Team Lead, by stage), and seed data covering every stage including a Team Lead's own submission.
+
+### Review Chain
+
+- [ ] `BE-1010` Implement submission restricted to Employee and Team Lead. Every other role is rejected at the service, not hidden in the UI.
+- [ ] `BE-1011` Implement routing: an Employee's requisition enters the Team Lead stage addressed to that employee's current Team Lead; a Team Lead's own requisition skips it and enters the reviewer stage directly.
+- [ ] `BE-1012` Implement the Team Lead decision, and advance to the HR/Finance/Super Administrator stage only on approval.
+- [ ] `BE-1013` Implement the HR, Finance, and Super Administrator decisions, resolving the open question in `frontend_milestone.md` on whether all three must decide or any one settles it.
+- [ ] `BE-1014` Make every decision idempotent and conflict-safe: a second decision on an already-decided requisition, or two reviewers deciding at the same instant, must produce a defined conflict result rather than a lost or duplicated decision.
+- [ ] `BE-1015` Implement withdrawal by the submitter while the requisition is still undecided, and define whether a decided requisition can be reopened (assumed: no).
+- [ ] `BE-1016` Handle the Team Lead mapping changing mid-chain — reassignment, deactivation, or an employee with no current Team Lead — so a requisition can never become unreviewable.
+
+### Authorization and Audit
+
+- [ ] `BE-1017` Enforce visibility: submitter, that submitter's Team Lead, and reviewers the requisition has reached. Apply it before aggregation so counts, queue badges, and search results cannot reveal a requisition the viewer may not see.
+- [ ] `BE-1018` Return the same not-found response for an unauthorized requisition id as for a nonexistent one, with no timing difference.
+- [ ] `BE-1019` Audit every submission, decision, withdrawal, and amount change with actor, role, before/after, and reason.
+
+### Notifications and Tests
+
+- [ ] `BE-1020` Trigger a Team Lead notification on Employee submission and reviewer notifications when a requisition reaches their stage, reusing the Phase 7 notification service and its deduplication.
+- [ ] `BE-1021` Keep notification text free of any field the recipient is not authorized to read.
+- [ ] `BE-1022` Add tests for both form kinds, both routing paths, every stage transition, rejection at each stage, withdrawal, concurrent decisions, Team Lead reassignment, and unauthorized access from every role.
+- [ ] `BE-1023` Add tests asserting the amount round-trips exactly and that no requisition figure is ever produced by floating-point arithmetic.
+
+### Phase 10 Exit Criteria
+
+- [ ] Only Employees and Team Leads can submit, and the restriction is enforced in the service.
+- [ ] An Employee's requisition reaches HR, Finance, and the Super Administrator only after its Team Lead has approved it; a Team Lead's own reaches them directly.
+- [ ] A requisition is invisible to every role it has not reached, including through counts and search.
+- [ ] Every decision is audited, idempotent, and safe under concurrency.
+- [ ] A `REQ-*` requirement exists in `project_requirement.md` covering this feature.
+
+## Phase 11 - Conveyance
+
+A travel-expense claim. The approval chain is **identical to Phase 10's**, which is the defining constraint on this milestone rather than an aside: two independent implementations of one workflow will diverge, and the divergence will show up as a claim that reached a reviewer it should not have.
+
+**Depends on** Phase 1-3 and Phase 7 as Phase 10 does, plus Phase 7's file storage (`BE-0710`, `BE-0711`) for receipts. **It also depends on Phase 10 having landed**, because the shared approval engine below is extracted from it.
+
+### Shared Approval Engine
+
+- [ ] `BE-1101` Extract the requisition stage machine, transition rules and audit shape into one approval component that both requisition and conveyance use, rather than copying it. Re-run the Phase 10 tests unchanged against the extracted version to prove the extraction changed no behaviour.
+- [ ] `BE-1102` Model the chain once: submitter role decides whether the Team Lead stage applies, approval advances, any rejection is terminal, and the record of who decided is append-only.
+- [ ] `BE-1103` Keep the visibility rule in the shared component too — submitter, that submitter's Team Lead, and reviewers the record has reached — so a change to one workflow's scope cannot silently miss the other.
+
+### Schema and Domain
+
+- [ ] `BE-1110` Create the `conveyance_claim` table with submitter, submitter role at submission, business name, client name, visited instant, travel mode, amount, stage, outcome, timestamps and standard audit columns.
+- [ ] `BE-1111` Store the submitted date/time as a server-assigned UTC instant plus local date and timezone. It is never accepted from the client — a claim whose own timestamp the submitter chooses is not evidence of anything.
+- [ ] `BE-1112` Store the visited date and time as one instant in the business timezone, and reject a future one.
+- [ ] `BE-1113` Store the amount as a fixed-precision decimal plus a currency code, never a float, matching §2.2.
+- [ ] `BE-1114` Store travel mode as a constrained value, with the description that "Other" requires (see the frontend open questions) validated as required for that value and absent otherwise.
+- [ ] `BE-1115` Add migrations, queue indexes, and seed data covering every stage, a Team Lead's own claim, and claims both with and without a receipt.
+
+### Receipts
+
+- [ ] `BE-1120` Attach receipts through the Phase 7 upload path — size and type validation, malware-scanning integration point, integrity metadata, storage adapter — rather than a second upload mechanism.
+- [ ] `BE-1121` Bind receipt access to the claim's own visibility, so a receipt is never reachable by anyone who cannot see the claim, including by guessing a file id or URL.
+- [ ] `BE-1122` Serve receipts only through short-lived or streamed authorized access, and audit every protected download (`REQ-WORK-009`).
+- [ ] `BE-1123` Keep the upload genuinely optional end to end: absent, present, and failed-upload are three distinct states, and a failed upload must never silently produce a claim that appears to have a receipt.
+- [ ] `BE-1124` Decide and enforce whether a receipt may be added or replaced after submission, and whether a decided claim's receipt is immutable (assumed: no changes after the first decision).
+
+### Authorization, Audit and Notifications
+
+- [ ] `BE-1130` Apply authorization before aggregation for claim lists, queue counts, and any expense total, so a count cannot reveal a claim or a receipt the viewer may not see.
+- [ ] `BE-1131` Return the same not-found response for an unauthorized claim or receipt id as for a nonexistent one, with no timing difference.
+- [ ] `BE-1132` Audit submission, each decision, withdrawal, receipt upload, receipt download and amount change with actor, role, before/after and reason.
+- [ ] `BE-1133` Reuse the Phase 7 notification service for the Team Lead and reviewer triggers, keeping notification text free of any field the recipient may not read — the business name, client and amount included.
+
+### Tests
+
+- [ ] `BE-1140` Test both routing paths, every transition, rejection at each stage, withdrawal, concurrent decisions, Team Lead reassignment, and unauthorized access from every role — the Phase 10 suite applied to conveyance, since the chain is the same component.
+- [ ] `BE-1141` Test receipt access from every role at every stage, including direct file-id access by someone who cannot see the claim.
+- [ ] `BE-1142` Test that the amount round-trips exactly and that no conveyance figure is produced by floating-point arithmetic.
+- [ ] `BE-1143` Test that a client-supplied submitted timestamp is ignored, and that a future visited instant is rejected.
+
+### Phase 11 Exit Criteria
+
+- [ ] Requisition and conveyance share one approval implementation, and the Phase 10 tests still pass against it unchanged.
+- [ ] Only Employees and Team Leads can submit, enforced in the service.
+- [ ] A receipt is reachable by exactly the people who can see its claim, and by no one else, including by direct file id.
+- [ ] The submitted timestamp is server-assigned and a future visited instant is refused.
+- [ ] A `REQ-*` requirement exists in `project_requirement.md` covering this feature.
+
 ## 5. Backend Acceptance Scenarios
 
 ### Time and Calculation
@@ -554,6 +653,22 @@ A backend task may be marked `[x]` only when all applicable conditions are true:
 - [ ] `BAC-RPT-04` Repeated export and webhook operations must be idempotent and recover safely after worker or provider failure.
 - [ ] `BAC-OPS-01` A production-like backup must restore database records, protected file references, permissions, jobs, and audit history within the approved recovery objectives.
 - [ ] `BAC-OPS-02` Normal reads, writes, dashboards, and reports must meet the approved p95 targets at representative load.
+
+### Requisition
+
+- [ ] An Employee submits an in-house requisition; only their Team Lead is notified, and no other Employee can retrieve it by id.
+- [ ] The Team Lead approves it; HR, Finance, and the Super Administrator can then retrieve it, and not before.
+- [ ] A Team Lead's own requisition is visible to HR, Finance, and the Super Administrator immediately, with no Team Lead review row in its chain.
+- [ ] Two reviewers deciding simultaneously produce one recorded outcome and a defined conflict for the loser, never two.
+- [ ] An approximate amount entered as text is stored as an exact decimal with a currency code and returns identical on read.
+
+### Conveyance
+
+- [ ] An Employee submits a claim with a receipt; only their Team Lead is notified, and no other Employee can retrieve the claim or the receipt.
+- [ ] Requesting the receipt's file id directly, as a role that cannot see the claim, returns the same not-found response as a nonexistent file.
+- [ ] A claim submitted without a receipt is accepted and shows an absent receipt, not a failed one.
+- [ ] A submitted timestamp supplied by the client is ignored in favour of the server's.
+- [ ] A visited date and time in the future is rejected with field-level guidance.
 
 ## 6. Dependencies and Required Decisions
 
@@ -601,5 +716,7 @@ A backend task may be marked `[x]` only when all applicable conditions are true:
 | Phase 7 - Notifications, Documents, Search, and Integrations | Pending | 0/23 |
 | Phase 8 - Quality, Performance, Backup, and Security Hardening | Pending | 0/23 |
 | Phase 9 - Production Readiness and Frontend Cutover | Pending | 0/18 |
+| Phase 10 - Requisition | Pending | 0/20 |
+| Phase 11 - Conveyance | Pending | 0/22 |
 
 Update this table whenever numbered tasks change status. Acceptance scenarios and phase exit criteria are tracked as gates and are not included in the numbered task totals.

@@ -45,6 +45,7 @@ Everything below already exists. Read the relevant one *before* starting work ra
 | `docs/frontend/phase-5/verification.md` | You need what Phase 5 delivered and how it was verified, including the HR permission boundaries. |
 | `docs/frontend/phase-6/verification.md` | You need what Phase 6 delivered and how it was verified, including the money-precision and redaction rules. |
 | `docs/frontend/phase-7/verification.md` | You need what Phase 7 delivered and how it was verified, including the runtime feature-flag store and the print rules. |
+| `docs/frontend/phase-8/verification.md` | You need the hardening evidence: the four QA gates, the nine defects they found, and the three checks that were wrong and removed. |
 | `src/contracts/*.ts` | You are calling or implementing a data operation. Domain types, view models, service interfaces, result shapes, query shapes, feature flags. |
 
 ---
@@ -88,6 +89,19 @@ contribution split. The preview, timesheet views, dashboards and later reports
 all call it. Never recompute hours anywhere else — not in a component, not in a
 service, not in an aggregate.
 
+Requisition and conveyance share **one** approval chain —
+`src/contracts/approval.ts` and `src/services/mock/approval-chain.ts`. A second
+copy of the stage machine is how the two silently diverge, and the divergence
+shows up as a record reaching a reviewer it should not have. Add a workflow by
+extending `Approvable`, never by rewriting the transitions.
+
+`src/lib/client-time.ts` regroups that output by client and is the only place
+that happens. A client is a free-text label on a project (`Project.client`),
+not an entity — so time reaches a client only through its project, work on a
+project with no client and work on no project at all share one reported "Not
+recorded" bucket, and the split always sums back to the day's active total.
+It adds integer minutes; it never derives a duration.
+
 `src/lib/calculation/validation.ts` holds the entry rules. Every error it
 returns carries a field, a message **and** corrective guidance, because
 `REQ-TIME-025` requires all three.
@@ -107,6 +121,14 @@ Cost reaches the UI as `RedactableMoneyView`, whose restricted variant carries *
 `src/lib/format.ts` is the single implementation of every date, time, duration, money, and percentage rule. Never build one of those strings by hand — a duration rendered two ways is a defect, and a rounded one is a calculation defect. Status presentation lives in `src/lib/status.ts`.
 
 ### Styling
+
+The palette is the **PowerInAI brand** (powerinai.com) inverted onto a light
+canvas: violet `#6c63ff`, pink `#ff3c7e`, ink `#18192b`. Neither brand colour
+clears 4.5:1 on white, so each identity hue is split by job — full strength for
+indicators, focus and charts, one step deeper (`#5b52e6`) for anything carrying
+a label. Pink never appears on a control or a status, because it reads as the
+Critical red. `docs/frontend/phase-1/contrast-audit.md` records the reasoning
+and every ratio.
 
 Tailwind v4 with semantic tokens in `@theme` (`src/app/globals.css`). Utilities stay inside typed component wrappers — screens compose `<Button variant="primary">`, not raw utility strings. Build new UI from `src/components/{ui,forms,feedback,data,charts,layout,shell}`; if something is missing, add it *there*, not inline in a feature screen.
 
@@ -188,6 +210,16 @@ scripts/
 | `npm run audit:flows5` | Phase 5 HR flows. **Requires a dev server already running** |
 | `npm run audit:flows6` | Phase 6 Finance and Management flows. **Requires a dev server already running** |
 | `npm run audit:flows7` | Phase 7 reporting and supporting-module flows. **Requires a dev server already running** |
+| `npm run audit:a11y` | Keyboard, focus, structure, semantics, zoom and reduced motion. **Requires a dev server already running** |
+| `npm run audit:stress` | Extreme content at three widths, interaction feedback, type-scale consistency. **Requires a dev server already running** |
+| `npm run audit:journeys` | End-to-end role journeys. **Requires a dev server already running** |
+| `npm run audit:perf` | DOM size and layout stability. **Requires a dev server already running** |
+
+### Layout constraints belong to the component
+
+Three separate phases found the same defect in a new place: a flex or grid child sizes itself to its content's min-content width unless told not to. `min-w-0` is therefore already on `Card`, the chart `figure`, `DataTable`'s scroll region and the shell's content column — put it on the container, not on the forty call sites. The matching rule for a header row is `flex-wrap` plus `min-w-0` on the actions, never `shrink-0`.
+
+`.table-scroll` is also `position: relative`, because `sr-only` text is absolutely positioned and escapes a static scroll container, stretching the document's scroll width.
 
 ### Quality gates are hard
 
@@ -208,12 +240,14 @@ React Compiler lint errors (`set-state-in-effect`, render-phase mutation) are re
 | Frontend | 4 — Team Lead experience | Done (21/21) |
 | Frontend | 5 — HR experience | Done (17/17) |
 | Frontend | 6 — Finance and Management experience | Done (11/11) |
-| Frontend | 7 — Shared reporting and supporting modules | Done (19/19) |
-| Frontend | 8 — Responsive, accessibility and quality hardening | **Next** (0/18) |
-| Frontend | 9 | Pending |
+| Frontend | 7 — Shared reporting and supporting modules | Done (47/47 · requisition and conveyance included) |
+| Frontend | 8 — Responsive, accessibility and quality hardening | Done (17/18 · `FE-0825` awaiting visual review) |
+| Frontend | 9 — Demo packaging and backend handoff | **Next** (0/14) |
 | Backend | 0–9 | Pending — blocked on frontend contracts |
+| Backend | 10 — Requisition | Pending (0/20) — new milestone |
+| Backend | 11 — Conveyance | Pending (0/22) — new milestone, depends on 10 |
 
-Gates: contrast 48/48, responsive 268/268, Phase 2 flows 16/16, Phase 3 flows 18/18, Phase 4 flows 20/20, Phase 5 flows 51/51, Phase 6 flows 40/40, Phase 7 flows 55/55, `verify` passing with 213 tests.
+Gates: contrast 48/48, responsive 268/268, accessibility 217/217, content-stress 63/63, role journeys 41/41, performance 16/16, Phase 2 flows 16/16, Phase 3 flows 18/18, Phase 4 flows 20/20, Phase 5 flows 51/51, Phase 6 flows 40/40, Phase 7 flows 55/55, `verify` passing with 264 tests.
 
 Signing in: `/login`, password `Demo1234!` for every demo account, picker on the sign-in page. Auth fixtures (2FA code, reset tokens, lockout) are in `docs/frontend/phase-0/demo-setup.md` §1.1.
 

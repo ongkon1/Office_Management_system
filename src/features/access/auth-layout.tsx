@@ -33,7 +33,7 @@ export function AuthLayout({
           <div className="mb-6 flex items-center gap-2.5">
             <span
               aria-hidden
-              className="grid size-8 shrink-0 place-items-center rounded-md bg-primary text-body-sm font-bold text-ink-inverse"
+              className="brand-mark grid size-8 shrink-0 place-items-center rounded-md text-body-sm font-bold"
             >
               T
             </span>
@@ -57,9 +57,10 @@ export function AuthLayout({
         aria-hidden
         className={cn(
           'hidden w-[42%] max-w-2xl shrink-0 flex-col justify-between',
-          'border-l border-border bg-surface-sunken p-10 lg:flex',
+          'brand-wash relative border-l border-border p-10 lg:flex',
         )}
       >
+        <span aria-hidden className="brand-rule absolute inset-x-0 top-0 h-1" />
         <div />
         <div className="max-w-md">
           <p className="text-display text-ink">

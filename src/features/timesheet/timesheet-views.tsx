@@ -5,17 +5,18 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, Lock } from 'lucide-react';
 import type { DayStatus } from '@/contracts/domain';
-import type { TimesheetDayRowView } from '@/contracts/view-models';
+import type { ClientContributionView, TimesheetDayRowView } from '@/contracts/view-models';
 import { cn } from '@/lib/cn';
 import { addDays, formatDate, formatMonth, parseIsoDate } from '@/lib/format';
 import { useAsync } from '@/lib/use-async';
+import { sumClientContributions } from '@/lib/client-time';
 import { ATTENDANCE_LABEL } from '@/lib/status';
 import { Button, IconButton } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Duration } from '@/components/ui/misc';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Card } from '@/components/feedback/card';
+import { Card, CardHeader } from '@/components/feedback/card';
 import { EmptyState } from '@/components/feedback/alert';
 import { Tabs } from '@/components/feedback/disclosure';
 import { MultiSelectFilter } from '@/components/data/filters';
@@ -35,6 +36,16 @@ const VIEW_TABS = [
   { key: 'list', label: 'List' },
 ];
 
+/**
+ * Filter value standing for time with no client behind it.
+ *
+ * A client is a free-text label on a project, so "no client" has no id of its
+ * own; it still has to be selectable, because otherwise the one bucket a person
+ * most needs to find - unattributed time - is the only one they cannot filter
+ * to.
+ */
+const NO_CLIENT = '__no_client__';
+
 const STATUS_OPTIONS: { value: DayStatus; label: string }[] = [
   { value: 'missing', label: 'Missing' },
   { value: 'under_time', label: 'Under-time' },
@@ -49,6 +60,7 @@ export function TimesheetViews({ employeeId }: { employeeId: string }) {
   const [anchor, setAnchor] = React.useState(DEMO_TODAY);
   const [statuses, setStatuses] = React.useState<readonly string[]>([]);
   const [divisions, setDivisions] = React.useState<readonly string[]>([]);
+  const [clients, setClients] = React.useState<readonly string[]>([]);
   const [term, setTerm] = React.useState('');
 
   const monthKey = anchor.slice(0, 7);
@@ -65,11 +77,34 @@ export function TimesheetViews({ employeeId }: { employeeId: string }) {
 
   const source = mode === 'week' ? week : month;
 
+  /**
+   * Client options come from the period's own rows rather than from a project
+   * list. A viewer is then offered exactly the clients their own recorded time
+   * touches, so the filter can never name a client whose work they are not
+   * authorized to see.
+   */
+  const clientOptions = React.useMemo(() => {
+    if (source.state.status !== 'success') return [];
+    return sumClientContributions(source.state.data.days).map((contribution) => ({
+      value: contribution.clientId ?? NO_CLIENT,
+      label: contribution.clientLabel,
+      hint: contribution.active.display,
+    }));
+  }, [source.state]);
+
   const days = React.useMemo(() => {
     if (source.state.status !== 'success') return [];
     const rows = source.state.data.days;
     return rows.filter((row) => {
       if (statuses.length > 0 && !statuses.includes(row.status.status)) return false;
+      if (
+        clients.length > 0 &&
+        !row.clientContributions.some((contribution) =>
+          clients.includes(contribution.clientId ?? NO_CLIENT),
+        )
+      ) {
+        return false;
+      }
       if (
         divisions.length > 0 &&
         !row.divisionCodes.some((code) =>
@@ -85,9 +120,21 @@ export function TimesheetViews({ employeeId }: { employeeId: string }) {
       }
       return true;
     });
-  }, [source.state, statuses, divisions, term]);
+  }, [source.state, statuses, divisions, clients, term]);
 
-  const hasFilters = statuses.length > 0 || divisions.length > 0 || term.trim().length > 0;
+  /**
+   * The client split of the days actually on screen, so the panel and the table
+   * can never state different things. Filtering by client keeps whole days - a
+   * day usually carries work for more than one client - so the other clients'
+   * share of those days stays visible rather than silently vanishing.
+   */
+  const clientTotals = React.useMemo(() => sumClientContributions(days), [days]);
+
+  const hasFilters =
+    statuses.length > 0 ||
+    divisions.length > 0 ||
+    clients.length > 0 ||
+    term.trim().length > 0;
 
   function shift(direction: -1 | 1) {
     setAnchor((current) =>
@@ -161,6 +208,12 @@ export function TimesheetViews({ employeeId }: { employeeId: string }) {
               hint: division.code,
             }))}
           />
+          <MultiSelectFilter
+            label="Client"
+            selected={clients}
+            onChange={setClients}
+            options={clientOptions}
+          />
           <div className="w-full sm:w-56">
             <SearchInput
               value={term}
@@ -177,6 +230,7 @@ export function TimesheetViews({ employeeId }: { employeeId: string }) {
               onClick={() => {
                 setStatuses([]);
                 setDivisions([]);
+                setClients([]);
                 setTerm('');
               }}
             >
@@ -206,6 +260,14 @@ export function TimesheetViews({ employeeId }: { employeeId: string }) {
           <>
             <TotalsCard totals={source.state.data.totals} />
 
+            {clientTotals.length > 0 && (
+              <ClientTotalsCard
+                totals={clientTotals}
+                selected={clients}
+                onSelect={setClients}
+              />
+            )}
+
             {days.length === 0 ? (
               <EmptyState
                 variant={hasFilters ? 'no-results' : 'empty'}
@@ -226,6 +288,7 @@ export function TimesheetViews({ employeeId }: { employeeId: string }) {
                         onClick: () => {
                           setStatuses([]);
                           setDivisions([]);
+                          setClients([]);
                           setTerm('');
                         },
                       }
@@ -303,6 +366,85 @@ function TotalsCard({
             </span>
           ))}
       </div>
+    </Card>
+  );
+}
+
+/**
+ * Time spent per client for the days on screen (`REQ-WORK-001`, `REQ-RPT-002`).
+ *
+ * Each row is also the fastest way to apply the filter, so "how much on this
+ * client" and "show me only those days" are one gesture rather than two. The
+ * share bar is decoration only: the duration is always present as text, and the
+ * percentage beside it, so nothing here depends on the bar being seen.
+ */
+function ClientTotalsCard({
+  totals,
+  selected,
+  onSelect,
+}: {
+  totals: readonly ClientContributionView[];
+  selected: readonly string[];
+  onSelect: (next: readonly string[]) => void;
+}) {
+  function toggle(value: string) {
+    onSelect(
+      selected.includes(value)
+        ? selected.filter((item) => item !== value)
+        : [...selected, value],
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader
+        title="Time by client"
+        description="Active work in this period, grouped by the client each project is delivered for."
+      />
+      <ul className="mt-4 flex flex-col gap-2">
+        {totals.map((contribution) => {
+          const value = contribution.clientId ?? NO_CLIENT;
+          const isSelected = selected.includes(value);
+          return (
+            <li key={value}>
+              <button
+                type="button"
+                aria-pressed={isSelected}
+                onClick={() => toggle(value)}
+                className={cn(
+                  'flex min-h-11 w-full min-w-0 items-center gap-3 rounded-md border px-3 py-2 text-left',
+                  'transition-colors hover:bg-surface-sunken',
+                  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
+                  isSelected ? 'border-accent bg-surface-sunken' : 'border-border',
+                )}
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-body-sm font-medium text-ink">
+                    {contribution.clientLabel}
+                  </span>
+                  <span
+                    aria-hidden
+                    className="mt-1.5 block h-1.5 w-full overflow-hidden rounded-full bg-surface-sunken"
+                  >
+                    <span
+                      className="block h-full rounded-full bg-accent"
+                      style={{ width: `${contribution.sharePercent}%` }}
+                    />
+                  </span>
+                </span>
+                <span className="shrink-0 text-right">
+                  <span className="block text-body-sm font-semibold tabular text-ink">
+                    <Duration value={contribution.active} />
+                  </span>
+                  <span className="block text-caption tabular text-ink-muted">
+                    {contribution.sharePercent}%
+                  </span>
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
     </Card>
   );
 }

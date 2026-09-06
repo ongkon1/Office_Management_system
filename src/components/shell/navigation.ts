@@ -64,6 +64,8 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
         { key: 'wfh', label: 'WFH', href: '/wfh', iconKey: 'house', flag: 'wfhRequests' },
         { key: 'leave', label: 'Leave', href: '/leave', iconKey: 'calendar-off', flag: 'leaveManagement' },
         { key: 'evaluations', label: 'My Evaluation', href: '/evaluations', iconKey: 'award', flag: 'evaluations' },
+        { key: 'requisitions', label: 'Requisition', href: '/requisitions', iconKey: 'package-open', flag: 'requisitions' },
+        { key: 'conveyance', label: 'Conveyance', href: '/conveyance', iconKey: 'car-front', flag: 'conveyance' },
       ],
     },
     {
@@ -97,6 +99,8 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
         { key: 'requests', label: 'Requests', href: '/requests', iconKey: 'inbox', flag: 'wfhRequests' },
         { key: 'evaluations', label: 'Evaluations', href: '/evaluations', iconKey: 'award', flag: 'evaluations' },
         { key: 'reports', label: 'Reports', href: '/reports', iconKey: 'file-chart-column' },
+        { key: 'requisitions', label: 'Requisition', href: '/requisitions', iconKey: 'package-open', flag: 'requisitions' },
+        { key: 'conveyance', label: 'Conveyance', href: '/conveyance', iconKey: 'car-front', flag: 'conveyance' },
       ],
     },
     EMPLOYEE_SELF_GROUP,
@@ -120,6 +124,8 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
         { key: 'wfh', label: 'WFH', href: '/wfh', iconKey: 'house', flag: 'wfhRequests' },
         { key: 'leave', label: 'Leave', href: '/leave', iconKey: 'calendar-off', flag: 'leaveManagement' },
         { key: 'evaluations', label: 'Evaluations', href: '/evaluations', iconKey: 'award', flag: 'evaluations' },
+        { key: 'requisitions', label: 'Requisition', href: '/requisitions', iconKey: 'package-open', flag: 'requisitions' },
+        { key: 'conveyance', label: 'Conveyance', href: '/conveyance', iconKey: 'car-front', flag: 'conveyance' },
       ],
     },
     {
@@ -188,6 +194,14 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
         },
       ],
     },
+    {
+      key: 'review',
+      label: 'Review',
+      items: [
+        { key: 'requisitions', label: 'Requisition', href: '/requisitions', iconKey: 'package-open', flag: 'requisitions' },
+        { key: 'conveyance', label: 'Conveyance', href: '/conveyance', iconKey: 'car-front', flag: 'conveyance' },
+      ],
+    },
   ],
 
   management: [
@@ -211,6 +225,8 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
         { key: 'dashboard', label: 'Dashboard', href: '/dashboard', iconKey: 'layout-dashboard', inMobileBottomNav: true },
         { key: 'employees', label: 'Employees', href: '/employees', iconKey: 'users', inMobileBottomNav: true },
         { key: 'reports', label: 'Reports', href: '/reports', iconKey: 'file-chart-column' },
+        { key: 'requisitions', label: 'Requisition', href: '/requisitions', iconKey: 'package-open', flag: 'requisitions' },
+        { key: 'conveyance', label: 'Conveyance', href: '/conveyance', iconKey: 'car-front', flag: 'conveyance' },
       ],
     },
     {

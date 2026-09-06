@@ -51,6 +51,7 @@ async function seedFlags(page) {
       'wfhRequests', 'leaveManagement', 'attendance', 'evaluations',
       'workloadPlanning', 'notifications', 'financeReports', 'projectCosting',
       'documents', 'messages', 'globalSearch', 'integrations', 'aiInsights',
+      'requisitions', 'conveyance',
     ];
     window.localStorage.setItem(
       'oms.feature-flags',

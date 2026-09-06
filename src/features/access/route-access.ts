@@ -58,6 +58,23 @@ export const ROUTE_RULES: readonly RouteRule[] = [
   { path: '/evaluations', roles: ['employee', 'team_lead', 'hr_manager', 'super_admin'] },
   { path: '/remarks', roles: ['employee', 'team_lead', 'hr_manager', 'super_admin'] },
 
+  /*
+   * Requisition. Every role here except Management, which is read-only and has
+   * no place in the chain. Submission is narrower still — Employee and Team
+   * Lead only — but that is a service rule, not a route rule: Finance opening
+   * `/requisitions` should reach their review queue, not a denial.
+   */
+  {
+    path: '/requisitions',
+    roles: ['employee', 'team_lead', 'hr_manager', 'finance_manager', 'super_admin'],
+  },
+
+  // Conveyance travels the same chain, so it has the same audiences.
+  {
+    path: '/conveyance',
+    roles: ['employee', 'team_lead', 'hr_manager', 'finance_manager', 'super_admin'],
+  },
+
   // Team Lead scope.
   { path: '/team', roles: ['team_lead', 'hr_manager', 'super_admin'] },
   { path: '/projects', roles: ALL_ROLES },

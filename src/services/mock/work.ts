@@ -314,6 +314,8 @@ export const mockDashboardService = {
       },
       attendance: today.attendance,
       isLocked: today.isLocked,
+      overtimeReason: today.overtimeReason,
+      criticalExplanation: today.criticalExplanation,
     };
 
     const weekFrom = weekStart(date);

@@ -146,7 +146,7 @@ function projectView(project: Project, userId: string): TeamProjectView {
     division: divisionRef(project.divisionId),
     manager: employeeRef(project.managerEmployeeId),
     memberCount: memberIds.length,
-    stakeholder: project.clientOrStakeholder,
+    client: project.client,
     startDateLabel: formatDate(project.startDate),
     endDateLabel: project.endDate ? formatDate(project.endDate) : null,
     priority: project.priority,
@@ -459,7 +459,7 @@ export const mockTeamLeadService: TeamLeadService = {
     const project: Project = {
       id: existing?.id ?? `prj-${Date.now()}`, name: input.name.trim(), code: input.code.trim().toUpperCase(),
       divisionId: input.divisionId, managerEmployeeId: input.managerEmployeeId,
-      clientOrStakeholder: input.stakeholder || null, startDate: input.startDate, endDate: input.endDate,
+      client: input.client || null, startDate: input.startDate, endDate: input.endDate,
       priority: input.priority, description: existing?.description ?? null, estimatedMinutes: input.estimatedMinutes,
       budget: input.budgetAmount
         ? { visible: true, value: { amount: input.budgetAmount, currency: 'BDT' } }

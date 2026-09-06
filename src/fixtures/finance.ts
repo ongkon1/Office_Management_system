@@ -56,7 +56,7 @@ export const OVERTIME_MULTIPLIER_NOTE =
 /* -------------------------------------------------------------------------- */
 
 /**
- * Which project work is billable to a client or stakeholder.
+ * Which project work is billable to a client.
  *
  * Internal training and legacy maintenance are not billable, which is what
  * makes the billable-versus-non-billable reconciliation show a real split

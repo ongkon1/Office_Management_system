@@ -35,7 +35,13 @@ export function Avatar({ name, src, size = 'md', className }: AvatarProps) {
     >
       {src ? (
         // eslint-disable-next-line @next/next/no-img-element -- fixture avatars are remote/data URLs during the frontend milestone
-        <img src={src} alt="" className="size-full object-cover" />
+        <img
+          src={src}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          className="size-full object-cover"
+        />
       ) : (
         <span aria-hidden>{initialsOf(name)}</span>
       )}
