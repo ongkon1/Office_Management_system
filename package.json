@@ -30,8 +30,24 @@
     "audit:security": "npm audit --audit-level=high",
     "audit:contrast": "node scripts/contrast-audit.mjs",
     "audit:responsive": "node scripts/responsive-audit.mjs",
+<<<<<<< HEAD
     "verify": "npm run typecheck && npm run lint && npm run audit:contrast && npm run test && npm run build",
     "verify:backend": "npm run typecheck && npm run lint && npm run db:validate && npm run test:backend && npm run audit:security && npm run build"
+=======
+    "audit:a11y": "node scripts/a11y-audit.mjs",
+    "audit:stress": "node scripts/stress-audit.mjs",
+    "audit:perf": "node scripts/perf-audit.mjs",
+    "audit:journeys": "node scripts/journey-audit.mjs",
+    "audit:flows": "node scripts/phase2-flows.mjs",
+    "audit:flows3": "node scripts/phase3-flows.mjs",
+    "audit:flows4": "node scripts/phase4-flows.mjs",
+    "audit:flows5": "node scripts/phase5-flows.mjs",
+    "audit:flows6": "node scripts/phase6-flows.mjs",
+    "audit:flows7": "node scripts/phase7-flows.mjs",
+    "audit:requisition": "node scripts/requisition-flows.mjs",
+    "audit:conveyance": "node scripts/conveyance-flows.mjs",
+    "verify": "npm run typecheck && npm run lint && npm run audit:contrast && npm run test && npm run build"
+>>>>>>> f5f666db5e9bd3731019b7c923cdc803306a5a16
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1125.0",

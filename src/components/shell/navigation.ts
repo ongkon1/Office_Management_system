@@ -54,6 +54,7 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
         { key: 'timesheets', label: 'My Timesheet', href: '/timesheets', iconKey: 'clock', inMobileBottomNav: true },
         { key: 'tasks', label: 'My Tasks', href: '/tasks', iconKey: 'check-square', inMobileBottomNav: true },
         { key: 'divisions', label: 'My Divisions', href: '/divisions', iconKey: 'building' },
+        { key: 'remarks', label: 'Remarks', href: '/remarks', iconKey: 'message-square' },
       ],
     },
     {
@@ -63,6 +64,8 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
         { key: 'wfh', label: 'WFH', href: '/wfh', iconKey: 'house', flag: 'wfhRequests' },
         { key: 'leave', label: 'Leave', href: '/leave', iconKey: 'calendar-off', flag: 'leaveManagement' },
         { key: 'evaluations', label: 'My Evaluation', href: '/evaluations', iconKey: 'award', flag: 'evaluations' },
+        { key: 'requisitions', label: 'Requisition', href: '/requisitions', iconKey: 'package-open', flag: 'requisitions' },
+        { key: 'conveyance', label: 'Conveyance', href: '/conveyance', iconKey: 'car-front', flag: 'conveyance' },
       ],
     },
     {
@@ -96,6 +99,8 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
         { key: 'requests', label: 'Requests', href: '/requests', iconKey: 'inbox', flag: 'wfhRequests' },
         { key: 'evaluations', label: 'Evaluations', href: '/evaluations', iconKey: 'award', flag: 'evaluations' },
         { key: 'reports', label: 'Reports', href: '/reports', iconKey: 'file-chart-column' },
+        { key: 'requisitions', label: 'Requisition', href: '/requisitions', iconKey: 'package-open', flag: 'requisitions' },
+        { key: 'conveyance', label: 'Conveyance', href: '/conveyance', iconKey: 'car-front', flag: 'conveyance' },
       ],
     },
     EMPLOYEE_SELF_GROUP,
@@ -119,6 +124,8 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
         { key: 'wfh', label: 'WFH', href: '/wfh', iconKey: 'house', flag: 'wfhRequests' },
         { key: 'leave', label: 'Leave', href: '/leave', iconKey: 'calendar-off', flag: 'leaveManagement' },
         { key: 'evaluations', label: 'Evaluations', href: '/evaluations', iconKey: 'award', flag: 'evaluations' },
+        { key: 'requisitions', label: 'Requisition', href: '/requisitions', iconKey: 'package-open', flag: 'requisitions' },
+        { key: 'conveyance', label: 'Conveyance', href: '/conveyance', iconKey: 'car-front', flag: 'conveyance' },
       ],
     },
     {
@@ -147,6 +154,13 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
       label: 'Costing',
       items: [
         {
+          key: 'billable',
+          label: 'Billable Analysis',
+          href: '/finance/billable',
+          iconKey: 'chart-pie',
+          permission: 'finance.cost.view',
+        },
+        {
           key: 'project-costs',
           label: 'Project Costs',
           href: '/finance/project-costs',
@@ -162,13 +176,14 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
           flag: 'projectCosting',
           permission: 'finance.cost.view',
         },
+        // Reachable without the cost permission: the money is redacted inside
+        // the screen, and the hours remain usable (`FE-0611`).
         {
           key: 'payroll',
           label: 'Payroll Reports',
           href: '/finance/payroll',
           iconKey: 'receipt',
           flag: 'financeReports',
-          permission: 'finance.cost.view',
         },
         {
           key: 'financial-reports',
@@ -176,8 +191,15 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
           href: '/finance/reports',
           iconKey: 'file-chart-column',
           flag: 'financeReports',
-          permission: 'finance.cost.view',
         },
+      ],
+    },
+    {
+      key: 'review',
+      label: 'Review',
+      items: [
+        { key: 'requisitions', label: 'Requisition', href: '/requisitions', iconKey: 'package-open', flag: 'requisitions' },
+        { key: 'conveyance', label: 'Conveyance', href: '/conveyance', iconKey: 'car-front', flag: 'conveyance' },
       ],
     },
   ],
@@ -203,6 +225,8 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
         { key: 'dashboard', label: 'Dashboard', href: '/dashboard', iconKey: 'layout-dashboard', inMobileBottomNav: true },
         { key: 'employees', label: 'Employees', href: '/employees', iconKey: 'users', inMobileBottomNav: true },
         { key: 'reports', label: 'Reports', href: '/reports', iconKey: 'file-chart-column' },
+        { key: 'requisitions', label: 'Requisition', href: '/requisitions', iconKey: 'package-open', flag: 'requisitions' },
+        { key: 'conveyance', label: 'Conveyance', href: '/conveyance', iconKey: 'car-front', flag: 'conveyance' },
       ],
     },
     {

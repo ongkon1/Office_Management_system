@@ -34,6 +34,8 @@ export type FeatureFlagKey =
   | 'messages'
   | 'globalSearch'
   | 'integrations'
+  | 'requisitions'
+  | 'conveyance'
   | 'aiInsights';
 
 export const FEATURE_FLAGS: Readonly<Record<FeatureFlagKey, FeatureFlagDefinition>> = {
@@ -102,6 +104,24 @@ export const FEATURE_FLAGS: Readonly<Record<FeatureFlagKey, FeatureFlagDefinitio
     description: 'Cost rates, labour cost, and budget variance. Additionally requires the financial permission.',
     defaultEnabled: true,
     routes: ['/finance/project-costs', '/finance/division-costs'],
+  },
+  requisitions: {
+    key: 'requisitions',
+    label: 'Requisition',
+    phase: 'phase_2',
+    description:
+      'Item requisition raised by an Employee or Team Lead, reviewed by the Team Lead and then by HR, Finance and the Super Administrator.',
+    defaultEnabled: true,
+    routes: ['/requisitions'],
+  },
+  conveyance: {
+    key: 'conveyance',
+    label: 'Conveyance',
+    phase: 'phase_2',
+    description:
+      'Travel-expense claims with an optional receipt, reviewed by the Team Lead and then by HR, Finance and the Super Administrator.',
+    defaultEnabled: true,
+    routes: ['/conveyance'],
   },
   documents: {
     key: 'documents',

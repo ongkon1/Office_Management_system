@@ -101,15 +101,17 @@ export function ChartContainer({
   }
 
   return (
-    <figure className={cn('rounded-lg border border-border bg-surface p-4', className)}>
-      <figcaption className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+    <figure
+      className={cn('min-w-0 rounded-lg border border-border bg-surface p-4', className)}
+    >
+      <figcaption className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
           <h3 className="text-h3 text-ink">{title}</h3>
           {description && (
             <p className="mt-0.5 text-body-sm text-ink-muted">{description}</p>
           )}
         </div>
-        {actions && <div className="flex shrink-0 gap-2">{actions}</div>}
+        {actions && <div className="flex min-w-0 flex-wrap gap-2">{actions}</div>}
       </figcaption>
 
       <div className="mt-4" role="img" aria-label={`${title}. ${tableCaption}`}>
@@ -286,7 +288,7 @@ export function DonutChart({
               x="50%"
               y="47%"
               textAnchor="middle"
-              className="fill-[var(--color-ink)] text-[1.25rem] font-semibold"
+              className="fill-[var(--color-ink)] text-h3 font-semibold"
               style={{ fontVariantNumeric: 'tabular-nums' }}
             >
               {centerValue}
@@ -295,7 +297,7 @@ export function DonutChart({
               x="50%"
               y="60%"
               textAnchor="middle"
-              className="fill-[var(--color-ink-muted)] text-[0.75rem]"
+              className="fill-[var(--color-ink-muted)] text-caption"
             >
               {centerLabel}
             </text>

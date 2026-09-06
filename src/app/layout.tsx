@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { DM_Sans } from 'next/font/google';
 import { ToastProvider } from '@/components/feedback/toast';
+import { SessionProvider } from '@/features/access/session-provider';
 import './globals.css';
 
 const dmSans = DM_Sans({
@@ -38,7 +39,7 @@ export const viewport: Viewport = {
   // Zoom is never disabled: capping it fails WCAG 2.2 AA (REQ-NFR-UX-003).
   maximumScale: 5,
   userScalable: true,
-  themeColor: '#f7f5f1',
+  themeColor: '#ffffff',
   viewportFit: 'cover',
 };
 
@@ -46,7 +47,9 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
     <html lang="en" className={`${dmSans.variable} h-full`} suppressHydrationWarning>
       <body className="min-h-full antialiased">
-        <ToastProvider>{children}</ToastProvider>
+        <SessionProvider>
+          <ToastProvider>{children}</ToastProvider>
+        </SessionProvider>
       </body>
     </html>
   );

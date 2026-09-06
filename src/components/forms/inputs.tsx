@@ -17,7 +17,9 @@ const CONTROL_HEIGHT = 'h-[var(--control-height)] px-[var(--control-padding-x)]'
 function controlClasses(invalid: boolean, extra?: string): string {
   return cn(
     CONTROL_BASE,
-    invalid ? 'border-danger' : 'border-border-strong hover:border-ink-subtle',
+    invalid
+      ? 'border-danger'
+      : 'border-border-strong hover:border-highlight-hover focus-visible:border-focus-border',
     extra,
   );
 }
@@ -66,7 +68,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(function Inp
       className={cn(
         controlClasses(isInvalid, 'flex items-center gap-2 px-[var(--control-padding-x)]'),
         'h-[var(--control-height)] focus-within:outline focus-within:outline-2',
-        'focus-within:outline-offset-2 focus-within:outline-focus',
+        'focus-within:border-focus-border focus-within:outline-offset-2 focus-within:outline-focus',
       )}
     >
       {prefix && (
@@ -460,7 +462,7 @@ export function Switch({
         <span
           aria-hidden
           className={cn(
-            'inline-block size-4.5 rounded-full bg-white shadow-xs transition-transform duration-150',
+            'inline-block size-4.5 rounded-full bg-surface shadow-xs transition-transform duration-150',
             checked ? 'translate-x-[1.4rem]' : 'translate-x-1',
           )}
         />

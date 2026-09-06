@@ -29,7 +29,10 @@ export function Card({
   return (
     <div
       className={cn(
-        'rounded-lg border border-border bg-surface',
+        // `min-w-0` is load-bearing: a card is nearly always a grid or flex
+        // child, whose default `min-width: auto` lets it grow to its content's
+        // min-content width and stretch the whole track past the viewport.
+        'min-w-0 rounded-lg border border-border bg-surface shadow-xs',
         elevation === 'raised' && 'shadow-sm',
         PADDING_CLASSES[padding],
         className,
@@ -46,7 +49,14 @@ export interface CardHeaderProps {
   description?: string;
   /** Right-aligned controls: a filter, a link, an overflow menu. */
   actions?: React.ReactNode;
-  /** Heading level so the page keeps a correct outline. */
+  /**
+   * Heading level so the page keeps a correct outline.
+   *
+   * `h2` by default because a card is a top-level section under the page `h1`
+   * on nearly every screen. Pass `h3` only where the card genuinely nests
+   * inside a section that already has its own `h2` — skipping a level leaves a
+   * screen-reader user unable to tell what a section belongs to.
+   */
   as?: 'h2' | 'h3' | 'h4';
   className?: string;
 }
@@ -55,18 +65,22 @@ export function CardHeader({
   title,
   description,
   actions,
-  as: Heading = 'h3',
+  as: Heading = 'h2',
   className,
 }: CardHeaderProps) {
   return (
-    <div className={cn('flex items-start justify-between gap-3', className)}>
-      <div className="min-w-0">
+    <div className={cn('flex flex-wrap items-start justify-between gap-3', className)}>
+      <div className="min-w-0 flex-1">
         <Heading className="text-h3 text-ink">{title}</Heading>
         {description && (
           <p className="mt-0.5 text-body-sm text-ink-muted">{description}</p>
         )}
       </div>
-      {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+      {/*
+        Not `shrink-0`: a header with a long title and several actions has to be
+        able to wrap, or it pushes the card wider than the viewport.
+      */}
+      {actions && <div className="flex min-w-0 flex-wrap items-center gap-2">{actions}</div>}
     </div>
   );
 }
@@ -114,7 +128,10 @@ export function MetricCard({ tile, loading = false, className }: MetricCardProps
       </div>
 
       {loading ? (
-        <Skeleton height="2rem" width="60%" className="mt-2" />
+        <div role="status" aria-busy className="mt-2">
+          <span className="sr-only">Loading {tile.label}</span>
+          <Skeleton height="2rem" width="60%" />
+        </div>
       ) : tile.restricted ? (
         <div className="mt-2">
           <RestrictedValue />
@@ -149,8 +166,8 @@ export function MetricCard({ tile, loading = false, className }: MetricCardProps
       <Link
         href={tile.href}
         className={cn(
-          'group flex flex-col rounded-lg border border-border bg-surface p-4',
-          'transition-colors duration-150 hover:border-border-strong hover:bg-surface-sunken',
+          'group flex flex-col rounded-lg border border-border border-l-2 border-l-brand bg-surface p-4 shadow-xs',
+          'transition-colors duration-150 hover:border-highlight-hover hover:bg-surface-sunken hover:shadow-sm',
           className,
         )}
       >
@@ -161,7 +178,10 @@ export function MetricCard({ tile, loading = false, className }: MetricCardProps
 
   return (
     <div
-      className={cn('flex flex-col rounded-lg border border-border bg-surface p-4', className)}
+      className={cn(
+        'flex flex-col rounded-lg border border-border border-l-2 border-l-brand bg-surface p-4 shadow-xs',
+        className,
+      )}
     >
       {body}
     </div>

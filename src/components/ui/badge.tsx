@@ -43,8 +43,10 @@ export function Badge({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 rounded-full border px-2 py-0.5',
-        'text-caption font-medium whitespace-nowrap',
+        'inline-flex max-w-full min-w-0 items-center gap-1 rounded-full border px-2 py-0.5',
+        // Not `whitespace-nowrap`: a translated or unusually long label has to
+        // be able to wrap, or a badge pushes the whole page sideways.
+        'text-caption font-medium break-words',
         TONE_CLASSES[tone],
         className,
       )}
@@ -76,7 +78,7 @@ export function CountBadge({
     <span
       className={cn(
         'inline-flex min-w-5 items-center justify-center rounded-full px-1.5',
-        'bg-accent text-caption font-semibold text-white tabular',
+        'bg-accent text-caption font-semibold text-ink-on-accent tabular',
         className,
       )}
       aria-label={label ? `${count} ${label}` : undefined}

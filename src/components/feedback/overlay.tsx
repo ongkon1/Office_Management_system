@@ -41,9 +41,21 @@ function useOverlayBehavior(open: boolean, onClose: () => void) {
 
       if (event.key !== 'Tab' || !ref.current) return;
 
+      /*
+       * Visibility, not layout position. `offsetParent` was the obvious test
+       * and the wrong one: it is `null` for descendants of a fixed-position
+       * container in some engines, which silently empties this list and
+       * disables the trap altogether. Checking the computed style asks the
+       * question actually being asked — can this be focused and seen.
+       */
       const focusable = Array.from(
         ref.current.querySelectorAll<HTMLElement>(FOCUSABLE),
-      ).filter((element) => element.offsetParent !== null);
+      ).filter((element) => {
+        if (element.hasAttribute('hidden')) return false;
+        if (element.getAttribute('aria-hidden') === 'true') return false;
+        const style = window.getComputedStyle(element);
+        return style.display !== 'none' && style.visibility !== 'hidden';
+      });
       if (focusable.length === 0) return;
 
       const first = focusable[0];

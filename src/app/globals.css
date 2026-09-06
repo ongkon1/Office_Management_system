@@ -4,84 +4,119 @@
    Design tokens
    FE-0107 semantic colour  ·  FE-0109 typography  ·  FE-0110 spacing, radius,
    border, shadow, elevation, z-index, motion  ·  FE-0111 density
-   FE-0112 light mode is the product theme; dark values are defined but not
-   activated in the MVP.
+   FE-0112 light mode is the only product theme.
 
    Contrast results are recorded in docs/frontend/phase-1/contrast-audit.md
    (FE-0108). Any change to a colour pair below must re-run that audit.
    ========================================================================== */
 
 @theme {
-  /* --- Palette: warm off-white canvas, charcoal ink, restrained gold ------ */
-  --color-canvas: #f7f5f1;
+  /* --- Palette: the PowerInAI identity on a light canvas ------------------
+     Taken from powerinai.com's own stylesheet: --accent2/--neon2 #6c63ff,
+     --accent/--neon #ff3c7e, --primary #18192b, and the violet-to-pink
+     gradient those two make.
+
+     The site runs that palette on a near-black canvas. Inverting it is not a
+     matter of swapping background for foreground: #6c63ff reaches only 4.32:1
+     on white and #ff3c7e only 3.39:1, so neither can carry small text or a
+     white button label here. The identity hues are therefore kept exactly
+     where contrast permits — the brand mark, the focus ring, the gradient,
+     the chart series — and deepened one step for anything that has to be read.
+     Every value below is checked by `npm run audit:contrast`. */
+  --color-canvas: #ffffff;
   --color-surface: #ffffff;
   --color-surface-raised: #ffffff;
-  --color-surface-sunken: #f1eee8;
-  --color-surface-inverse: #1c1b19;
+  /* Violet-tinted rather than neutral grey: it is what makes a white app read
+     as this brand instead of as a default. */
+  --color-surface-sunken: #f5f4ff;
+  /* powerinai.com --primary, verbatim. */
+  --color-surface-inverse: #18192b;
 
-  --color-ink: #1c1b19;
-  --color-ink-muted: #57534e;
-  --color-ink-subtle: #6e6760;
-  --color-ink-inverse: #faf9f7;
+  /* Ink is the site's own near-black, not a neutral slate, so every line of
+     text on every screen carries the brand's temperature. */
+  --color-ink: #18192b;
+  --color-ink-muted: #4b4a68;
+  --color-ink-subtle: #5c5b78;
+  --color-ink-inverse: #ffffff;
   --color-ink-on-accent: #ffffff;
 
-  --color-border: #e2ddd4;
+  --color-border: #e6e4f2;
   /* Control and input edges: non-text contrast must reach 3:1 (WCAG 1.4.11). */
-  --color-border-strong: #8b8070;
-  --color-border-inverse: #3f3d39;
+  --color-border-strong: #827ea0;
+  --color-border-inverse: #3a3a5c;
 
-  --color-primary: #2b2a27;
-  --color-primary-hover: #1c1b19;
-  --color-primary-active: #131211;
+  /* #6c63ff is the site's violet, unaltered. It clears the 3:1 non-text
+     threshold, so it is the brand indicator and the focus ring; it does not
+     clear 4.5:1, so it never carries a label. */
+  --color-brand: #6c63ff;
+  --color-brand-dark: #4a41bf;
+  --color-brand-light: #e8e6ff;
+  --color-highlight: #6c63ff;
+  --color-highlight-hover: #5b52e6;
 
-  --color-accent: #835e12;
-  --color-accent-hover: #694a0d;
-  --color-accent-subtle: #fdf6e6;
-  --color-accent-border: #e8d4a3;
+  --color-primary: #5b52e6;
+  --color-primary-hover: #4a41bf;
+  --color-primary-active: #3f37a3;
+
+  --color-accent: #5b52e6;
+  --color-accent-hover: #3f37a3;
+  --color-accent-subtle: #f2f0ff;
+  --color-accent-border: #c3bdff;
+  --color-focus-border: #6c63ff;
+
+  /* The gradient partner. Pink is deliberately absent from the working UI:
+     #ff3c7e sits close enough to the Critical red that a pink control beside a
+     status badge would read as a severity. It appears only on brand surfaces —
+     the mark and the sign-in panel — where nothing is being classified. */
+  --color-brand-pink: #ff3c7e;
+  --color-brand-pink-deep: #be185d;
 
   /* --- Status: the five day classifications (REQ-TIME-016/017) ----------- */
-  --color-missing: #6b6560;
-  --color-missing-surface: #f2f0ed;
-  --color-missing-border: #d6d1cb;
+  --color-missing: #64748b;
+  --color-missing-surface: #f8fafc;
+  --color-missing-border: #cbd5e1;
 
-  --color-undertime: #8a6100;
-  --color-undertime-surface: #fdf5e3;
-  --color-undertime-border: #ecd9a8;
+  --color-undertime: #92400e;
+  --color-undertime-surface: #fffbeb;
+  --color-undertime-border: #fcd34d;
 
-  --color-complete: #1f6b45;
-  --color-complete-surface: #eaf5ef;
-  --color-complete-border: #b3ddc6;
+  --color-complete: #166534;
+  --color-complete-surface: #f0fdf4;
+  --color-complete-border: #86efac;
 
-  --color-overtime: #9c4c11;
-  --color-overtime-surface: #fdf0e6;
-  --color-overtime-border: #f0cba9;
+  --color-overtime: #9a3412;
+  --color-overtime-surface: #fff7ed;
+  --color-overtime-border: #fdba74;
 
-  --color-critical: #a51f1f;
-  --color-critical-surface: #fdedec;
-  --color-critical-border: #f2bfbc;
+  --color-critical: #dc2626;
+  --color-critical-surface: #fff7f7;
+  --color-critical-border: #fca5a5;
 
   /* --- Feedback ---------------------------------------------------------- */
-  --color-success: #1f6b45;
-  --color-success-surface: #eaf5ef;
-  --color-warning: #8a6100;
-  --color-warning-surface: #fdf5e3;
-  --color-danger: #a51f1f;
-  --color-danger-surface: #fdedec;
-  --color-info: #1d5c86;
-  --color-info-surface: #e9f2f8;
+  --color-success: #166534;
+  --color-success-brand: #16a34a;
+  --color-success-surface: #f0fdf4;
+  --color-warning: #92400e;
+  --color-warning-brand: #f59e0b;
+  --color-warning-surface: #fffbeb;
+  --color-danger: #dc2626;
+  --color-danger-surface: #fff7f7;
+  --color-info: #075985;
+  --color-info-brand: #0284c7;
+  --color-info-surface: #f0f9ff;
 
-  --color-focus: #1d5c86;
+  --color-focus: #6c63ff;
 
   /* --- Charts ------------------------------------------------------------
      Ordered so each series differs from its neighbour in lightness as well as
      hue (adjacent luminance ratio >= 1.2). That is what keeps a chart legible
      in greyscale and for a colour-blind viewer, which hue alone does not. */
-  --color-chart-1: #2f5d7c;
-  --color-chart-2: #9a6f16;
-  --color-chart-3: #43506b;
-  --color-chart-4: #a55a2a;
-  --color-chart-5: #1f6b45;
-  --color-chart-6: #9d5a86;
+  --color-chart-1: #4338ca;
+  --color-chart-2: #ec4899;
+  --color-chart-3: #155e75;
+  --color-chart-4: #a855f7;
+  --color-chart-5: #0369a1;
+  --color-chart-6: #6c63ff;
 
   /* --- Typography (FE-0109) ---------------------------------------------- */
   --font-sans: var(--font-dm-sans), ui-sans-serif, system-ui, -apple-system,
@@ -125,19 +160,22 @@
   --text-metric--letter-spacing: -0.02em;
   --text-metric--font-weight: 600;
 
-  /* --- Radius (FE-0110) --------------------------------------------------- */
-  --radius-xs: 0.25rem;
-  --radius-sm: 0.375rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
+  /* --- Radius (FE-0110) ---------------------------------------------------
+     Opened up one step to match powerinai.com, which rounds cards at 20px and
+     controls at 10px. The scale keeps its shape, so nothing needs re-tuning
+     per component. */
+  --radius-xs: 0.3125rem;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.25rem;
   --radius-full: 9999px;
 
   /* --- Shadow: a deliberately short scale --------------------------------- */
-  --shadow-xs: 0 1px 2px 0 rgb(28 27 25 / 0.05);
-  --shadow-sm: 0 1px 3px 0 rgb(28 27 25 / 0.08), 0 1px 2px -1px rgb(28 27 25 / 0.06);
-  --shadow-md: 0 4px 12px -2px rgb(28 27 25 / 0.1), 0 2px 6px -2px rgb(28 27 25 / 0.06);
-  --shadow-lg: 0 12px 28px -6px rgb(28 27 25 / 0.14), 0 4px 10px -4px rgb(28 27 25 / 0.08);
+  --shadow-xs: 0 1px 2px 0 rgb(24 25 43 / 0.05);
+  --shadow-sm: 0 2px 8px -2px rgb(24 25 43 / 0.08), 0 1px 2px -1px rgb(24 25 43 / 0.05);
+  --shadow-md: 0 8px 20px -6px rgb(24 25 43 / 0.12), 0 2px 8px -4px rgb(108 99 255 / 0.10);
+  --shadow-lg: 0 18px 40px -12px rgb(24 25 43 / 0.16), 0 6px 16px -8px rgb(108 99 255 / 0.14);
 
   /* --- Motion ------------------------------------------------------------- */
   --ease-standard: cubic-bezier(0.2, 0, 0.15, 1);
@@ -189,6 +227,19 @@
   /* Every interactive target reserves a 44px hit area regardless of density. */
   --touch-target: 2.75rem;
 
+  /*
+   * The brand gradient (powerinai.com's signature violet-to-pink).
+   *
+   * Two of them, because a gradient that carries a label and a gradient that
+   * carries nothing have different obligations. `--gradient-brand` runs
+   * between stops that both hold a white label at AA (5.53:1 and 6.04:1), so
+   * the mark stays readable end to end. `--gradient-brand-vivid` uses the
+   * site's own unaltered stops and is only ever laid under empty space.
+   */
+  --gradient-brand: linear-gradient(135deg, #5b52e6 0%, #be185d 100%);
+  --gradient-brand-vivid: linear-gradient(135deg, #6c63ff 0%, #ff3c7e 100%);
+  --gradient-brand-wash: linear-gradient(160deg, #f5f4ff 0%, #fdf3f8 100%);
+
   --shell-sidebar-width: 16rem;
   --shell-sidebar-width-collapsed: 4.5rem;
   --shell-topbar-height: 3.5rem;
@@ -208,23 +259,7 @@
   --section-gap: 1rem;
 }
 
-/* FE-0112: dark values are staged but not activated. The MVP ships light only,
-   so this block is opt-in via [data-theme="dark"] and no media query enables
-   it. Contrast for these pairs is audited before dark mode is ever released. */
-[data-theme="dark"] {
-  --color-canvas: #161513;
-  --color-surface: #1f1e1c;
-  --color-surface-raised: #262523;
-  --color-surface-sunken: #131211;
-  --color-ink: #f5f3ef;
-  --color-ink-muted: #b8b2a8;
-  --color-ink-subtle: #948d82;
-  --color-border: #35332f;
-  --color-border-strong: #4a4741;
-  color-scheme: dark;
-}
-
-/* ==========================================================================
+/* ========================================================================== 
    Base
    ========================================================================== */
 
@@ -299,10 +334,54 @@
     overflow-x: auto;
     overscroll-behavior-x: contain;
     scrollbar-width: thin;
+    /*
+     * `relative` is load-bearing. `sr-only` text is absolutely positioned;
+     * without a positioned ancestor its containing block sits further up the
+     * tree, so it escapes this container's clipping and stretches the
+     * document's scroll width to the full content width — even though the
+     * visible content is correctly clipped and scrolls here.
+     */
+    position: relative;
   }
 
   .safe-bottom {
     padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+
+  /*
+   * Brand gradients.
+   *
+   * Each one declares an opaque `background-color` *underneath* its gradient,
+   * and that colour is load-bearing rather than tidiness. A gradient is painted
+   * through `background-image`, which leaves the computed `background-color`
+   * transparent — so anything resolving a text colour against its background
+   * (the responsive audit does exactly this, and so do forced-colors mode,
+   * print, and any engine that drops the image) sees straight through to the
+   * white card behind and finds white text on white. The fallback is the real
+   * background as far as every one of those is concerned, so it is chosen to
+   * hold the label at AA on its own.
+   */
+
+  /* The application mark. Carries a letter, so it uses the AA-safe stops and a
+     fallback that gives that letter 5.53:1 unaided. */
+  .brand-mark {
+    background-color: var(--color-primary);
+    background-image: var(--gradient-brand);
+    color: var(--color-ink-inverse);
+  }
+
+  /* A brand wash for large empty surfaces. Both stops stay light enough that
+     body ink keeps well over 4.5:1 anywhere on the sweep. */
+  .brand-wash {
+    background-color: var(--color-surface-sunken);
+    background-image: var(--gradient-brand-wash);
+  }
+
+  /* A hairline of brand colour, for the top edge of a panel or a divider.
+     Carries no text, but keeps a fallback so the edge does not disappear. */
+  .brand-rule {
+    background-color: var(--color-brand);
+    background-image: var(--gradient-brand-vivid);
   }
 }
 
@@ -379,15 +458,78 @@
    ========================================================================== */
 
 @media print {
-  body {
-    background: #fff;
+  /*
+   * A printed report has to survive leaving the application: the reader has no
+   * navigation, no hover, and no way to ask what the filters were. So the
+   * chrome goes and the provenance stays.
+   */
+  @page {
+    margin: 14mm;
   }
 
+  body {
+    background: #fff;
+    color: #000;
+  }
+
+  /* Navigation, action bars, filter builders and toasts. */
   [data-print="hide"] {
     display: none !important;
   }
 
+  /* The shell reserves space for a sidebar and a sticky bar that are now gone. */
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
   .table-scroll {
     overflow: visible !important;
+  }
+
+  /* Cards become plain sections: a border and a shadow cost ink and say nothing. */
+  [class*="shadow"] {
+    box-shadow: none !important;
+  }
+
+  /*
+   * Table headers repeat on every page and totals are never orphaned from the
+   * rows they total — the two failures that make a printed report unusable.
+   */
+  thead {
+    display: table-header-group;
+  }
+
+  tfoot {
+    display: table-footer-group;
+  }
+
+  tr,
+  img,
+  figure {
+    break-inside: avoid;
+  }
+
+  h1,
+  h2,
+  h3 {
+    break-after: avoid;
+  }
+
+  /* A link's destination is invisible on paper unless it is written out. */
+  a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 90%;
+    color: #444;
+  }
+
+  /*
+   * The chart data table is the printed equivalent of the chart, so it is
+   * revealed even when collapsed on screen. Scoped to that one container:
+   * un-hiding everything would print dialog contents and collapsed panels the
+   * reader never chose to open.
+   */
+  .table-scroll[hidden] {
+    display: block !important;
   }
 }

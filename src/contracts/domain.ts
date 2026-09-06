@@ -251,7 +251,15 @@ export interface Project extends AuditableRecord {
   /** Exactly one division (`REQ-WORK-001`). */
   readonly divisionId: string;
   readonly managerEmployeeId: string;
-  readonly clientOrStakeholder: string | null;
+  /**
+   * The client or stakeholder the project is delivered for (`REQ-WORK-001`).
+   *
+   * A single free-text name on the project, not a separate entity: the
+   * requirement stores one label per project and there is no Client record to
+   * point at. Time therefore reaches a client only through its project, which
+   * is what `clientContributions` on a day row regroups.
+   */
+  readonly client: string | null;
   readonly startDate: IsoDate;
   readonly endDate: IsoDate | null;
   readonly priority: Priority;
