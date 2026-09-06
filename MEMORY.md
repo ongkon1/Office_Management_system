@@ -2,7 +2,7 @@
 
 Durable context for anyone — human or AI — picking up this codebase. It records what the plan files don't: why things are the way they are, what's decided versus assumed, and the rules that are easy to break by accident.
 
-Last updated: **2 September 2026** (end of frontend Phase 1).
+Last updated: **6 September 2026** (Backend Phase 1 complete).
 
 ---
 
@@ -103,6 +103,9 @@ scripts/
 | `npm run audit:contrast` | WCAG 2.2 AA across every token pairing |
 | `npm run audit:responsive` | Needs a dev server already running |
 | `npm run test` | Vitest |
+| `npm run verify:backend` | Typecheck → lint → migration validation → backend suites → dependency audit → production build |
+| `npm run test:e2e` | Playwright browser workflow tests; starts the development server |
+| `npm run db:validate` | Validates ordered migrations, recovery scripts, destructive SQL, and prohibited floating types |
 
 Environment: Windows + WAMP, PowerShell. **Not currently a git repository.**
 
@@ -130,9 +133,11 @@ Environment: Windows + WAMP, PowerShell. **Not currently a git repository.**
 |---|---|---|
 | Frontend | 0 — Product and UX foundation | Done (19/19) |
 | Frontend | 1 — Next.js foundation and design system | Done (26/26) |
-| Frontend | 2 — Authentication and role-based shell | **Next** (0/10) |
+| Frontend | 2 — Authentication and role-based shell | Pending (0/10) |
 | Frontend | 3–9 | Pending |
-| Backend | 0–9 | Pending — blocked on frontend contracts |
+| Backend | 0 — Architecture and delivery foundation | Done (25/25) |
+| Backend | 1 — MySQL schema and data foundation | Next (0/26) |
+| Backend | 2–9 | Pending |
 
 Phase 2 replaces the temporary index at `/` with `/login` and role-based redirection.
 
@@ -164,3 +169,8 @@ Later phases harden screens and fixtures around these assumptions, so the cost o
 | Phase 1 | Hand-built charts (inline SVG) instead of a charting library | Full control of the colour-safe series and the always-present data-table equivalent |
 | Phase 1 | Added two custom audit gates | Both found real defects on first run — a 1.70:1 control border, two chart series 1.02 apart in luminance, 8 undersized touch targets, and a component stealing focus on mount |
 | Phase 1 | Native `<select>` rather than a custom listbox | Free platform keyboard behavior, mobile pickers, and screen-reader support |
+| Backend Phase 0 | Contract inventory maps every current `ServiceRegistry` operation to a server use-case family | Preserves the frontend boundary and exposes missing later-phase contracts before database work |
+| Backend Phase 0 | Domain/application/infrastructure/delivery/composition dependency direction | Keeps calculations, authorization and transactions framework-independent and testable |
+| Backend Phase 0 | Drizzle/mysql2, Better Auth, Zod, BullMQ/Redis, private S3, Resend, Node 24 containers and MySQL 8.4 | Satisfies the documented transaction, security, durable-work, protected-file and deployment criteria while keeping providers behind ports |
+
+Backend Phases 0 and 1 are complete. Architecture evidence lives in `docs/backend/phase-0/`; four checksum-protected MySQL migrations, least-privilege runtime/migrator separation, deterministic development seeds, scoped repository adapters, isolated database builders, and verification evidence live in `drizzle/`, `src/server/`, `scripts/`, and `docs/backend/phase-1/`. Backend Phase 2 is next. Seed identities and organization data are demonstrations, not authoritative production inputs; provider credentials, production domains, capacity sizing, and RTO/RPO remain deployment/business inputs.

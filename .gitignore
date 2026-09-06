@@ -2,6 +2,8 @@
 
 # dependencies
 /node_modules
+/.tools
+/node-v*-win-x64.zip
 /.pnp
 .pnp.*
 .yarn/*
@@ -30,8 +32,9 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files (the documented template is committed)
 .env*
+!.env.example
 
 # vercel
 .vercel

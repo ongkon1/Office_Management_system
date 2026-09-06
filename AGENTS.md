@@ -160,9 +160,12 @@ React Compiler lint errors (`set-state-in-effect`, render-phase mutation) are re
 |---|---|---|
 | Frontend | 0 — Product and UX foundation | Done (19/19) |
 | Frontend | 1 — Foundation and design system | Done (26/26) |
-| Frontend | 2 — Authentication and role-based shell | **Next** (0/10) |
+| Frontend | 2 — Authentication and role-based shell | Pending (0/10) |
 | Frontend | 3–9 | Pending |
-| Backend | 0–9 | Pending — blocked on frontend contracts |
+| Backend | 0 — Architecture and delivery foundation | Done (25/25) |
+| Backend | 1 — MySQL schema and data foundation | Done (26/26) |
+| Backend | 2 — Authentication, authorization, and audit | **Next** (0/23) |
+| Backend | 3–9 | Pending |
 
 Phase 1 gates: contrast 47/47, responsive 8/8, `verify` passing with 23 tests.
 
@@ -180,7 +183,7 @@ These read as settled in the deliverable files, but **no stakeholder has confirm
 
 Still owed by the business (`project_requirement.md` §11): authoritative employee list, division membership, Team Lead mapping, holiday calendars, schedules, leave balances, initial projects; HR approval of work policies and payroll periods; Finance approval of cost-rate and payroll-export rules.
 
-Also open: ORM, auth library, validation library, job runner, file storage, email provider, runtime topology, and MySQL environment settings (`BE-0007`–`BE-0014`). **Do not invent these choices** — see `docs/architecture.md` §18 for the selection criteria.
+Backend Phase 0 selected Drizzle/mysql2, Better Auth, Zod, BullMQ/Redis, private Amazon S3, Resend, persistent Node.js 24 LTS containers, and MySQL 8.4 LTS. See `docs/backend/phase-0/technology-decisions.md`; do not silently replace these choices.
 
 ---
 

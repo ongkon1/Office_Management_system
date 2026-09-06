@@ -101,87 +101,87 @@ A backend task may be marked `[x]` only when all applicable conditions are true:
 
 ### Technical Decisions
 
-- [ ] `BE-0006` Inventory the implemented frontend mock queries, mutations, view models, validation shapes, pagination, sorting, filters, and permission outcomes.
-- [ ] `BE-0007` Select and record the MySQL ORM or query builder after validating transactions, compound indexes, migrations, decimal handling, date/time handling, and Next.js deployment compatibility.
-- [ ] `BE-0008` Select and record the authentication/session implementation after validating credentials, database sessions, 2FA, reset flows, revocation, and server-side authorization integration.
-- [ ] `BE-0009` Select and record the schema-validation library and establish shared server/client validation ownership.
-- [ ] `BE-0010` Select and record the durable job mechanism for exports, notifications, scheduled checks, and integration retries.
-- [ ] `BE-0011` Select and record file/object storage for profile photos, attachments, documents, and generated exports, including local development behavior.
-- [ ] `BE-0012` Select and record transactional email and any initial in-app notification delivery provider.
-- [ ] `BE-0013` Define whether the initial deployment uses a persistent Node server, containers, or another Next.js-compatible runtime and document runtime limitations.
-- [ ] `BE-0014` Record supported MySQL version, character set, collation, SQL mode, connection-pool strategy, and migration ownership.
+- [x] `BE-0006` Inventory the implemented frontend mock queries, mutations, view models, validation shapes, pagination, sorting, filters, and permission outcomes. See `docs/backend/phase-0/service-contract-inventory.md`.
+- [x] `BE-0007` Select and record the MySQL ORM or query builder after validating transactions, compound indexes, migrations, decimal handling, date/time handling, and Next.js deployment compatibility. Drizzle ORM/Kit with `mysql2`; see `docs/backend/phase-0/technology-decisions.md`.
+- [x] `BE-0008` Select and record the authentication/session implementation after validating credentials, database sessions, 2FA, reset flows, revocation, and server-side authorization integration. Better Auth with database sessions and 2FA; see `docs/backend/phase-0/technology-decisions.md`.
+- [x] `BE-0009` Select and record the schema-validation library and establish shared server/client validation ownership. Zod 4; see `docs/backend/phase-0/technology-decisions.md`.
+- [x] `BE-0010` Select and record the durable job mechanism for exports, notifications, scheduled checks, and integration retries. BullMQ with Redis and a separate worker; see `docs/backend/phase-0/technology-decisions.md`.
+- [x] `BE-0011` Select and record file/object storage for profile photos, attachments, documents, and generated exports, including local development behavior. Private Amazon S3 plus a development filesystem adapter; see `docs/backend/phase-0/technology-decisions.md`.
+- [x] `BE-0012` Select and record transactional email and any initial in-app notification delivery provider. Resend plus a development capture adapter; see `docs/backend/phase-0/technology-decisions.md`.
+- [x] `BE-0013` Define whether the initial deployment uses a persistent Node server, containers, or another Next.js-compatible runtime and document runtime limitations. Persistent Node.js 24 LTS Linux containers with separate web/worker processes; see `docs/backend/phase-0/technology-decisions.md`.
+- [x] `BE-0014` Record supported MySQL version, character set, collation, SQL mode, connection-pool strategy, and migration ownership. MySQL 8.4 LTS; see `docs/backend/phase-0/technology-decisions.md`.
 
 ### Application Structure and Contracts
 
-- [ ] `BE-0015` Define module boundaries for access, organization, work, time, HR, evaluation, reporting, Finance, collaboration, notifications, integrations, files, and audit.
-- [ ] `BE-0016` Define shared layers for domain rules, application services, authorization policies, repositories, job handlers, Server Actions, and Route Handlers.
-- [ ] `BE-0017` Define canonical error codes for validation, unauthenticated, forbidden, not found, conflict, locked period, rate limit, dependency failure, and internal failure.
-- [ ] `BE-0018` Define request correlation, idempotency key, audit context, actor context, timezone, locale, and policy-version propagation.
-- [ ] `BE-0019` Define transaction boundaries for time entry, timers, corrections, approvals, overrides, period verification, evaluations, exports, and integration imports.
-- [ ] `BE-0020` Map frontend service interfaces to server-side use cases without exposing database records directly to UI components.
-- [ ] `BE-0021` Create a requirement-to-module and requirement-to-test traceability matrix for backend MVP requirements.
-- [ ] `BE-0022` Define development, test, staging, and production configuration ownership and secret handling.
+- [x] `BE-0015` Define module boundaries for access, organization, work, time, HR, evaluation, reporting, Finance, collaboration, notifications, integrations, files, and audit. See `docs/backend/phase-0/backend-foundation.md`.
+- [x] `BE-0016` Define shared layers for domain rules, application services, authorization policies, repositories, job handlers, Server Actions, and Route Handlers. See `docs/backend/phase-0/backend-foundation.md`.
+- [x] `BE-0017` Define canonical error codes for validation, unauthenticated, forbidden, not found, conflict, locked period, rate limit, dependency failure, and internal failure. See `src/contracts/results.ts` and `docs/backend/phase-0/backend-foundation.md`.
+- [x] `BE-0018` Define request correlation, idempotency key, audit context, actor context, timezone, locale, and policy-version propagation. See `docs/backend/phase-0/backend-foundation.md`.
+- [x] `BE-0019` Define transaction boundaries for time entry, timers, corrections, request decisions, overrides, period verification, evaluations, exports, and integration imports. See `docs/backend/phase-0/backend-foundation.md`.
+- [x] `BE-0020` Map frontend service interfaces to server-side use cases without exposing database records directly to UI components. See `docs/backend/phase-0/service-contract-inventory.md`.
+- [x] `BE-0021` Create a requirement-to-module and requirement-to-test traceability matrix for backend MVP requirements. See `docs/backend/phase-0/traceability.md`.
+- [x] `BE-0022` Define development, test, staging, and production configuration ownership and secret handling. See `docs/backend/phase-0/backend-foundation.md`.
 
 ### Quality Gates
 
-- [ ] `BE-0023` Configure backend unit, database integration, API/action integration, authorization, and end-to-end test layers.
-- [ ] `BE-0024` Configure type-check, lint, test, migration validation, security scan, and production-build commands for continuous integration.
-- [ ] `BE-0025` Define code-review rules for schema changes, authorization changes, financial logic, time calculations, audit behavior, and integrations.
+- [x] `BE-0023` Configure backend unit, database integration, API/action integration, authorization, and end-to-end test layers. See `vitest.backend.config.mts`, `playwright.config.ts`, and `docs/backend/phase-0/quality-gates.md`.
+- [x] `BE-0024` Configure type-check, lint, test, migration validation, security scan, and production-build commands for continuous integration. See `package.json`, `scripts/validate-migrations.mjs`, `.github/workflows/quality.yml`, and `docs/backend/phase-0/quality-gates.md`.
+- [x] `BE-0025` Define code-review rules for schema changes, authorization changes, financial logic, time calculations, audit behavior, and integrations. See `docs/backend/phase-0/backend-foundation.md`.
 
 ### Phase 0 Exit Criteria
 
-- [ ] Every frontend mock operation has a named backend use case, owner, permission rule, and expected response/error contract.
-- [ ] ORM/query, authentication, validation, job, file-storage, email, runtime, and MySQL environment decisions are documented.
-- [ ] Module boundaries and automated quality gates are approved before schema implementation begins.
+- [x] Every frontend mock operation has a named backend use case, owner, permission rule, and expected response/error contract.
+- [x] ORM/query, authentication, validation, job, file-storage, email, runtime, and MySQL environment decisions are documented.
+- [x] Module boundaries and automated quality gates are approved before schema implementation begins.
 
 ## Phase 1 - MySQL Schema and Data Foundation
 
 ### Database Tooling and Conventions
 
-- [ ] `BE-0101` Configure development and test MySQL connections with least-privilege database users.
-- [ ] `BE-0102` Configure the selected database library, connection pooling, health checks, timeouts, retry boundaries, and graceful shutdown.
-- [ ] `BE-0103` Establish versioned migration commands for create, apply, status, rollback/recovery, and CI validation.
-- [ ] `BE-0104` Define table/column naming, primary-key format, foreign keys, check constraints, unique constraints, timestamps, optimistic versioning, and soft-deactivation conventions.
-- [ ] `BE-0105` Define UTC instant, local date, local time, timezone, integer duration, fixed decimal, currency, and JSON usage conventions.
-- [ ] `BE-0106` Prohibit floating-point storage for durations, allocation percentages requiring precision, cost rates, and money.
+- [x] `BE-0101` Configure development and test MySQL connections with least-privilege database users.
+- [x] `BE-0102` Configure the selected database library, connection pooling, health checks, timeouts, retry boundaries, and graceful shutdown.
+- [x] `BE-0103` Establish versioned migration commands for create, apply, status, rollback/recovery, and CI validation.
+- [x] `BE-0104` Define table/column naming, primary-key format, foreign keys, check constraints, unique constraints, timestamps, optimistic versioning, and soft-deactivation conventions.
+- [x] `BE-0105` Define UTC instant, local date, local time, timezone, integer duration, fixed decimal, currency, and JSON usage conventions.
+- [x] `BE-0106` Prohibit floating-point storage for durations, allocation percentages requiring precision, cost rates, and money.
 
 ### Access and Organization Schema
 
-- [ ] `BE-0110` Create users, credentials/authentication identity, sessions, login history, roles, permissions, user roles, and scoped grants.
-- [ ] `BE-0111` Create employees, divisions, teams, employee-division assignments, work policies, policy versions, and holiday calendars.
-- [ ] `BE-0112` Add effective dates, active states, primary-division constraints, Team Lead relationships, allocation percentage, and expected weekly hours.
-- [ ] `BE-0113` Add constraints and service validation that protect historical users, employees, divisions, assignments, and policy versions from destructive deletion.
+- [x] `BE-0110` Create users, credentials/authentication identity, sessions, login history, roles, permissions, user roles, and scoped grants.
+- [x] `BE-0111` Create employees, divisions, teams, employee-division assignments, work policies, policy versions, and holiday calendars.
+- [x] `BE-0112` Add effective dates, active states, primary-division constraints, Team Lead relationships, allocation percentage, and expected weekly hours.
+- [x] `BE-0113` Add constraints and service validation that protect historical users, employees, divisions, assignments, and policy versions from destructive deletion.
 
 ### Work and Time Schema
 
-- [ ] `BE-0120` Create projects, project members, tasks, task members, checklist items, and work attachments.
-- [ ] `BE-0121` Create time entries, timer sessions, daily breaks, daily summaries, timesheet periods, period verifications, unlocks, and amendments.
-- [ ] `BE-0122` Store work date, UTC instants, timezone, entry method, location, integer duration, descriptions, completed work, status, and policy version needed for reproducibility.
-- [ ] `BE-0123` Add indexes supporting employee/date overlap checks, daily aggregation, division/project/task reporting, timer uniqueness, exception queries, and verified-period reads.
-- [ ] `BE-0124` Design the one-running-timer-per-employee invariant so concurrent requests cannot create multiple active timers.
+- [x] `BE-0120` Create projects, project members, tasks, task members, checklist items, and work attachments.
+- [x] `BE-0121` Create time entries, timer sessions, daily breaks, daily summaries, timesheet periods, period verifications, unlocks, and amendments.
+- [x] `BE-0122` Store work date, UTC instants, timezone, entry method, location, integer duration, descriptions, completed work, status, and policy version needed for reproducibility.
+- [x] `BE-0123` Add indexes supporting employee/date overlap checks, daily aggregation, division/project/task reporting, timer uniqueness, exception queries, and verified-period reads.
+- [x] `BE-0124` Design the one-running-timer-per-employee invariant so concurrent requests cannot create multiple active timers.
 
 ### HR, Finance, and Supporting Schema
 
-- [ ] `BE-0130` Create WFH requests, leave types, leave balances, leave requests, attendance days, evaluation periods, evaluations, responses, scores, and general remarks.
-- [ ] `BE-0131` Create workload allocation, cost rates, budgets, payroll periods, report definitions, export jobs, and export artifacts.
-- [ ] `BE-0132` Create notifications, delivery attempts, documents, document versions, messages, comments, announcements, attachments, and search metadata needed by enabled phases.
-- [ ] `BE-0133` Create integration connections, encrypted credential references, sync cursors, webhook endpoints, webhook deliveries, idempotency records, and job records.
-- [ ] `BE-0134` Create append-only audit event storage with actor, impersonator if applicable, action, resource, scope, timestamp, reason, correlation ID, and protected before/after representation.
+- [x] `BE-0130` Create WFH requests, leave types, leave balances, leave requests, attendance days, evaluation periods, evaluations, responses, scores, and general remarks.
+- [x] `BE-0131` Create workload allocation, cost rates, budgets, payroll periods, report definitions, export jobs, and export artifacts.
+- [x] `BE-0132` Create notifications, delivery attempts, documents, document versions, messages, comments, announcements, attachments, and search metadata needed by enabled phases.
+- [x] `BE-0133` Create integration connections, encrypted credential references, sync cursors, webhook endpoints, webhook deliveries, idempotency records, and job records.
+- [x] `BE-0134` Create append-only audit event storage with actor, impersonator if applicable, action, resource, scope, timestamp, reason, correlation ID, and protected before/after representation.
 
 ### Seed Data and Repository Foundation
 
-- [ ] `BE-0140` Seed the five initial divisions through an idempotent seed process.
-- [ ] `BE-0141` Seed development-only users for all six roles, representative assignments, projects, tasks, time scenarios, requests, evaluations, costs, and reports.
-- [ ] `BE-0142` Include deterministic complete, under-time, overtime, critical, missing, leave, WFH, correction, locked, and restricted-data scenarios.
-- [ ] `BE-0143` Implement repository interfaces and database adapters without returning unrestricted database rows to higher layers.
-- [ ] `BE-0144` Add factories/builders for test data and isolate every automated database test.
-- [ ] `BE-0145` Test clean migration, upgrade migration, seed idempotency, constraint failures, rollback/recovery guidance, and representative query plans.
+- [x] `BE-0140` Seed the five initial divisions through an idempotent seed process.
+- [x] `BE-0141` Seed development-only users for all six roles, representative assignments, projects, tasks, time scenarios, requests, evaluations, costs, and reports.
+- [x] `BE-0142` Include deterministic complete, under-time, overtime, critical, missing, leave, WFH, correction, locked, and restricted-data scenarios.
+- [x] `BE-0143` Implement repository interfaces and database adapters without returning unrestricted database rows to higher layers.
+- [x] `BE-0144` Add factories/builders for test data and isolate every automated database test.
+- [x] `BE-0145` Test clean migration, upgrade migration, seed idempotency, constraint failures, rollback/recovery guidance, and representative query plans.
 
 ### Phase 1 Exit Criteria
 
-- [ ] A clean MySQL database can be migrated and seeded deterministically.
-- [ ] Required entities, effective dates, historical preservation, constraints, and indexes are represented.
-- [ ] Repository and transaction foundations pass isolated database integration tests.
+- [x] A clean MySQL database can be migrated and seeded deterministically.
+- [x] Required entities, effective dates, historical preservation, constraints, and indexes are represented.
+- [x] Repository and transaction foundations pass isolated database integration tests.
 
 ## Phase 2 - Authentication, Authorization, and Audit
 
@@ -591,8 +591,8 @@ A backend task may be marked `[x]` only when all applicable conditions are true:
 
 | Phase | Status | Completed/Total |
 |---:|---|---:|
-| Phase 0 - Architecture and Delivery Foundation | In progress | 5/25 |
-| Phase 1 - MySQL Schema and Data Foundation | Pending | 0/26 |
+| Phase 0 - Architecture and Delivery Foundation | Done | 25/25 |
+| Phase 1 - MySQL Schema and Data Foundation | Done | 26/26 |
 | Phase 2 - Authentication, Authorization, and Audit | Pending | 0/23 |
 | Phase 3 - Organization, Projects, and Tasks | Pending | 0/21 |
 | Phase 4 - Timesheet Calculation and Correction | Pending | 0/32 |

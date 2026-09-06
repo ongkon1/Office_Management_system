@@ -8,7 +8,7 @@
 | Last updated | 2 September 2026 |
 | Requirements source | `project_requirement.md` |
 | Delivery plans | `frontend_milestone.md`, `backend_milestone.md` |
-| Implemented so far | Frontend Phases 0–1 (contracts, design system, shell) |
+| Implemented so far | Frontend Phases 0–1; Backend Phases 0–1 (architecture, MySQL schema/data foundation) |
 
 This document explains *how* the system is structured and *why*. It derives the structure from the requirements rather than restating them, and it distinguishes decisions that are fixed from decisions still open.
 
@@ -378,20 +378,20 @@ Two automated gates run in CI: a contrast audit that parses the real design toke
 
 ---
 
-## 18. Open Architectural Decisions
+## 18. Backend Technology Decisions
 
-These are **not yet made**. The backend milestone (`BE-0007`–`BE-0014`) owns them, and each has selection criteria rather than a default.
+These decisions were completed in Backend Phase 0. The detailed rationale, constraints, installed baselines, and source references are recorded in `docs/backend/phase-0/technology-decisions.md`.
 
-| Decision | Must satisfy | Owner |
+| Decision | Selection | Owner |
 |---|---|---|
-| ORM or query builder | Transactions, compound indexes, migrations, decimal handling, date/time handling, Next.js deployment compatibility | Backend lead |
-| Authentication and session implementation | Credentials, database-backed sessions, 2FA, reset flows, revocation, server-side authorization integration | Backend lead + security owner |
-| Schema-validation library | Shared server/client validation ownership | Backend lead |
-| Durable job mechanism | Exports, notifications, scheduling, integration retries, idempotency, monitoring | Backend + operations |
-| File/object storage | Attachments, exports, malware scanning, local development behavior | Operations + security |
-| Transactional email provider | Notification delivery with status recording | Product + operations |
-| Runtime and deployment topology | Persistent Node server, containers, or another Next.js-compatible runtime; must support a job runner | Backend + operations |
-| MySQL environment | Version, character set, collation, SQL mode, connection pooling, migration ownership | Backend lead |
+| ORM or query builder | Drizzle ORM/Kit with `mysql2` | Backend lead |
+| Authentication and session implementation | Better Auth, database-backed sessions, credentials and 2FA | Backend lead + security owner |
+| Schema-validation library | Zod 4 with server-authoritative domain validation | Backend lead |
+| Durable job mechanism | BullMQ with Redis 7 and a separate worker | Backend + operations |
+| File/object storage | Private Amazon S3; filesystem adapter only for local development/test | Operations + security |
+| Transactional email provider | Resend behind a provider-neutral port; capture adapter for development/test | Product + operations |
+| Runtime and deployment topology | Persistent Node.js 24 LTS Linux containers, reverse proxy, separate web and worker processes | Backend + operations |
+| MySQL environment | MySQL 8.4 LTS, InnoDB, `utf8mb4`, strict modes, bounded `mysql2` pools, single migration owner | Backend lead |
 
 Also open, and required from the business rather than engineering: authoritative employee and assignment data, payroll period and retention policy, cost-rate and billable rules, availability/RTO/RPO targets, and government-project access policy.
 
