@@ -18,7 +18,7 @@ describe('BE-0145 MySQL foundation', () => {
       `SELECT table_name AS tableName FROM information_schema.tables WHERE table_schema = ?`, [database.name],
     );
     const names = new Set(rows.map((row) => row.tableName));
-    for (const required of ['users','employee_division_assignments','projects','time_entries','daily_breaks','daily_summaries','leave_requests','evaluations','cost_rates','notifications','documents','integration_connections','audit_events']) {
+    for (const required of ['users','auth_two_factor','auth_rate_limits','auth_security_events','employee_division_assignments','projects','time_entries','daily_breaks','daily_summaries','leave_requests','evaluations','cost_rates','notifications','documents','integration_connections','audit_events']) {
       expect(names.has(required), required).toBe(true);
     }
     const [floatingColumns] = await database.connection.query<RowDataPacket[]>(
@@ -53,6 +53,8 @@ describe('BE-0145 MySQL foundation', () => {
     )).rejects.toMatchObject({ code: 'ER_DUP_ENTRY' });
     await database.connection.execute("INSERT INTO audit_events(event_id,action,resource_type,scope_json,correlation_id) VALUES(UUID(),'test.created','test',JSON_OBJECT(),UUID())");
     await expect(database.connection.execute("UPDATE audit_events SET action='changed' LIMIT 1")).rejects.toMatchObject({ sqlState: '45000' });
+    await database.connection.execute("INSERT INTO auth_security_events(event_type,correlation_id,safe_details) VALUES('test',UUID(),JSON_OBJECT())");
+    await expect(database.connection.execute("DELETE FROM auth_security_events LIMIT 1")).rejects.toMatchObject({ sqlState: '45000' });
   });
 
   it('uses the employee/date index for daily time queries', async () => {

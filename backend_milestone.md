@@ -189,40 +189,40 @@ A backend task may be marked `[x]` only when all applicable conditions are true:
 
 ### Authentication
 
-- [ ] `BE-0201` Implement credential login using a modern password-hashing configuration and constant-time verification.
-- [ ] `BE-0202` Implement database-backed sessions with secure, HTTP-only, same-site cookies, rotation, expiration, revocation, and logout.
-- [ ] `BE-0203` Implement account active/inactive/locked state, failed-attempt throttling, lockout policy, and login history.
-- [ ] `BE-0204` Implement password reset tokens with single use, short expiry, secure storage, revocation, and non-enumerating responses.
-- [ ] `BE-0205` Implement two-factor enrollment, verification, recovery, reset, and audit behavior using the selected approach.
-- [ ] `BE-0206` Implement session-expiry and security-event responses expected by the frontend.
-- [ ] `BE-0207` Protect first-party mutations against cross-site request forgery and unsafe cross-origin access.
-- [ ] `BE-0208` Add per-account and per-origin rate limits for login, reset, 2FA, and other sensitive public endpoints.
+- [x] `BE-0201` Implement credential login using a modern password-hashing configuration and constant-time verification.
+- [x] `BE-0202` Implement database-backed sessions with secure, HTTP-only, same-site cookies, rotation, expiration, revocation, and logout.
+- [x] `BE-0203` Implement account active/inactive/locked state, failed-attempt throttling, lockout policy, and login history.
+- [x] `BE-0204` Implement password reset tokens with single use, short expiry, secure storage, revocation, and non-enumerating responses.
+- [x] `BE-0205` Implement two-factor enrollment, verification, recovery, reset, and audit behavior using the selected approach.
+- [x] `BE-0206` Implement session-expiry and security-event responses expected by the frontend.
+- [x] `BE-0207` Protect first-party mutations against cross-site request forgery and unsafe cross-origin access.
+- [x] `BE-0208` Add per-account and per-origin rate limits for login, reset, 2FA, and other sensitive public endpoints.
 
 ### Authorization
 
-- [ ] `BE-0210` Implement a central authorization policy API used by Server Components, Server Actions, Route Handlers, jobs, search, reports, and exports.
-- [ ] `BE-0211` Implement role permissions for Super Administrator, Team Lead, Employee, HR Manager, Finance Manager, and Management/View-Only.
-- [ ] `BE-0212` Implement division-, project-, team-, ownership-, date-effective-, workflow-state-, and field-level scope checks.
-- [ ] `BE-0213` Implement deny-by-default policies for government projects, salary, cost rate, labour cost, evaluations, exports, documents, attachments, and audit data.
-- [ ] `BE-0214` Ensure Management/View-Only cannot mutate records through any server boundary.
-- [ ] `BE-0215` Ensure Team Leads are limited to effective assigned scope and Employees to their own records unless an explicit grant applies.
-- [ ] `BE-0216` Prevent object-identifier guessing from revealing record existence through status codes, timings, search, counts, exports, or file URLs.
-- [ ] `BE-0217` Implement permission-aware response mapping so restricted fields are omitted rather than merely hidden by the frontend.
+- [x] `BE-0210` Implement a central authorization policy API used by Server Components, Server Actions, Route Handlers, jobs, search, reports, and exports.
+- [x] `BE-0211` Implement role permissions for Super Administrator, Team Lead, Employee, HR Manager, Finance Manager, and Management/View-Only.
+- [x] `BE-0212` Implement division-, project-, team-, ownership-, date-effective-, workflow-state-, and field-level scope checks.
+- [x] `BE-0213` Implement deny-by-default policies for government projects, salary, cost rate, labour cost, evaluations, exports, documents, attachments, and audit data.
+- [x] `BE-0214` Ensure Management/View-Only cannot mutate records through any server boundary.
+- [x] `BE-0215` Ensure Team Leads are limited to effective assigned scope and Employees to their own records unless an explicit grant applies.
+- [x] `BE-0216` Prevent object-identifier guessing from revealing record existence through status codes, timings, search, counts, exports, or file URLs.
+- [x] `BE-0217` Implement permission-aware response mapping so restricted fields are omitted rather than merely hidden by the frontend.
 
 ### Audit and Security Operations
 
-- [ ] `BE-0220` Implement append-only audit recording for authentication, changes, decisions, overrides, verification, permissions, integration settings, file access, and exports.
-- [ ] `BE-0221` Redact secrets, password material, tokens, raw integration credentials, and disallowed sensitive values from audit payloads.
-- [ ] `BE-0222` Implement audited administrative impersonation only if explicitly approved; otherwise prohibit it.
-- [ ] `BE-0223` Implement encryption/key-management boundaries for application secrets, integration credentials, protected files, and backups.
-- [ ] `BE-0224` Add authorization matrix tests covering allow and deny cases across all roles, scopes, sensitive fields, record states, and server entry points.
-- [ ] `BE-0225` Add authentication tests for enumeration, brute force, session fixation, session revocation, reset replay, 2FA recovery, cookie flags, and CSRF.
+- [x] `BE-0220` Implement append-only audit recording for authentication, changes, decisions, overrides, verification, permissions, integration settings, file access, and exports.
+- [x] `BE-0221` Redact secrets, password material, tokens, raw integration credentials, and disallowed sensitive values from audit payloads.
+- [x] `BE-0222` Implement audited administrative impersonation only if explicitly approved; otherwise prohibit it.
+- [x] `BE-0223` Implement encryption/key-management boundaries for application secrets, integration credentials, protected files, and backups.
+- [x] `BE-0224` Add authorization matrix tests covering allow and deny cases across all roles, scopes, sensitive fields, record states, and server entry points.
+- [x] `BE-0225` Add authentication tests for enumeration, brute force, session fixation, session revocation, reset replay, 2FA recovery, cookie flags, and CSRF.
 
 ### Phase 2 Exit Criteria
 
-- [ ] All six roles can authenticate and receive server-enforced access matching the approved matrix.
-- [ ] Direct calls, identifiers, exports, search, jobs, and file access cannot bypass scope or protected-field rules.
-- [ ] Authentication and authorization security tests pass and material events are auditable.
+- [x] All six roles can authenticate and receive server-enforced access matching the approved matrix. *(Requirements-derived matrix approved by the user on 2026-09-06; engineering verification passes.)*
+- [x] Direct calls, identifiers, exports, search, jobs, and file access cannot bypass scope or protected-field rules.
+- [x] Authentication and authorization security tests pass and material events are auditable.
 
 ## Phase 3 - Organization, Projects, and Tasks
 
@@ -708,7 +708,7 @@ A travel-expense claim. The approval chain is **identical to Phase 10's**, which
 |---:|---|---:|
 | Phase 0 - Architecture and Delivery Foundation | Done | 25/25 |
 | Phase 1 - MySQL Schema and Data Foundation | Done | 26/26 |
-| Phase 2 - Authentication, Authorization, and Audit | Pending | 0/23 |
+| Phase 2 - Authentication, Authorization, and Audit | Done | 23/23 |
 | Phase 3 - Organization, Projects, and Tasks | Pending | 0/21 |
 | Phase 4 - Timesheet Calculation and Correction | Pending | 0/32 |
 | Phase 5 - HR, Attendance, WFH, Leave, Workload, and Evaluation | Pending | 0/26 |
