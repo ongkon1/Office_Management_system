@@ -286,6 +286,26 @@ export interface ProjectMember {
 
 export type TaskStatus = 'pending' | 'in_progress' | 'completed';
 
+/**
+ * Whether a task needs a Team Lead's endorsement before work counts against it.
+ *
+ * A task a Team Lead creates is `not_required`: they are the reviewer, so there
+ * is nobody above them to ask. A task an employee raises for themselves starts
+ * `pending_review`.
+ *
+ * This is deliberately *not* the shared approval chain in `./approval.ts`. That
+ * chain models a request travelling to a Team Lead and then to three parallel
+ * reviewers; a task is endorsed by one person and then becomes ordinary work.
+ * Forcing it into the chain would add a special case to every transition
+ * function for the benefit of one workflow.
+ */
+export type TaskReviewState = 'not_required' | 'pending_review' | 'approved' | 'rejected';
+
+/** A task may only receive time once its origin has been endorsed. */
+export function taskAcceptsTime(reviewState: TaskReviewState): boolean {
+  return reviewState === 'not_required' || reviewState === 'approved';
+}
+
 export interface Task extends AuditableRecord {
   readonly id: string;
   readonly title: string;
@@ -301,6 +321,15 @@ export interface Task extends AuditableRecord {
   readonly estimatedMinutes: DurationMinutes;
   readonly description: string | null;
   readonly status: TaskStatus;
+  /**
+   * Set when an employee raises the task for themselves. Until it is approved
+   * the task exists but accepts no time — see `taskAcceptsTime`.
+   */
+  readonly reviewState: TaskReviewState;
+  readonly reviewerEmployeeId: string | null;
+  readonly reviewedAt: IsoDateTime | null;
+  /** The Team Lead's note; required when rejecting. */
+  readonly reviewNote: string | null;
 }
 
 export interface TaskChecklistItem {

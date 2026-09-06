@@ -286,7 +286,17 @@ function task(
   status: Task['status'],
   estimatedHours: number,
   dueDate: string | null,
-  options: { priority?: Task['priority']; supporting?: string[]; completed?: string } = {},
+  options: {
+    priority?: Task['priority'];
+    supporting?: string[];
+    completed?: string;
+    /** An employee raising the task for themselves; defaults to the Team Lead. */
+    createdBy?: string;
+    review?: Task['reviewState'];
+    reviewer?: string;
+    reviewedAt?: string;
+    reviewNote?: string;
+  } = {},
 ): Task {
   return {
     id,
@@ -295,7 +305,7 @@ function task(
     projectId,
     assigneeEmployeeId,
     supportingMemberIds: options.supporting ?? [],
-    creatorEmployeeId: 'emp-2001',
+    creatorEmployeeId: options.createdBy ?? 'emp-2001',
     priority: options.priority ?? 'medium',
     startDate: null,
     dueDate,
@@ -304,6 +314,11 @@ function task(
     description:
       'Delivered against the project plan. See the linked time entries for the work history.',
     status,
+    // A Team Lead's own task needs no endorsement: they are the reviewer.
+    reviewState: options.review ?? 'not_required',
+    reviewerEmployeeId: options.reviewer ?? null,
+    reviewedAt: options.reviewedAt ?? null,
+    reviewNote: options.reviewNote ?? null,
     ...STAMP,
   };
 }
@@ -319,6 +334,33 @@ export const TASKS: readonly Task[] = [
   task('tsk-7', 'Onboarding checklist', 'prj-wpr', 'wcf', 'emp-1004', 'pending', 8, '2026-09-30'),
   task('tsk-8', 'Benchmark report write-up', 'prj-vp2', 'pia', 'emp-1001', 'completed', 12, '2026-08-28', { completed: '2026-08-28' }),
   task('tsk-9', 'Data retention review', 'prj-nrd', 'gov', 'emp-1001', 'pending', 16, '2026-09-25'),
+
+  /*
+   * Employee-raised tasks (`FE-0780`). One at each review state, because the
+   * three behave differently: only the approved one may receive time.
+   */
+  task('tsk-10', 'Refactor the annotation import script', 'prj-vp2', 'pia', 'emp-1001', 'pending', 6, '2026-09-15', {
+    createdBy: 'emp-1001',
+    review: 'pending_review',
+  }),
+  task('tsk-11', 'Write a regression checklist for the intake form', 'prj-nrd', 'gov', 'emp-1002', 'pending', 4, '2026-09-20', {
+    createdBy: 'emp-1002',
+    review: 'pending_review',
+    priority: 'low',
+  }),
+  task('tsk-12', 'Tidy the shared fixture folder', 'prj-vp2', 'pia', 'emp-1002', 'in_progress', 3, '2026-09-11', {
+    createdBy: 'emp-1002',
+    review: 'approved',
+    reviewer: 'emp-2001',
+    reviewedAt: '2026-08-29T10:15:00+06:00',
+  }),
+  task('tsk-13', 'Rebuild the demo laptop image', 'prj-vp2', 'pia', 'emp-1001', 'pending', 10, '2026-09-08', {
+    createdBy: 'emp-1001',
+    review: 'rejected',
+    reviewer: 'emp-2001',
+    reviewedAt: '2026-08-30T09:30:00+06:00',
+    reviewNote: 'This is IT support work, not project work. Raise a requisition instead.',
+  }),
 ];
 
 export const CHECKLIST_ITEMS: readonly TaskChecklistItem[] = [

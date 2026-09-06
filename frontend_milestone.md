@@ -95,7 +95,7 @@ The final route names may be refined without changing the feature ownership belo
 | 4 | Team Lead experience | Team review, projects/tasks, remarks, corrections, requests, and workload views are demonstrable. |
 | 5 | HR experience | Employees, assignments, attendance, WFH/leave, verification, and evaluation screens are demonstrable. |
 | 6 | Finance and management experience | Hours, overtime, costing, payroll, reports, and read-only management views are demonstrable. |
-| 7 | Shared reporting and supporting modules | Reports, exports, notifications, search, documents, messages, profile, settings, requisition, and conveyance are represented. |
+| 7 | Shared reporting and supporting modules | Reports, exports, notifications, search, documents, messages, profile, settings, requisition, conveyance, and employee-raised tasks are represented. |
 | 8 | Responsive, accessibility, and quality hardening | All agreed flows pass responsive, accessibility, visual, and interaction QA. |
 | 9 | Demo packaging and backend handoff | Stakeholders can review the product, and backend implementation can begin without UI restructuring. |
 
@@ -567,6 +567,29 @@ Added after the requisition work, so Phase 7 is reopened a second time. `FE-0701
 6. **Is "client name" the same client as `Project.client`?** The product now has client names on projects and a client filter on the timesheet. Assumed: free text, unlinked, because no Client entity exists — but if these are meant to be the same clients, that is an argument for creating one rather than typing the name twice.
 7. **File storage is undecided.** `BE-0007`-`BE-0014` have not chosen a storage provider, and no size or type limits have been approved. Assumed for the frontend: a mock upload with an in-memory reference, presented as a prototype and never as a stored file.
 
+### Employee-Raised Tasks
+
+Added after conveyance. Until now every task was created by a Team Lead; an employee can now raise one for themselves, and their Team Lead endorses it.
+
+**The rule that makes this more than a form.** A task an employee raised **accepts no time until it is approved**. Without that, someone could invent a task, record a full day against it, and have the review happen after the hours already exist. It is the same reason an inactive project refuses time (`REQ-WORK-008`), and it is enforced in three places because each covers a gap the others leave: the dropdown omits it (convenience), `validation.ts` refuses a submitted `taskId` (the control, since an id can be posted without opening the dropdown), and the service refuses a Team Lead who is not that employee's own.
+
+**This is deliberately not the shared approval chain.** `src/contracts/approval.ts` models a request travelling to a Team Lead and then to three parallel reviewers. A task is endorsed by one person and then stops being a request — it becomes work that time is recorded against. Forcing it into the chain would add a `reviewer_review` stage and three reviewer roles to a shape that has neither, and put a special case in every transition function for one workflow.
+
+- [x] `FE-0780` Add `TaskReviewState` to the domain, with `taskAcceptsTime` as the single predicate, and enforce it in `selectableTasks` and in `src/lib/calculation/validation.ts` with a field, a message and corrective guidance.
+- [x] `FE-0781` Build the employee raise-a-task form, naming the reviewer before anything is typed, restricted to projects in divisions the employee is assigned to, and validated at the service boundary.
+- [x] `FE-0782` Build the Team Lead review queue on the team task board, with approve and do-not-approve, a required note on refusal, and a named list region.
+- [x] `FE-0783` Surface the queue on the Team Lead dashboard inside the existing waiting-for-you prompt, and add the notification.
+- [x] `FE-0784` Add unit tests for the scope, review and time-entry rules, and a `npm run audit:task-review` browser gate.
+
+Evidence is in `docs/frontend/phase-7/task-review-verification.md`: 26/26 task-review flow checks and 41 unit tests, with accessibility 279/279 and content stress 73/73 unchanged.
+
+**Open questions — unchanged by the build.**
+
+1. **No `REQ-*` covers this**, as with requisition and conveyance. `REQ-WORK-003` describes a task's fields but says nothing about who may create one.
+2. **A refusal is terminal.** The employee reads the note and raises a new task; there is no edit-and-resubmit. Assumed, not confirmed.
+3. **The employee's form is narrower than the Team Lead's** — no assignee, no supporting members, no checklist — because an employee proposes work for themselves. Widening it later is easy; taking a granted power back is not.
+4. **An approved task is an ordinary task.** It can then be edited by the Team Lead like any other, and nothing re-opens the review.
+
 Conveyance evidence is recorded in `docs/frontend/phase-7/conveyance-verification.md`: the shared approval chain extracted first and proven behaviour-preserving by re-running the requisition gates unchanged, then 45/45 conveyance flow checks, 50 unit tests, accessibility 279/279 and content stress 73/73.
 
 Requisition evidence is recorded in `docs/frontend/phase-7/requisition-verification.md`: 44/44 requisition flow checks, 40 unit tests, accessibility 248/248 and content stress 68/68 with the three new routes added to those gates.
@@ -580,6 +603,7 @@ Phase 7 evidence is recorded in `docs/frontend/phase-7/verification.md`: shared 
 - [x] All navigation destinations have an intentional page, coming-later state, or feature-flag exclusion.
 - [x] A requisition can be submitted by an Employee and a Team Lead, routed through the correct review chain, and is invisible to every role it has not reached.
 - [x] A conveyance claim travels the same chain on the same shared implementation, and its receipt is subject to the same access rule as the claim.
+- [x] An employee can raise a task, their Team Lead reviews it, and no time can be recorded against it until they do.
 
 ## Phase 8 - Responsive, Accessibility, and Quality Hardening
 
@@ -676,6 +700,8 @@ A frontend task may be marked `[x]` only when all applicable conditions are true
 - [ ] `DEMO-10` The primary Employee, Team Lead, HR, and Finance flows remain usable at mobile and desktop widths.
 - [x] `DEMO-11` An Employee submits an in-house requisition, their Team Lead is notified and reviews it, and it then appears for HR, Finance, and the Super Administrator — while a second Employee cannot see it at all.
 - [x] `DEMO-13` An Employee submits a conveyance claim with a receipt, their Team Lead reviews it, and it then reaches HR, Finance and the Super Administrator — while a second Employee can see neither the claim nor the receipt.
+- [x] `DEMO-15` An Employee raises a task, cannot select it when recording time, and their Team Lead approves it — after which it becomes selectable.
+- [x] `DEMO-16` A task the Team Lead does not approve carries the reason back to the employee and still refuses time.
 - [x] `DEMO-14` A conveyance claim submitted without a receipt is accepted, because the upload is optional.
 - [x] `DEMO-12` A Team Lead submits a new-item requisition and it reaches HR, Finance, and the Super Administrator without a Team Lead review step.
 
@@ -690,7 +716,7 @@ A frontend task may be marked `[x]` only when all applicable conditions are true
 | Phase 4 - Team Lead Experience | Done | 21/21 |
 | Phase 5 - HR Experience | Done | 17/17 |
 | Phase 6 - Finance and Management Experience | Done | 11/11 |
-| Phase 7 - Shared Reporting and Supporting Modules | Done | 47/47 |
+| Phase 7 - Shared Reporting and Supporting Modules | Done | 52/52 |
 | Phase 8 - Responsive, Accessibility, and Quality Hardening | Done | 17/18 · 1 awaiting review |
 | Phase 9 - Demo Packaging and Backend Handoff | Pending | 0/14 |
 

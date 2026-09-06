@@ -7,6 +7,7 @@
  * simple lookup.
  */
 
+import { taskAcceptsTime } from '@/contracts/domain';
 import type { Division, EmployeeDivisionAssignment, IsoDate, Project, Task } from '@/contracts/domain';
 import { success, type Result } from '@/contracts/results';
 import { PROJECTS } from '@/fixtures';
@@ -90,7 +91,15 @@ export function selectableProjects(divisionId: string): readonly Project[] {
 export function selectableTasks(projectId: string): readonly Task[] {
   return mockStore
     .tasks()
-    .filter((task) => task.projectId === projectId && task.status !== 'completed');
+    .filter(
+      (task) =>
+        task.projectId === projectId &&
+        task.status !== 'completed' &&
+        // An employee-raised task is not selectable until it has been
+        // endorsed. The rule is enforced again in validation, because a
+        // filtered dropdown is a convenience and not a control.
+        taskAcceptsTime(task.reviewState),
+    );
 }
 
 export function projectById(id: string): Project | undefined {

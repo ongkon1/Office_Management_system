@@ -7,6 +7,7 @@ import type { TeamTimesheetRowView } from '@/contracts/view-models';
 import { mockTeamLeadService } from '@/services/mock/team-lead';
 import { mockRequisitionService } from '@/services/mock/requisition';
 import { mockConveyanceService } from '@/services/mock/conveyance';
+import { mockTaskReviewService } from '@/services/mock/task-review';
 import { useAsync } from '@/lib/use-async';
 import { useSession } from '@/features/access/session-provider';
 import { PageContainer, PageHeader, DashboardGrid, SectionHeader } from '@/components/layout/page';
@@ -64,6 +65,10 @@ export function TeamLeadDashboard() {
     () => mockConveyanceService.queue(user?.userId ?? ''),
     [user?.userId],
   );
+  const taskReviews = useAsync(
+    () => mockTaskReviewService.queue(user?.userId ?? ''),
+    [user?.userId],
+  );
   if (state.status === 'loading') return <LoadingPage label="Team Lead dashboard" />;
   if (state.status !== 'success') return <PageContainer><EmptyState variant="error" title="Dashboard unavailable" description={state.failure.message} /></PageContainer>;
 
@@ -96,6 +101,13 @@ export function TeamLeadDashboard() {
       plural: 'conveyance claims',
       href: '/conveyance',
     },
+    {
+      key: 'task-reviews',
+      count: taskReviews.state.status === 'success' ? taskReviews.state.data.awaitingCount : 0,
+      singular: 'task raised by your team',
+      plural: 'tasks raised by your team',
+      href: '/tasks',
+    },
   ].filter((item) => item.count > 0);
 
   return (
@@ -122,8 +134,9 @@ export function TeamLeadDashboard() {
             </span>
           }
         >
-          An employee cannot move these past you. They reach HR, Finance and the Super
-          Administrator only after your review.
+          An employee cannot move these past you. A requisition or claim reaches HR,
+          Finance and the Super Administrator only after your review, and a task they
+          raised cannot receive time until you approve it.
         </Alert>
       )}
 

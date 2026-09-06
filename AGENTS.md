@@ -89,6 +89,12 @@ contribution split. The preview, timesheet views, dashboards and later reports
 all call it. Never recompute hours anywhere else — not in a component, not in a
 service, not in an aggregate.
 
+**A task an employee raised accepts no time until their Team Lead approves it.**
+`taskAcceptsTime` in `src/contracts/domain.ts` is the single predicate; it is
+read by `selectableTasks`, by `validation.ts` and by the review service, so the
+rule cannot drift between them. This is *not* the approval chain below — one
+person endorses a task and it then becomes ordinary work.
+
 Requisition and conveyance share **one** approval chain —
 `src/contracts/approval.ts` and `src/services/mock/approval-chain.ts`. A second
 copy of the stage machine is how the two silently diverge, and the divergence
@@ -235,26 +241,20 @@ React Compiler lint errors (`set-state-in-effect`, render-phase mutation) are re
 |---|---|---|
 | Frontend | 0 — Product and UX foundation | Done (19/19) |
 | Frontend | 1 — Foundation and design system | Done (26/26) |
-<<<<<<< HEAD
-| Frontend | 2 — Authentication and role-based shell | Pending (0/10) |
-| Frontend | 3–9 | Pending |
-| Backend | 0 — Architecture and delivery foundation | Done (25/25) |
-| Backend | 1 — MySQL schema and data foundation | Done (26/26) |
-| Backend | 2 — Authentication, authorization, and audit | **Next** (0/23) |
-| Backend | 3–9 | Pending |
-=======
 | Frontend | 2 — Authentication and role-based shell | Done (10/10) |
 | Frontend | 3 — Employee core experience | Done (28/28) |
 | Frontend | 4 — Team Lead experience | Done (21/21) |
 | Frontend | 5 — HR experience | Done (17/17) |
 | Frontend | 6 — Finance and Management experience | Done (11/11) |
-| Frontend | 7 — Shared reporting and supporting modules | Done (47/47 · requisition and conveyance included) |
+| Frontend | 7 — Shared reporting and supporting modules | Done (52/52 · requisition, conveyance and employee-raised tasks included) |
 | Frontend | 8 — Responsive, accessibility and quality hardening | Done (17/18 · `FE-0825` awaiting visual review) |
 | Frontend | 9 — Demo packaging and backend handoff | **Next** (0/14) |
-| Backend | 0–9 | Pending — blocked on frontend contracts |
+| Backend | 0 — Architecture and delivery foundation | Done (25/25) |
+| Backend | 1 — MySQL schema and data foundation | Done (26/26) |
+| Backend | 2 — Authentication, authorization, and audit | **Next** (0/23) |
+| Backend | 3–9 | Pending |
 | Backend | 10 — Requisition | Pending (0/20) — new milestone |
 | Backend | 11 — Conveyance | Pending (0/22) — new milestone, depends on 10 |
->>>>>>> f5f666db5e9bd3731019b7c923cdc803306a5a16
 
 Gates: contrast 48/48, responsive 268/268, accessibility 217/217, content-stress 63/63, role journeys 41/41, performance 16/16, Phase 2 flows 16/16, Phase 3 flows 18/18, Phase 4 flows 20/20, Phase 5 flows 51/51, Phase 6 flows 40/40, Phase 7 flows 55/55, `verify` passing with 264 tests.
 

@@ -8,6 +8,7 @@ import type { TaskStatus } from '@/contracts/domain';
 import type { TaskSummaryView } from '@/contracts/view-models';
 import { cn } from '@/lib/cn';
 import { useAsync } from '@/lib/use-async';
+import { RaiseTaskButton } from './raise-task';
 import { TASK_STATUS_LABEL } from '@/lib/status';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,7 +17,7 @@ import { ProgressBar } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Checkbox } from '@/components/forms/inputs';
 import { Card, CardHeader } from '@/components/feedback/card';
-import { Alert, EmptyState } from '@/components/feedback/alert';
+import { Alert, Callout, EmptyState } from '@/components/feedback/alert';
 import { Tabs } from '@/components/feedback/disclosure';
 import { PageContainer, PageHeader } from '@/components/layout/page';
 import { mockTaskService } from '@/services/mock/work';
@@ -85,6 +86,7 @@ export function TaskList({ employeeId }: { employeeId: string }) {
   }
 
   const tasks = state.data.filter((task) => matches(task, filter));
+  const blockedCount = state.data.filter((task) => task.review.blocksTimeEntry).length;
 
   const counts = FILTER_TABS.map((tab) => ({
     ...tab,
@@ -95,8 +97,18 @@ export function TaskList({ employeeId }: { employeeId: string }) {
     <PageContainer>
       <PageHeader
         title="My Tasks"
-        description="Work assigned to you, with actual time derived from your entries."
+        description="Work assigned to you and work you raised, with actual time derived from your entries."
+        actions={<RaiseTaskButton onCreated={reload} />}
       />
+
+      {blockedCount > 0 && (
+        <Callout tone="info" className="mt-5">
+          {blockedCount === 1 ? 'One task you raised is' : `${blockedCount} tasks you raised are`}{' '}
+          not yet approved. You cannot record time against{' '}
+          {blockedCount === 1 ? 'it' : 'them'} until your Team Lead reviews{' '}
+          {blockedCount === 1 ? 'it' : 'them'}.
+        </Callout>
+      )}
 
       <div className="mt-5 flex flex-col gap-4">
         <Tabs
@@ -142,6 +154,19 @@ export function TaskList({ employeeId }: { employeeId: string }) {
                           {task.statusLabel}
                         </Badge>
                         {task.isOverdue && <Badge tone="danger">Overdue</Badge>}
+                        {task.review.state !== 'not_required' && (
+                          <Badge
+                            tone={
+                              task.review.state === 'approved'
+                                ? 'success'
+                                : task.review.state === 'rejected'
+                                  ? 'danger'
+                                  : 'warning'
+                            }
+                          >
+                            {task.review.label}
+                          </Badge>
+                        )}
                       </div>
                     </div>
 
@@ -165,6 +190,13 @@ export function TaskList({ employeeId }: { employeeId: string }) {
                     {task.dueDateLabel && (
                       <p className="mt-2 text-caption text-ink-muted">
                         Due {task.dueDateLabel}
+                      </p>
+                    )}
+
+                    {task.review.blocksTimeEntry && (
+                      <p className="mt-2 text-caption text-ink-muted">
+                        {task.review.detail}
+                        {task.review.note ? ` ${task.review.note}` : ''}
                       </p>
                     )}
                   </Card>
@@ -231,23 +263,61 @@ export function TaskDetail({ taskId }: { taskId: string }) {
               {TASK_STATUS_LABEL[summary.status]}
             </Badge>
             {summary.isOverdue && <Badge tone="danger">Overdue</Badge>}
+            {summary.review.state !== 'not_required' && (
+              <Badge
+                tone={
+                  summary.review.state === 'approved'
+                    ? 'success'
+                    : summary.review.state === 'rejected'
+                      ? 'danger'
+                      : 'warning'
+                }
+              >
+                {summary.review.label}
+              </Badge>
+            )}
             <Badge tone="neutral">{summary.division.code}</Badge>
           </>
         }
         actions={
-          <Button
-            variant="primary"
-            iconLeading={<Plus aria-hidden className="size-4" />}
-            onClick={() => {
-              router.push(`/timesheets/${DEMO_TODAY}`);
-            }}
-          >
-            Add time
-          </Button>
+          /*
+           * Offering "Add time" on a task that cannot receive any sends the
+           * person to a form that will refuse them, with no explanation until
+           * they have filled it in. The block is stated here instead.
+           */
+          summary.review.blocksTimeEntry ? undefined : (
+            <Button
+              variant="primary"
+              iconLeading={<Plus aria-hidden className="size-4" />}
+              onClick={() => {
+                router.push(`/timesheets/${DEMO_TODAY}`);
+              }}
+            >
+              Add time
+            </Button>
+          )
         }
       />
 
       <div className="mt-5 flex flex-col gap-5">
+        {summary.review.state !== 'not_required' && (
+          <Alert
+            tone={
+              summary.review.state === 'approved'
+                ? 'success'
+                : summary.review.state === 'rejected'
+                  ? 'danger'
+                  : 'warning'
+            }
+            title={summary.review.label}
+          >
+            {summary.review.detail}
+            {summary.review.note ? ` ${summary.review.note}` : ''}
+            {summary.review.reviewerName && summary.review.reviewedAtLabel
+              ? ` Reviewed by ${summary.review.reviewerName} on ${summary.review.reviewedAtLabel}.`
+              : ''}
+          </Alert>
+        )}
         {summary.isOverdue && (
           <Alert tone="warning" title="This task is past its due date">
             Due {summary.dueDateLabel}. Update the status, or raise it with your Team Lead
