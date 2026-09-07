@@ -21,8 +21,6 @@ export type SessionStatus = 'loading' | 'authenticated' | 'unauthenticated';
 interface SessionContextValue {
   readonly status: SessionStatus;
   readonly user: SessionUser | null;
-  /** Milliseconds until the session expires; `null` when unauthenticated. */
-  readonly msUntilExpiry: number | null;
   login: (
     input: LoginInput,
   ) => Promise<Result<{ requiresTwoFactor: boolean; user: SessionUser | null }>>;
@@ -38,10 +36,26 @@ interface SessionContextValue {
 
 const SessionContext = React.createContext<SessionContextValue | null>(null);
 
+/**
+ * The countdown is deliberately a separate context.
+ *
+ * It changes every second. Held on the session value, that tick re-rendered
+ * every `useSession()` consumer once a second — which is most of the product —
+ * and React re-applies a controlled input's `name` attribute on each update,
+ * so every form field visibly flickered in the inspector for a countdown only
+ * the expiry warning reads. Subscribing to the clock is now opt-in.
+ */
+const SessionExpiryContext = React.createContext<number | null>(null);
+
 export function useSession(): SessionContextValue {
   const context = React.useContext(SessionContext);
   if (!context) throw new Error('useSession must be used inside <SessionProvider>');
   return context;
+}
+
+/** Milliseconds until the session expires; `null` when unauthenticated. */
+export function useSessionExpiry(): number | null {
+  return React.useContext(SessionExpiryContext);
 }
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
@@ -148,7 +162,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     () => ({
       status,
       user,
-      msUntilExpiry,
       login,
       verifyTwoFactor,
       signOut,
@@ -159,7 +172,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     [
       status,
       user,
-      msUntilExpiry,
       login,
       verifyTwoFactor,
       signOut,
@@ -169,5 +181,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     ],
   );
 
-  return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
+  return (
+    <SessionContext.Provider value={value}>
+      <SessionExpiryContext.Provider value={msUntilExpiry}>
+        {children}
+      </SessionExpiryContext.Provider>
+    </SessionContext.Provider>
+  );
 }

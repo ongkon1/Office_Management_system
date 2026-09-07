@@ -131,7 +131,7 @@ export function AuditLog() {
   const [from, setFrom] = React.useState('');
   const [to, setTo] = React.useState('');
 
-  const { state } = useAsync(
+  const { state, previous } = useAsync(
     () =>
       mockAdminService.getAuditLog(user?.userId ?? '', {
         actors,
@@ -143,23 +143,29 @@ export function AuditLog() {
     [user?.userId, actors, actions, resourceTypes, from, to],
   );
 
-  if (state.status === 'loading') return <ReportsLoading label="audit log" />;
-  if (state.status !== 'success') {
-    return <ReportsFallback result={state.failure} subject="Audit log" />;
-  }
-  const data = state.data;
+  /*
+   * Every filter here is a `useAsync` dependency, so the request re-enters
+   * `loading` on each change. Returning a page-level skeleton unmounted the
+   * filter bar mid-interaction: a date being typed lost its caret after one
+   * character and an open multi-select closed the moment an option was picked.
+   * The bar stays mounted, drawing its option lists from the last successful
+   * response, and only the events region below it changes state.
+   */
+  const data = state.status === 'success' ? state.data : null;
+  const failure = state.status === 'failure' ? state.failure : null;
+  const options = data ?? previous;
 
   const applied = [
     ...actors.map((value) => ({
       key: `actor-${value}`,
       label: 'Actor',
-      value: data.actorOptions.find((option) => option.value === value)?.label ?? value,
+      value: options?.actorOptions.find((option) => option.value === value)?.label ?? value,
       onRemove: () => setActors(actors.filter((item) => item !== value)),
     })),
     ...actions.map((value) => ({
       key: `action-${value}`,
       label: 'Action',
-      value: data.actionOptions.find((option) => option.value === value)?.label ?? value,
+      value: options?.actionOptions.find((option) => option.value === value)?.label ?? value,
       onRemove: () => setActions(actions.filter((item) => item !== value)),
     })),
     ...resourceTypes.map((value) => ({
@@ -176,12 +182,14 @@ export function AuditLog() {
         title="Audit log"
         description="Who did what, to which record, when, and why."
         meta={
-          <>
-            <Badge tone="neutral">{data.totalCount} events</Badge>
-            {data.restrictedCount > 0 && (
-              <Badge tone="warning">{data.restrictedCount} with withheld values</Badge>
-            )}
-          </>
+          data && (
+            <>
+              <Badge tone="neutral">{data.totalCount} events</Badge>
+              {data.restrictedCount > 0 && (
+                <Badge tone="warning">{data.restrictedCount} with withheld values</Badge>
+              )}
+            </>
+          )
         }
       />
 
@@ -195,23 +203,25 @@ export function AuditLog() {
           setFrom('');
           setTo('');
         }}
-        resultSummary={`${data.totalCount} event${data.totalCount === 1 ? '' : 's'}`}
+        resultSummary={
+          data ? `${data.totalCount} event${data.totalCount === 1 ? '' : 's'}` : 'Loading…'
+        }
       >
         <MultiSelectFilter
           label="Actor"
-          options={data.actorOptions}
+          options={options?.actorOptions ?? []}
           selected={actors}
           onChange={setActors}
         />
         <MultiSelectFilter
           label="Action"
-          options={data.actionOptions}
+          options={options?.actionOptions ?? []}
           selected={actions}
           onChange={setActions}
         />
         <MultiSelectFilter
           label="Resource"
-          options={data.resourceOptions}
+          options={options?.resourceOptions ?? []}
           selected={resourceTypes}
           onChange={setResourceTypes}
         />
@@ -229,7 +239,11 @@ export function AuditLog() {
         happened.
       </Callout>
 
-      {data.events.length === 0 ? (
+      {state.status === 'loading' ? (
+        <ReportsLoading label="audit log" inline />
+      ) : failure ? (
+        <ReportsFallback result={failure} subject="Audit log" inline />
+      ) : !data ? null : data.events.length === 0 ? (
         <EmptyState
           className="mt-5"
           variant="no-results"

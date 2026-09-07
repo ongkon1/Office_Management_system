@@ -157,6 +157,7 @@ export function CostAnalysis({ scope }: { scope: 'project' | 'division' }) {
         divisionIds,
       }),
     [user?.userId, scope, periodId, divisionIds],
+    { keepPrevious: true },
   );
   const { state: periodState } = useAsync(
     () => mockFinanceService.listPeriods(user?.userId ?? ''),

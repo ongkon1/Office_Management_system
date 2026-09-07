@@ -72,6 +72,7 @@ export function FinanceReports() {
         groupBy,
       }),
     [user?.userId, reportKey, periodId, divisionIds, groupBy],
+    { keepPrevious: true },
   );
   const { state: periodState } = useAsync(
     () => mockFinanceService.listPeriods(user?.userId ?? ''),
