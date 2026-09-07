@@ -263,18 +263,22 @@ export function SearchResultsPage({ initialTerm }: { initialTerm: string }) {
     [user?.userId, term],
   );
 
-  if (state.status === 'loading') return <ReportsLoading label="search results" />;
-  if (state.status !== 'success') {
-    return <ReportsFallback result={state.failure} subject="Search" />;
-  }
-  const data = state.data;
+  /*
+   * The search field and the type filter both feed `useAsync`, so the request
+   * re-enters `loading` on every keystroke and every filter change. Returning
+   * a page-level skeleton here would unmount the field being typed into and
+   * the popover being clicked — so the header, field and filter bar render
+   * unconditionally and only the results region below them changes state.
+   */
+  const data = state.status === 'success' ? state.data : null;
+  const failure = state.status === 'failure' ? state.failure : null;
 
   return (
     <PageContainer width="full">
       <PageHeader
         title="Search"
         description="Employees, divisions, projects, tasks, timesheets, remarks and documents."
-        meta={<Badge tone="neutral">{data.totalCount} results</Badge>}
+        meta={data && <Badge tone="neutral">{data.totalCount} results</Badge>}
       />
 
       <div className="mt-5 max-w-xl">
@@ -295,7 +299,9 @@ export function SearchResultsPage({ initialTerm }: { initialTerm: string }) {
           onRemove: () => setKinds(kinds.filter((item) => item !== kind)),
         }))}
         onClearAll={() => setKinds([])}
-        resultSummary={`${data.totalCount} result${data.totalCount === 1 ? '' : 's'}`}
+        resultSummary={
+          data ? `${data.totalCount} result${data.totalCount === 1 ? '' : 's'}` : 'Searching…'
+        }
       >
         <MultiSelectFilter
           label="Type"
@@ -329,7 +335,11 @@ export function SearchResultsPage({ initialTerm }: { initialTerm: string }) {
         </Card>
       )}
 
-      {data.groups.length === 0 ? (
+      {state.status === 'loading' ? (
+        <ReportsLoading label="search results" inline />
+      ) : failure ? (
+        <ReportsFallback result={failure} subject="Search" inline />
+      ) : !data ? null : data.groups.length === 0 ? (
         <EmptyState
           className="mt-5"
           variant={term.trim() ? 'no-results' : 'empty'}

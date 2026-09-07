@@ -45,11 +45,15 @@ export function DocumentLibrary() {
     [user?.userId, term, scopes],
   );
 
-  if (state.status === 'loading') return <ReportsLoading label="document library" />;
-  if (state.status !== 'success') {
-    return <ReportsFallback result={state.failure} subject="Documents" />;
-  }
-  const data = state.data;
+  /*
+   * The search term and the scope filter are `useAsync` deps, so the request
+   * re-enters `loading` on every keystroke and every filter change. A
+   * page-level skeleton here would unmount the field being typed into and the
+   * popover being clicked, so the controls stay mounted and only the results
+   * region below them changes state.
+   */
+  const data = state.status === 'success' ? state.data : null;
+  const failure = state.status === 'failure' ? state.failure : null;
 
   async function download(document: DocumentItemView) {
     setDenial(null);
@@ -73,12 +77,14 @@ export function DocumentLibrary() {
         title="Documents"
         description="Company, division and project documents you have access to."
         meta={
-          <>
-            <Badge tone="neutral">{data.totalCount} documents</Badge>
-            {data.restrictedCount > 0 && (
-              <Badge tone="warning">{data.restrictedCount} restricted</Badge>
-            )}
-          </>
+          data && (
+            <>
+              <Badge tone="neutral">{data.totalCount} documents</Badge>
+              {data.restrictedCount > 0 && (
+                <Badge tone="warning">{data.restrictedCount} restricted</Badge>
+              )}
+            </>
+          )
         }
       />
 
@@ -106,7 +112,9 @@ export function DocumentLibrary() {
           onRemove: () => setScopes(scopes.filter((item) => item !== scope)),
         }))}
         onClearAll={() => setScopes([])}
-        resultSummary={`${data.totalCount} document${data.totalCount === 1 ? '' : 's'}`}
+        resultSummary={
+          data ? `${data.totalCount} document${data.totalCount === 1 ? '' : 's'}` : 'Loading…'
+        }
       >
         <MultiSelectFilter
           label="Scope"
@@ -121,7 +129,11 @@ export function DocumentLibrary() {
         but not open keeps its title and says which permission it needs.
       </Callout>
 
-      {data.groups.length === 0 ? (
+      {state.status === 'loading' ? (
+        <ReportsLoading label="document library" inline />
+      ) : failure ? (
+        <ReportsFallback result={failure} subject="Documents" inline />
+      ) : !data ? null : data.groups.length === 0 ? (
         <EmptyState
           className="mt-5"
           variant={term || scopes.length ? 'no-results' : 'empty'}

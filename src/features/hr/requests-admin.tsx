@@ -279,6 +279,7 @@ export function RequestAdministration({ kind }: { kind: 'wfh' | 'leave' }) {
   const { state, reload } = useAsync(
     () => mockHrService.listRequests(user?.userId ?? '', kind),
     [user?.userId, kind],
+    { keepPrevious: true },
   );
   const { state: summaryState } = useAsync(
     () => mockHrService.listDivisionRequestSummary(user?.userId ?? '', kind),

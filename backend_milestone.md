@@ -12,6 +12,28 @@
 | Frontend contract source | `frontend_milestone.md` and the implemented frontend service interfaces |
 | Backend goal | Secure, auditable, testable business logic and persistence that replace frontend mock adapters without redesigning approved screens |
 
+## 0. Product Design Alignment
+
+The backend supports a single modern enterprise SaaS product: a role-based employee operations workspace for time, projects, attendance, HR, Finance, and management reporting. The frontend remains the visual source of truth; backend work must preserve its approved information architecture, responsive behavior, and interaction states.
+
+### Frontend milestone handoff
+
+| Frontend phase | Current status | Backend implication |
+|---:|---|---|
+| 0–7 | Done | Contracts, routes, workflows, and supporting screens are available for service implementation. |
+| 8 | Done (17/18; FE-0825 awaiting visual review) | Accessibility, responsive, stress, journey, and performance evidence is available; retain these states in API responses. |
+| 9 | Next (0/14) | Demo packaging and final mock-to-service cutover define the integration handoff. |
+
+### SaaS experience principles (non-functional design contract)
+
+- Preserve the frontend's clean, spacious enterprise layout: predictable navigation, clear page hierarchy, scannable metric cards, and data-dense tables that remain usable on mobile.
+- Return explicit loading, empty, validation, error, conflict, permission-denied, and success outcomes so screens can render complete product states without guessing.
+- Enforce authorization before aggregation or search; restricted fields must be omitted or marked `Restricted`, never blanked or inferred by the UI.
+- Keep domain calculations, status labels, durations, money precision, and audit evidence canonical so every dashboard, table, export, and notification presents consistent information.
+- Do not introduce visual, route, workflow, or color-theme changes through backend implementation. Any presentation change belongs in `frontend_milestone.md` and the shared UI tokens.
+
+The detailed frontend plan and task evidence remain in [`frontend_milestone.md`](frontend_milestone.md); this document tracks the server-side work required to make that SaaS experience authoritative.
+
 ## 1. Task Status Convention
 
 Use exactly one status marker on every tracked task:

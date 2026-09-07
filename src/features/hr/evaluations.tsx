@@ -232,6 +232,7 @@ export function EvaluationAdministration({ periodId }: { periodId?: string }) {
         selected === 'all' ? undefined : selected,
       ),
     [user?.userId, selected],
+    { keepPrevious: true },
   );
 
   if (state.status === 'loading' || periodState.status === 'loading') {

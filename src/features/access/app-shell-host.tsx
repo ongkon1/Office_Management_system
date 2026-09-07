@@ -16,7 +16,7 @@ import { formatTimestamp } from '@/lib/format';
 import { DEMO_ACCOUNTS, findAccountByUserId } from '@/services/mock/accounts';
 import { SearchPalette } from '@/features/workspace/search';
 import { isDemoMode } from './demo-mode';
-import { useSession } from './session-provider';
+import { useSession, useSessionExpiry } from './session-provider';
 
 /** Show the expiry warning when this much time is left. */
 const WARNING_THRESHOLD_MS = 5 * 60 * 1000;
@@ -36,7 +36,8 @@ function formatCountdown(ms: number): string {
  * every tick, which would make a screen reader unusable.
  */
 function SessionExpiryWarning() {
-  const { msUntilExpiry, extendSession, signOut } = useSession();
+  const { extendSession, signOut } = useSession();
+  const msUntilExpiry = useSessionExpiry();
   const router = useRouter();
 
   if (msUntilExpiry === null || msUntilExpiry > WARNING_THRESHOLD_MS) return null;
@@ -265,8 +266,10 @@ export function AppShellHost({ children }: { children: React.ReactNode }) {
         <div className="flex items-center gap-3 rounded-md border border-border bg-surface-sunken p-3">
           <Avatar name={user.displayName} src={user.avatarUrl} size="md" />
           <div className="min-w-0">
-            <p className="text-body-sm font-medium text-ink">{user.displayName}</p>
-            <p className="text-caption text-ink-subtle">{ROLE_LABEL[user.primaryRole]}</p>
+            <p className="truncate text-body-sm font-medium text-ink">{user.displayName}</p>
+            <p className="truncate text-caption text-ink-subtle">
+              {ROLE_LABEL[user.primaryRole]}
+            </p>
             {/* Recent-login presentation (FE-0210). */}
             {account?.lastLoginAt && (
               <p className="mt-1 text-caption text-ink-muted">
@@ -277,8 +280,12 @@ export function AppShellHost({ children }: { children: React.ReactNode }) {
         </div>
         {pathname !== '/dashboard' && (
           <p className="mt-3 text-caption text-ink-muted">
-            You are currently on <code>{pathname}</code>. Anything unsaved here will not be
-            submitted.
+            You are currently on{' '}
+            {/* A route has no spaces to wrap at, so it is told where it may break. */}
+            <code className="rounded-xs bg-surface-sunken px-1 py-0.5 font-mono text-ink-muted break-all">
+              {pathname}
+            </code>{' '}
+            — anything unsaved here will not be submitted.
           </p>
         )}
       </Dialog>

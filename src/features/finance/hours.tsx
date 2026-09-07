@@ -109,6 +109,7 @@ export function EmployeeHours() {
       filters.projectIds,
       filters.statuses,
     ],
+    { keepPrevious: true },
   );
 
   const { state: periodState } = useAsync(
@@ -362,6 +363,7 @@ export function OvertimeAnalysis() {
         divisionIds: filters.divisionIds,
       }),
     [user?.userId, filters.periodId, filters.employeeIds, filters.divisionIds],
+    { keepPrevious: true },
   );
   const { state: periodState } = useAsync(
     () => mockFinanceService.listPeriods(user?.userId ?? ''),

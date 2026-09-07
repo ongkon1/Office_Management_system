@@ -46,7 +46,16 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
     <html lang="en" className={`${dmSans.variable} h-full`} suppressHydrationWarning>
-      <body className="min-h-full antialiased">
+      {/*
+        `suppressHydrationWarning` here matches the one on `<html>`, and for the
+        same reason: browser extensions write their own attributes onto these
+        two elements before React hydrates — Grammarly adds
+        `data-gr-ext-installed`, ColorZilla adds `cz-shortcut-listen` — and the
+        mismatch they cause is reported against our markup even though nothing
+        in this tree produced it. The flag covers attributes on this element
+        only, so a real mismatch anywhere inside the app is still reported.
+      */}
+      <body className="min-h-full antialiased" suppressHydrationWarning>
         <SessionProvider>
           <ToastProvider>{children}</ToastProvider>
         </SessionProvider>

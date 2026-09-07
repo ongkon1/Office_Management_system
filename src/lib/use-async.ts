@@ -18,11 +18,44 @@ export type AsyncState<T> =
       readonly failure: Exclude<Result<T>, { status: 'success' }>;
     };
 
+export interface AsyncOptions {
+  /**
+   * Keep the last successful data on screen while the next request runs,
+   * instead of dropping back to `loading`.
+   *
+   * For a screen whose own filter controls are `deps`: without it the screen
+   * replaces itself with a skeleton on every change, which unmounts the
+   * control being used — a date field loses its caret after one character and
+   * an open multi-select closes the instant an option is picked. Only the
+   * arguments differ between those requests, never the viewer, so the rows
+   * held over belong to the same person. Leave it off where a dependency can
+   * change who is asking.
+   */
+  readonly keepPrevious?: boolean;
+}
+
 export function useAsync<T>(
   run: () => Promise<Result<T>>,
   deps: readonly unknown[],
-): { state: AsyncState<T>; reload: () => void } {
+  options?: AsyncOptions,
+): { state: AsyncState<T>; previous: T | null; reload: () => void } {
   const [state, setState] = React.useState<AsyncState<T>>({ status: 'loading' });
+  /*
+   * The last successful payload, kept across a reload.
+   *
+   * A screen whose own filter controls are part of `deps` re-enters `loading`
+   * on every keystroke and every filter change. If it swaps itself for a
+   * skeleton it unmounts the field being typed into and the popover being
+   * clicked — the caret is lost after one character and the dropdown shuts on
+   * selection. Such a screen keeps its controls mounted and feeds them from
+   * `previous` while the next result is in flight.
+   *
+   * Only for populating controls that outlive the request — option lists,
+   * result summaries. Records belong to the current `state`: `previous` was
+   * fetched under the earlier arguments, so rendering rows from it would show
+   * data the current query has not authorised.
+   */
+  const [previous, setPrevious] = React.useState<T | null>(null);
   const [nonce, setNonce] = React.useState(0);
 
   // The store version is part of the key, so any mutation refreshes the view.
@@ -35,7 +68,9 @@ export function useAsync<T>(
   const [lastKey, setLastKey] = React.useState(key);
   if (key !== lastKey) {
     setLastKey(key);
-    setState({ status: 'loading' });
+    if (!(options?.keepPrevious && state.status === 'success')) {
+      setState({ status: 'loading' });
+    }
   }
 
   React.useEffect(() => {
@@ -43,14 +78,15 @@ export function useAsync<T>(
 
     run().then((result) => {
       if (cancelled) return;
-      setState(
-        result.status === 'success'
-          ? { status: 'success', data: result.data }
-          : {
-              status: 'failure',
-              failure: result as Exclude<Result<T>, { status: 'success' }>,
-            },
-      );
+      if (result.status === 'success') {
+        setState({ status: 'success', data: result.data });
+        setPrevious(result.data);
+      } else {
+        setState({
+          status: 'failure',
+          failure: result as Exclude<Result<T>, { status: 'success' }>,
+        });
+      }
     });
 
     return () => {
@@ -62,7 +98,7 @@ export function useAsync<T>(
 
   const reload = React.useCallback(() => setNonce((value) => value + 1), []);
 
-  return { state, reload };
+  return { state, previous, reload };
 }
 
 /** Re-renders when the mock store mutates. */

@@ -54,6 +54,7 @@ export function ManagementDashboard() {
   const { state } = useAsync(
     () => mockManagementService.getDashboard(user?.userId ?? '', periodId),
     [user?.userId, periodId],
+    { keepPrevious: true },
   );
 
   if (state.status === 'loading') {

@@ -52,6 +52,7 @@ export function PayrollSummary() {
   const { state, reload } = useAsync(
     () => mockFinanceService.getPayrollSummary(user?.userId ?? '', periodId),
     [user?.userId, periodId],
+    { keepPrevious: true },
   );
   const { state: periodState } = useAsync(
     () => mockFinanceService.listPeriods(user?.userId ?? ''),

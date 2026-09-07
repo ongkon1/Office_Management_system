@@ -14,51 +14,75 @@ import { LinkButton } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { Result } from '@/contracts/results';
 
-export function ReportsLoading({ label }: { label: string }) {
+/**
+ * `inline` drops the `PageContainer`, for a screen that keeps its own header
+ * and query controls mounted and swaps only the results region.
+ *
+ * That distinction is not cosmetic. A screen whose search term or filter feeds
+ * `useAsync` re-enters `loading` on every keystroke, so returning a whole-page
+ * skeleton unmounts the search field the user is typing into — the caret is
+ * lost after one character, and an open filter popover closes the moment an
+ * option is chosen. Keeping the controls mounted is the fix; this prop is what
+ * lets the loading and failure states sit inside them.
+ */
+function StateShell({ inline, children }: { inline?: boolean; children: React.ReactNode }) {
+  return inline ? <>{children}</> : <PageContainer>{children}</PageContainer>;
+}
+
+export function ReportsLoading({ label, inline }: { label: string; inline?: boolean }) {
   return (
-    <PageContainer>
+    <StateShell inline={inline}>
       <div role="status" aria-busy>
         <span className="sr-only">Loading {label}</span>
-        <Skeleton height="2rem" width="18rem" />
+        {!inline && <Skeleton height="2rem" width="18rem" />}
         <Skeleton height="20rem" rounded="md" className="mt-5" />
       </div>
-    </PageContainer>
+    </StateShell>
   );
 }
 
 export function ReportsFallback({
   result,
   subject,
+  inline,
 }: {
   result: Exclude<Result<unknown>, { status: 'success' }>;
   subject: string;
+  inline?: boolean;
 }) {
   if (result.status === 'permission_denied') {
     return (
-      <PageContainer>
+      <StateShell inline={inline}>
         <EmptyState
+          className={inline ? 'mt-5' : undefined}
           variant="denied"
           title="Not available to your role"
           description={`${result.message} ${result.guidance ?? ''}`.trim()}
         />
-      </PageContainer>
+      </StateShell>
     );
   }
   if (result.status === 'not_found') {
     return (
-      <PageContainer>
+      <StateShell inline={inline}>
         <EmptyState
+          className={inline ? 'mt-5' : undefined}
           variant="no-results"
           title={`${subject} not found`}
           description="It may not exist, or it may not be available to your role."
         />
-      </PageContainer>
+      </StateShell>
     );
   }
   return (
-    <PageContainer>
-      <EmptyState variant="error" title={`${subject} unavailable`} description="Try again in a moment." />
-    </PageContainer>
+    <StateShell inline={inline}>
+      <EmptyState
+        className={inline ? 'mt-5' : undefined}
+        variant="error"
+        title={`${subject} unavailable`}
+        description="Try again in a moment."
+      />
+    </StateShell>
   );
 }
 
