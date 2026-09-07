@@ -228,44 +228,44 @@ A backend task may be marked `[x]` only when all applicable conditions are true:
 
 ### Employees, Divisions, and Assignments
 
-- [ ] `BE-0301` Implement division create, update, activate, and deactivate use cases with historical-reference protection.
-- [ ] `BE-0302` Implement employee create, update, activate, deactivate, profile read, and directory search use cases.
-- [ ] `BE-0303` Implement profile-photo attachment metadata and authorized delivery through the selected storage adapter.
-- [ ] `BE-0304` Implement employee-division assignment create, update, end, activate, deactivate, and history queries.
-- [ ] `BE-0305` Enforce one primary division for an active employee when required and validate effective assignment date ranges.
-- [ ] `BE-0306` Validate planned allocation and return a warning, rather than silently changing data, when concurrent allocation differs from 100 percent.
-- [ ] `BE-0307` Implement temporary assignments with required start/end dates and prevent new time outside their effective period.
-- [ ] `BE-0308` Implement role and Team Lead assignment changes with authorization, effective dates where required, and audit records.
+- [x] `BE-0301` Implement division create, update, activate, and deactivate use cases with historical-reference protection.
+- [~] `BE-0302` Implement employee create, update, activate, deactivate, profile read, and directory search use cases.
+- [x] `BE-0303` Implement profile-photo attachment metadata and authorized delivery through the selected storage adapter.
+- [~] `BE-0304` Implement employee-division assignment create, update, end, activate, deactivate, and history queries.
+- [x] `BE-0305` Enforce one primary division for an active employee when required and validate effective assignment date ranges.
+- [x] `BE-0306` Validate planned allocation and return a warning, rather than silently changing data, when concurrent allocation differs from 100 percent.
+- [x] `BE-0307` Implement temporary assignments with required start/end dates and prevent new time outside their effective period.
+- [x] `BE-0308` Implement role and Team Lead assignment changes with authorization, effective dates where required, and audit records.
 
 ### Projects and Membership
 
-- [ ] `BE-0310` Implement project create, update, activate/close, membership, search, filtering, and scoped detail queries.
-- [ ] `BE-0311` Enforce exactly one division per project and validate manager/member access against effective assignments.
-- [ ] `BE-0312` Implement project estimates, deadlines, priority, budget visibility, completion percentage, client/stakeholder, notes, and attachment metadata.
-- [ ] `BE-0313` Calculate actual project hours from valid time entries rather than accepting a manually edited actual-hours total.
-- [ ] `BE-0314` Protect project deactivation/closure and preserve historical tasks, time, files, and audit references.
+- [~] `BE-0310` Implement project create, update, activate/close, membership, search, filtering, and scoped detail queries.
+- [x] `BE-0311` Enforce exactly one division per project and validate manager/member access against effective assignments.
+- [~] `BE-0312` Implement project estimates, deadlines, priority, budget visibility, completion percentage, client/stakeholder, notes, and attachment metadata.
+- [x] `BE-0313` Calculate actual project hours from valid time entries rather than accepting a manually edited actual-hours total.
+- [x] `BE-0314` Protect project deactivation/closure and preserve historical tasks, time, files, and audit references.
 
 ### Tasks
 
-- [ ] `BE-0320` Implement task create, update, assign, support-member, checklist, attachment, and scoped query use cases.
-- [ ] `BE-0321` Enforce Pending, In Progress, and Completed as the initial task statuses and validate allowed transitions.
-- [ ] `BE-0322` Enforce task-project-division consistency and effective employee authorization.
-- [ ] `BE-0323` Calculate actual task time from valid linked time entries and derive overdue state from status and due date.
-- [ ] `BE-0324` Implement task list filters, pagination, sorting, due-date views, and employee/team scopes expected by the frontend.
-- [ ] `BE-0325` Add transaction, conflict, authorization, deactivation, and concurrency tests for organization, project, membership, and task workflows.
+- [~] `BE-0320` Implement task create, update, assign, support-member, checklist, attachment, and scoped query use cases.
+- [x] `BE-0321` Enforce Pending, In Progress, and Completed as the initial task statuses and validate allowed transitions.
+- [x] `BE-0322` Enforce task-project-division consistency and effective employee authorization.
+- [x] `BE-0323` Calculate actual task time from valid linked time entries and derive overdue state from status and due date.
+- [x] `BE-0324` Implement task list filters, pagination, sorting, due-date views, and employee/team scopes expected by the frontend.
+- [~] `BE-0325` Add transaction, conflict, authorization, deactivation, and concurrency tests for organization, project, membership, and task workflows.
 
 ### Employee-Raised Tasks
 
 An employee raises a task for themselves and their Team Lead endorses it. Frontend behaviour is built (`FE-0780`-`FE-0784`); this is the server half.
 
-- [ ] `BE-0316` Add the task review state, reviewer, decided-at and note columns, with a constraint that a task created by a non-Team-Lead cannot be persisted as needing no review.
-- [ ] `BE-0317` Enforce that only the creator's own current Team Lead may decide, and that nobody may endorse a task they raised.
-- [ ] `BE-0318` **Refuse a time entry against a task that is not approved**, in the same server-side validation that already refuses an inactive project. This is the rule the whole feature rests on: a filtered task list is a convenience, and the entry endpoint is the control.
-- [ ] `BE-0319` Make the decision idempotent and conflict-safe, and keep it append-only so who endorsed what stays reproducible.
-- [ ] `BE-0320` Handle the Team Lead mapping changing while a task is pending, so a raised task can never become unreviewable.
-- [ ] `BE-0321` Restrict the employee's create payload to their own assigned divisions and active projects, ignoring any assignee or supporting members it carries.
-- [ ] `BE-0322` Audit raise, approve and refuse with actor, role, before/after and reason, and notify the Team Lead on raise and the employee on decision.
-- [ ] `BE-0323` Test the time-entry refusal at every review state, review by the wrong Team Lead, self-endorsement, concurrent decisions, and Team Lead reassignment mid-review.
+- [x] `BE-0330` Add the task review state, reviewer, decided-at and note columns, with a constraint that a task created by a non-Team-Lead cannot be persisted as needing no review.
+- [x] `BE-0331` Enforce that only the creator's own current Team Lead may decide, and that nobody may endorse a task they raised.
+- [x] `BE-0332` **Refuse a time entry against a task that is not approved**, in the same server-side validation that already refuses an inactive project. This is the rule the whole feature rests on: a filtered task list is a convenience, and the entry endpoint is the control.
+- [x] `BE-0333` Make the decision idempotent and conflict-safe, and keep it append-only so who endorsed what stays reproducible.
+- [x] `BE-0334` Handle the Team Lead mapping changing while a task is pending, so a raised task can never become unreviewable.
+- [x] `BE-0335` Restrict the employee's create payload to their own assigned divisions and active projects, ignoring any assignee or supporting members it carries.
+- [x] `BE-0336` Audit raise, approve and refuse with actor, role, before/after and reason, and notify the Team Lead on raise and the employee on decision.
+- [~] `BE-0337` Test the time-entry refusal at every review state, review by the wrong Team Lead, self-endorsement, concurrent decisions, and Team Lead reassignment mid-review.
 
 ### Phase 3 Exit Criteria
 
@@ -722,13 +722,8 @@ A travel-expense claim. The approval chain is **identical to Phase 10's**, which
 |---:|---|---:|
 | Phase 0 - Architecture and Delivery Foundation | Done | 25/25 |
 | Phase 1 - MySQL Schema and Data Foundation | Done | 26/26 |
-<<<<<<< HEAD
 | Phase 2 - Authentication, Authorization, and Audit | Done | 23/23 |
-| Phase 3 - Organization, Projects, and Tasks | Pending | 0/21 |
-=======
-| Phase 2 - Authentication, Authorization, and Audit | Pending | 0/23 |
-| Phase 3 - Organization, Projects, and Tasks | Pending | 0/29 |
->>>>>>> 3e21a4f454c265035a95b163addb220dcaa965c9
+| Phase 3 - Organization, Projects, and Tasks | In progress | 20/27 |
 | Phase 4 - Timesheet Calculation and Correction | Pending | 0/32 |
 | Phase 5 - HR, Attendance, WFH, Leave, Workload, and Evaluation | Pending | 0/26 |
 | Phase 6 - Reporting, Finance, and Exports | Pending | 0/19 |
