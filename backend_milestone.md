@@ -252,9 +252,15 @@ A backend task may be marked `[x]` only when all applicable conditions are true:
 ### Employees, Divisions, and Assignments
 
 - [x] `BE-0301` Implement division create, update, activate, and deactivate use cases with historical-reference protection.
+<<<<<<< HEAD
 - [x] `BE-0302` Implement employee create, update, activate, deactivate, profile read, and directory search use cases.
 - [x] `BE-0303` Implement profile-photo attachment metadata and authorized delivery through the selected storage adapter.
 - [x] `BE-0304` Implement employee-division assignment create, update, end, activate, deactivate, and history queries.
+=======
+- [~] `BE-0302` Implement employee create, update, activate, deactivate, profile read, and directory search use cases.
+- [x] `BE-0303` Implement profile-photo attachment metadata and authorized delivery through the selected storage adapter.
+- [~] `BE-0304` Implement employee-division assignment create, update, end, activate, deactivate, and history queries.
+>>>>>>> 00d146afb1dc2296921b692b63fc9173664225e3
 - [x] `BE-0305` Enforce one primary division for an active employee when required and validate effective assignment date ranges.
 - [x] `BE-0306` Validate planned allocation and return a warning, rather than silently changing data, when concurrent allocation differs from 100 percent.
 - [x] `BE-0307` Implement temporary assignments with required start/end dates and prevent new time outside their effective period.
@@ -262,20 +268,34 @@ A backend task may be marked `[x]` only when all applicable conditions are true:
 
 ### Projects and Membership
 
+<<<<<<< HEAD
 - [x] `BE-0310` Implement project create, update, activate/close, membership, search, filtering, and scoped detail queries.
 - [x] `BE-0311` Enforce exactly one division per project and validate manager/member access against effective assignments.
 - [x] `BE-0312` Implement project estimates, deadlines, priority, budget visibility, completion percentage, client/stakeholder, notes, and attachment metadata.
+=======
+- [~] `BE-0310` Implement project create, update, activate/close, membership, search, filtering, and scoped detail queries.
+- [x] `BE-0311` Enforce exactly one division per project and validate manager/member access against effective assignments.
+- [~] `BE-0312` Implement project estimates, deadlines, priority, budget visibility, completion percentage, client/stakeholder, notes, and attachment metadata.
+>>>>>>> 00d146afb1dc2296921b692b63fc9173664225e3
 - [x] `BE-0313` Calculate actual project hours from valid time entries rather than accepting a manually edited actual-hours total.
 - [x] `BE-0314` Protect project deactivation/closure and preserve historical tasks, time, files, and audit references.
 
 ### Tasks
 
+<<<<<<< HEAD
 - [x] `BE-0320` Implement task create, update, assign, support-member, checklist, attachment, and scoped query use cases.
+=======
+- [~] `BE-0320` Implement task create, update, assign, support-member, checklist, attachment, and scoped query use cases.
+>>>>>>> 00d146afb1dc2296921b692b63fc9173664225e3
 - [x] `BE-0321` Enforce Pending, In Progress, and Completed as the initial task statuses and validate allowed transitions.
 - [x] `BE-0322` Enforce task-project-division consistency and effective employee authorization.
 - [x] `BE-0323` Calculate actual task time from valid linked time entries and derive overdue state from status and due date.
 - [x] `BE-0324` Implement task list filters, pagination, sorting, due-date views, and employee/team scopes expected by the frontend.
+<<<<<<< HEAD
 - [x] `BE-0325` Add transaction, conflict, authorization, deactivation, and concurrency tests for organization, project, membership, and task workflows.
+=======
+- [~] `BE-0325` Add transaction, conflict, authorization, deactivation, and concurrency tests for organization, project, membership, and task workflows.
+>>>>>>> 00d146afb1dc2296921b692b63fc9173664225e3
 
 ### Employee-Raised Tasks
 
@@ -288,7 +308,11 @@ An employee raises a task for themselves and their Team Lead endorses it. Fronte
 - [x] `BE-0334` Handle the Team Lead mapping changing while a task is pending, so a raised task can never become unreviewable.
 - [x] `BE-0335` Restrict the employee's create payload to their own assigned divisions and active projects, ignoring any assignee or supporting members it carries.
 - [x] `BE-0336` Audit raise, approve and refuse with actor, role, before/after and reason, and notify the Team Lead on raise and the employee on decision.
+<<<<<<< HEAD
 - [x] `BE-0337` Test the time-entry refusal at every review state, review by the wrong Team Lead, self-endorsement, concurrent decisions, and Team Lead reassignment mid-review.
+=======
+- [~] `BE-0337` Test the time-entry refusal at every review state, review by the wrong Team Lead, self-endorsement, concurrent decisions, and Team Lead reassignment mid-review.
+>>>>>>> 00d146afb1dc2296921b692b63fc9173664225e3
 
 ### Phase 3 Exit Criteria
 
@@ -780,7 +804,11 @@ A role that has been used cannot simply be deleted. `finance_manager` is recorde
 | Phase 0 - Architecture and Delivery Foundation | Done | 25/25 |
 | Phase 1 - MySQL Schema and Data Foundation | Done | 26/26 |
 | Phase 2 - Authentication, Authorization, and Audit | Done | 23/23 |
+<<<<<<< HEAD
 | Phase 3 - Organization, Projects, and Tasks | Done | 27/27 |
+=======
+| Phase 3 - Organization, Projects, and Tasks | In progress | 20/27 |
+>>>>>>> 00d146afb1dc2296921b692b63fc9173664225e3
 | Phase 4 - Timesheet Calculation and Correction | Pending | 0/32 |
 | Phase 5 - HR, Attendance, WFH, Leave, Workload, and Evaluation | Pending | 0/26 |
 | Phase 6 - Reporting, Finance, and Exports | Pending | 0/19 |
