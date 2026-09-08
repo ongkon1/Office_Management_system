@@ -193,8 +193,8 @@ export function ConveyanceForm() {
 
       <Callout tone="info" className="mt-5">
         {user?.primaryRole === 'team_lead'
-          ? 'Your own claim goes straight to HR, Finance and the Super Administrator.'
-          : 'Your Team Lead reviews this first. It reaches HR, Finance and the Super Administrator afterwards.'}
+          ? 'Your own claim goes straight to HR and the Super Administrator.'
+          : 'Your Team Lead reviews this first. It reaches HR and the Super Administrator afterwards.'}
       </Callout>
 
       {/*

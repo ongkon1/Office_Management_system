@@ -550,11 +550,32 @@ describe('roles and permissions (FE-0731)', () => {
   it('states the consequence of every sensitive grant', async () => {
     const result = await mockAdminService.listRoles(ADMIN);
     if (result.status !== 'success') return;
-    const finance = result.data.find((role) => role.key === 'finance_manager');
-    expect(finance?.permissions.every((permission) => permission.consequence.length > 20)).toBe(
-      true,
-    );
-    expect(finance?.permissions.every((permission) => permission.isSensitive)).toBe(true);
+    // HR carries the sensitive grants now that it absorbed the Finance role.
+    const hr = result.data.find((role) => role.key === 'hr_manager');
+    expect(hr?.permissions.every((permission) => permission.consequence.length > 20)).toBe(true);
+    expect(hr?.permissions.every((permission) => permission.isSensitive)).toBe(true);
+  });
+
+  it('lists the retired Finance role as history, with nothing to grant', async () => {
+    const result = await mockAdminService.listRoles(ADMIN);
+    if (result.status !== 'success') return;
+
+    const retired = result.data.find((role) => role.key === 'finance_manager');
+    expect(retired?.isRetired).toBe(true);
+    // Nobody can hold it, so there is nothing to grant against it.
+    expect(retired?.userCount).toBe(0);
+    expect(retired?.permissions).toEqual([]);
+  });
+
+  it('does not grant HR the financial permission by role default', async () => {
+    const result = await mockAdminService.listRoles(ADMIN);
+    if (result.status !== 'success') return;
+
+    // The whole point of the merge: HR reaches the finance screens, and sees
+    // money on them only where an administrator granted it per user.
+    const hr = result.data.find((role) => role.key === 'hr_manager');
+    const financial = hr?.permissions.find((item) => item.key === 'finance.cost.view');
+    expect(financial?.granted).toBe(false);
   });
 
   it('refuses to strip an administrator of their own access', async () => {

@@ -108,9 +108,15 @@ export function TaskReviewQueue({ onDecided }: { onDecided?: () => void }) {
           <li key={row.id} className="rounded-md border border-border p-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
+                {/*
+                  `inline-flex min-h-6` gives the link a 24px effective target
+                  (WCAG 2.5.8). A bare inline link inherits the line box and
+                  came out 18px tall — the same pattern every other list in the
+                  product already uses.
+                */}
                 <Link
                   href={row.href}
-                  className="text-body-sm font-medium text-ink hover:text-accent"
+                  className="inline-flex min-h-6 items-center text-body-sm font-medium text-ink hover:text-accent"
                 >
                   {row.title}
                 </Link>

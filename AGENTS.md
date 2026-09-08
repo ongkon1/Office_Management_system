@@ -17,7 +17,7 @@ A centralized web application for tracking employee time and work across multipl
 | Field | Value |
 |---|---|
 | Divisions | PowerInAI, PowerInAI Training, Government Projects, Computer Jagat, WesternCF |
-| Roles | Super Administrator, Team Lead, Employee, HR Manager, Finance Manager, Management/View-Only |
+| Roles | Super Administrator, Team Lead, Employee, HR Manager, Management/View-Only. **Finance Manager was retired in frontend Phase 10** — HR absorbed it, and `finance.cost.view` stays a per-user grant, so the role merge granted nobody cost access. `finance_manager` remains a legal *stored* value for historical rows. |
 | Stack | Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS v4 · Vitest |
 | Database | MySQL — **backend milestone only, not yet connected** |
 | Business timezone / currency | Asia/Dhaka · BDT |
@@ -249,12 +249,15 @@ React Compiler lint errors (`set-state-in-effect`, render-phase mutation) are re
 | Frontend | 7 — Shared reporting and supporting modules | Done (52/52 · requisition, conveyance and employee-raised tasks included) |
 | Frontend | 8 — Responsive, accessibility and quality hardening | Done (17/18 · `FE-0825` awaiting visual review) |
 | Frontend | 9 — Demo packaging and backend handoff | **Next** (0/14) |
+| Frontend | 10 — Role consolidation: Finance into HR | Done (14/14 · requirements amendment owed) |
 | Backend | 0 — Architecture and delivery foundation | Done (25/25) |
 | Backend | 1 — MySQL schema and data foundation | Done (26/26) |
-| Backend | 2 — Authentication, authorization, and audit | **Next** (0/23) |
-| Backend | 3–9 | Pending |
+| Backend | 2 — Authentication, authorization, and audit | Done (23/23) |
+| Backend | 3 — Organization, projects, and tasks | Done (27/27) |
+| Backend | 4–9 | Pending |
 | Backend | 10 — Requisition | Pending (0/20) — new milestone |
 | Backend | 11 — Conveyance | Pending (0/22) — new milestone, depends on 10 |
+| Backend | 12 — Role consolidation: Finance into HR | Pending (0/11) — new milestone |
 
 Gates: contrast 48/48, responsive 268/268, accessibility 217/217, content-stress 63/63, role journeys 41/41, performance 16/16, Phase 2 flows 16/16, Phase 3 flows 18/18, Phase 4 flows 20/20, Phase 5 flows 51/51, Phase 6 flows 40/40, Phase 7 flows 55/55, `verify` passing with 264 tests.
 

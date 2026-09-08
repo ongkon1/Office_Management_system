@@ -40,10 +40,16 @@ export function teamLeadOf(employeeId: string): string | null {
   return EMPLOYEES.find((employee) => employee.id === employeeId)?.teamLeadEmployeeId ?? null;
 }
 
-/** The reviewer role this account decides as, or null when it never reviews. */
+/**
+ * The reviewer role this account decides as, or null when it never reviews.
+ *
+ * `finance_manager` is absent by construction: no account can hold a retired
+ * role, so no new decision can be recorded against one. Rows that already
+ * carry it still render — see `REVIEWER_ROLE_LABEL`.
+ */
 export function reviewerRoleOf(userId: string): ReviewerRole | null {
   const role = viewerOf(userId)?.primaryRole;
-  if (role === 'team_lead' || role === 'hr_manager' || role === 'finance_manager') return role;
+  if (role === 'team_lead' || role === 'hr_manager') return role;
   if (role === 'super_admin') return 'super_admin';
   return null;
 }
@@ -160,7 +166,7 @@ export function stageLabel(record: Approvable): string {
   if (record.stage === 'reviewer_review') {
     const pending = pendingReviewerRoles(record);
     return pending.length === PARALLEL_REVIEWER_ROLES.length
-      ? 'Waiting for HR, Finance and the Super Administrator'
+      ? 'Waiting for HR and the Super Administrator'
       : `Waiting for ${pending.map((role) => REVIEWER_ROLE_LABEL[role]).join(' and ')}`;
   }
   return record.outcome ? APPROVAL_OUTCOME_LABEL[record.outcome] : 'Decided';
@@ -176,13 +182,13 @@ export function stageLabel(record: Approvable): string {
 export function nextStep(record: Approvable, subject: string): string {
   if (record.stage === 'team_lead_review') {
     return record.teamLeadEmployeeId
-      ? `${employeeName(record.teamLeadEmployeeId)} reviews this first. It reaches HR, Finance and the Super Administrator only after that.`
+      ? `${employeeName(record.teamLeadEmployeeId)} reviews this first. It reaches HR and the Super Administrator only after that.`
       : 'No Team Lead is currently assigned, so this cannot move forward. Contact HR.';
   }
 
   if (record.stage === 'reviewer_review') {
     const pending = pendingReviewerRoles(record);
-    return `HR, Finance and the Super Administrator each review this. ${pending
+    return `HR and the Super Administrator each review this. ${pending
       .map((role) => REVIEWER_ROLE_LABEL[role])
       .join(', ')} still to decide.`;
   }
@@ -198,7 +204,7 @@ export function nextStep(record: Approvable, subject: string): string {
     return `Withdrawn by the person who raised it. Raise a new ${subject} if it is still needed.`;
   }
 
-  return 'Approved by HR, Finance and the Super Administrator.';
+  return 'Approved by HR and the Super Administrator.';
 }
 
 export function toReviewView(review: ApprovalReview): ApprovalReviewView {

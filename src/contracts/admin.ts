@@ -22,6 +22,7 @@ import type {
   PermissionKey,
   Redactable,
   RoleKey,
+  StoredRoleKey,
 } from './domain';
 import type { Result } from './results';
 import type { DivisionRef, EmployeeRef } from './view-models';
@@ -87,12 +88,19 @@ export interface PermissionGrantView {
 }
 
 export interface RoleAdminView {
-  readonly key: RoleKey;
+  readonly key: StoredRoleKey;
   readonly label: string;
   readonly description: string;
   readonly userCount: number;
   readonly scopeSummary: string;
   readonly permissions: readonly PermissionGrantView[];
+  /**
+   * True for a role that existed once and can no longer be assigned
+   * (`FE-1010`). Listed rather than hidden: an administrator looking for the
+   * Finance Manager needs to be told it was retired, not left to wonder
+   * whether the screen is broken.
+   */
+  readonly isRetired: boolean;
 }
 
 /* ------------------------------------------------------------------------- */

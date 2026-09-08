@@ -17,7 +17,13 @@ const OTHER_EMPLOYEE = 'usr-1003'; // Sadia Karim, same Team Lead
 const TEAM_LEAD = 'usr-2001'; // Imran Hossain
 const OTHER_TEAM_LEAD = 'usr-2002'; // Farhana Islam
 const HR = 'usr-3001';
-const FINANCE = 'usr-4001';
+/*
+ * `usr-4001` is an HR account now (`FE-1006`). It is kept as a *second* HR
+ * reviewer only where a test needs one; the parallel chain is HR and the
+ * administrator, so a test that decided as "Finance" after HR would be
+ * deciding twice as the same role and would pass for the wrong reason.
+ */
+const SECOND_HR = 'usr-4001';
 const ADMIN = 'usr-9001';
 const MANAGEMENT = 'usr-5001';
 
@@ -59,7 +65,7 @@ describe('who may raise a requisition', () => {
 
   it.each([
     ['HR', HR],
-    ['Finance', FINANCE],
+    ['a second HR account', SECOND_HR],
     ['the Super Administrator', ADMIN],
     ['Management', MANAGEMENT],
   ])('refuses %s at the service, not in the UI', async (_label, userId) => {
@@ -68,7 +74,7 @@ describe('who may raise a requisition', () => {
   });
 
   it('tells a reviewer why they cannot submit rather than hiding the reason', async () => {
-    const list = await mockRequisitionService.list(FINANCE);
+    const list = await mockRequisitionService.list(SECOND_HR);
     if (list.status !== 'success') throw new Error('expected success');
     expect(list.data.canSubmit).toBe(false);
     expect(list.data.submitBlockedReason).toBeTruthy();
@@ -91,7 +97,7 @@ describe('routing', () => {
     expect(result.data.reviews).toHaveLength(0);
   });
 
-  it('moves to the three reviewers only once the Team Lead approves', async () => {
+  it('moves to the parallel reviewers only once the Team Lead approves', async () => {
     const submitted = await mockRequisitionService.submit(EMPLOYEE, IN_HOUSE);
     if (submitted.status !== 'success') throw new Error('expected success');
 
@@ -103,12 +109,11 @@ describe('routing', () => {
     expect(decided.data.stage).toBe('reviewer_review');
     expect(decided.data.pendingReviewers.map((item) => item.roleLabel)).toEqual([
       'HR',
-      'Finance',
       'Super Administrator',
     ]);
   });
 
-  it('is approved only when all three reviewers have approved', async () => {
+  it('is approved only when every parallel reviewer has approved', async () => {
     const approve = { decision: 'approved' as const, reason: '' };
     const submitted = await mockRequisitionService.submit(TEAM_LEAD, NEW_ITEM);
     if (submitted.status !== 'success') throw new Error('expected success');
@@ -118,9 +123,10 @@ describe('routing', () => {
     if (afterHr.status !== 'success') throw new Error('expected success');
     expect(afterHr.data.stage).toBe('reviewer_review');
 
-    const afterFinance = await mockRequisitionService.decide(FINANCE, id, approve);
-    if (afterFinance.status !== 'success') throw new Error('expected success');
-    expect(afterFinance.data.stage).toBe('reviewer_review');
+    // A second HR account is not a second vote: the stage tracks roles, not
+    // people, so HR having decided is what matters.
+    const secondHr = await mockRequisitionService.decide(SECOND_HR, id, approve);
+    expect(secondHr.status).toBe('permission_denied');
 
     const afterAdmin = await mockRequisitionService.decide(ADMIN, id, approve);
     if (afterAdmin.status !== 'success') throw new Error('expected success');
@@ -132,7 +138,7 @@ describe('routing', () => {
     const submitted = await mockRequisitionService.submit(TEAM_LEAD, NEW_ITEM);
     if (submitted.status !== 'success') throw new Error('expected success');
 
-    const rejected = await mockRequisitionService.decide(FINANCE, submitted.data.id, {
+    const rejected = await mockRequisitionService.decide(SECOND_HR, submitted.data.id, {
       decision: 'rejected',
       reason: 'Outside budget this quarter.',
     });
@@ -156,12 +162,12 @@ describe('routing', () => {
 });
 
 describe('visibility', () => {
-  it('hides a requisition still with the Team Lead from HR, Finance and the administrator', async () => {
+  it('hides a requisition still with the Team Lead from HR and the administrator', async () => {
     const submitted = await mockRequisitionService.submit(EMPLOYEE, IN_HOUSE);
     if (submitted.status !== 'success') throw new Error('expected success');
     const id = submitted.data.id;
 
-    for (const reviewer of [HR, FINANCE, ADMIN]) {
+    for (const reviewer of [HR, SECOND_HR, ADMIN]) {
       const result = await mockRequisitionService.get(reviewer, id);
       expect(result.status).toBe('not_found');
     }
@@ -175,7 +181,7 @@ describe('visibility', () => {
       reason: '',
     });
 
-    for (const reviewer of [HR, FINANCE, ADMIN]) {
+    for (const reviewer of [HR, SECOND_HR, ADMIN]) {
       const result = await mockRequisitionService.get(reviewer, submitted.data.id);
       expect(result.status).toBe('success');
     }
@@ -417,12 +423,12 @@ describe('the chain a requisition travelled stays reproducible', () => {
     if (submitted.status !== 'success') throw new Error('expected success');
 
     await mockRequisitionService.decide(HR, submitted.data.id, approve);
-    const after = await mockRequisitionService.decide(FINANCE, submitted.data.id, approve);
+    const after = await mockRequisitionService.decide(ADMIN, submitted.data.id, approve);
     if (after.status !== 'success') throw new Error('expected success');
 
     expect(after.data.reviews.map((review) => review.reviewerRoleLabel)).toEqual([
       'HR',
-      'Finance',
+      'Super Administrator',
     ]);
   });
 });

@@ -234,12 +234,21 @@ export function RoleAdministration() {
               title={role.label}
               description={role.description}
               as="h2"
-              actions={<Badge tone="neutral">{role.userCount} account(s)</Badge>}
+              actions={
+                <Badge tone={role.isRetired ? 'warning' : 'neutral'}>
+                  {role.isRetired ? 'Retired' : `${role.userCount} account(s)`}
+                </Badge>
+              }
             />
             <p className="mt-2 text-caption text-ink-muted">
               <span className="font-medium text-ink">Scope:</span> {role.scopeSummary}
             </p>
 
+            {/*
+              A retired role is listed so an administrator can see it existed,
+              and carries no permission switches, because there is nothing to
+              grant to a role nobody can hold (`FE-1010`).
+            */}
             <ul className="mt-4 space-y-2">
               {role.permissions.map((permission) => (
                 <li
@@ -263,8 +272,9 @@ export function RoleAdministration() {
                     <Switch
                       checked={permission.granted}
                       onCheckedChange={(checked) => {
+                        if (role.isRetired) return;
                         if (checked) setPending({ role, permission });
-                        else apply(role.key, permission.key, false);
+                        else apply(role.key as RoleKey, permission.key, false);
                       }}
                       label={permission.granted ? 'Granted' : 'Not granted'}
                     />
@@ -292,7 +302,7 @@ export function RoleAdministration() {
             <Button
               variant="primary"
               onClick={() =>
-                pending && apply(pending.role.key, pending.permission.key, true)
+                pending && apply(pending.role.key as RoleKey, pending.permission.key, true)
               }
             >
               Grant permission

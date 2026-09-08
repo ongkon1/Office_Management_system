@@ -36,8 +36,10 @@ const roleDefaults: Record<RoleKey, ReadonlySet<string>> = {
   super_admin: new Set(['*']),
   team_lead: new Set(['organization.read','project.manage','task.manage','time.team.read','request.decide','evaluation.manage','report.read']),
   employee: new Set(['organization.self.read','project.assigned.read','task.assigned.read','time.self.manage','request.self.manage','evaluation.self.read']),
-  hr_manager: new Set(['organization.manage','attendance.read','request.override','evaluation.manage','time.period.verify','report.hr.read']),
-  finance_manager: new Set(['time.verified.read','report.finance.read','report.export']),
+  // HR absorbed the Finance Manager's actions (`FE-1004`). Note what is *not*
+  // here: `finance.cost.view` and `finance.salary.view` stay per-user grants,
+  // so the merge widened who reaches finance screens and nobody's cost access.
+  hr_manager: new Set(['organization.manage','attendance.read','request.override','evaluation.manage','time.period.verify','report.hr.read','time.verified.read','report.finance.read','report.export']),
   management: new Set(['dashboard.read','report.read']),
 };
 

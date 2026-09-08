@@ -9,7 +9,7 @@ const boundaries:EntryPoint[]=['server_component','server_action','route_handler
 describe('Phase 2 exit matrix across every trusted server boundary',()=>{
   it.each([
     ['super_admin','organization.read',true],['team_lead','time.team.read',true],['employee','time.self.manage',true],
-    ['hr_manager','time.period.verify',true],['finance_manager','report.finance.read',true],['management','report.read',true],
+    ['hr_manager','time.period.verify',true],['hr_manager','report.finance.read',true],['management','report.read',true],
   ] as const)('%s receives its baseline %s capability', (role,permission,allowed)=>expect(authorize(actor(role),permission,{},'server_component')).toBe(allowed));
 
   it.each(boundaries)('prevents scope bypass and identifier disclosure at %s',(boundary)=>{
@@ -20,7 +20,7 @@ describe('Phase 2 exit matrix across every trusted server boundary',()=>{
   });
 
   it('omits protected fields before a response leaves the service',()=>{
-    const result=mapAuthorizedRecord(actor('finance_manager'),'report.finance.read',{value:{minutes:420,salary:'1.00',cost:'2.00'},policy:{}},'report',{salary:'salary',cost:'labour_cost'});
+    const result=mapAuthorizedRecord(actor('hr_manager'),'report.finance.read',{value:{minutes:420,salary:'1.00',cost:'2.00'},policy:{}},'report',{salary:'salary',cost:'labour_cost'});
     expect(result).toEqual({status:'success',data:{minutes:420}});
   });
 

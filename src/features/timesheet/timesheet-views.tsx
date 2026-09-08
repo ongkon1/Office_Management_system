@@ -25,7 +25,7 @@ import { DataTable, type DataTableColumn } from '@/components/data/data-table';
 import { PageContainer, PageHeader } from '@/components/layout/page';
 import { mockTimesheetService, weekStart } from '@/services/mock/timesheet';
 import { ALL_DIVISIONS } from '@/services/mock/organization';
-import { DEMO_TODAY } from '@/fixtures';
+import { DEMO_TODAY } from '@/lib/demo-context';
 
 type ViewMode = 'week' | 'month' | 'calendar' | 'list';
 

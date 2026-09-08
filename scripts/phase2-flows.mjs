@@ -24,8 +24,8 @@ const ROLES = [
   ['nadia.rahman@demo.local', 'Employee', '/dashboard'],
   ['imran.hossain@demo.local', 'Team Lead', '/dashboard'],
   ['rezaul.haque@demo.local', 'HR Manager', '/hr'],
-  ['mahmuda.akter@demo.local', 'Finance (with cost)', '/finance'],
-  ['shakil.chowdhury@demo.local', 'Finance (no cost)', '/finance'],
+  ['mahmuda.akter@demo.local', 'HR (with cost)', '/hr'],
+  ['shakil.chowdhury@demo.local', 'HR (no cost)', '/hr'],
   ['ayesha.siddika@demo.local', 'Management', '/dashboard'],
 ];
 
@@ -89,8 +89,15 @@ for (const [email, label, expected] of ROLES) {
   check(path === '/finance/project-costs', `denied route redirected to ${path} instead of staying`);
   check(denied, 'denied screen was not shown for /finance/project-costs');
   check(namesPermission, 'denied screen did not name the required permission');
+  /*
+   * The printed verdict compared against `/finance/payroll` while the page had
+   * navigated to `/finance/project-costs`, so this line always printed FAIL
+   * even though the `check()` calls above passed and the gate exited zero. A
+   * permanently red line that never fails the build teaches people to ignore
+   * red lines.
+   */
   console.log(
-    `${denied && path === '/finance/payroll' ? 'PASS' : 'FAIL'} | denied in place | Finance without cost permission → /finance/project-costs`,
+    `${denied && path === '/finance/project-costs' ? 'PASS' : 'FAIL'} | denied in place | HR without cost permission → /finance/project-costs`,
   );
 
   if (shoot) await page.screenshot({ path: 'screenshots/phase2-denied.png' });

@@ -95,11 +95,17 @@ Period verification is MVP because `project_requirement.md` Section 2.2 requires
 
 ## 7. Finance Screens
 
+> **Owner changed in Phase 10.** HR absorbed the Finance Manager role, which was
+> retired. Every screen below keeps its route and its requirement ids; the
+> "Role" column now means HR. `finance.cost.view` is unchanged — it is still a
+> per-user grant, and it is still what separates the hours from the money.
+
+
 | Screen | Route | Roles | Priority | Requirement IDs |
 |---|---|---|---|---|
-| Finance dashboard | `/finance` | Finance | MVP (hours) / P2 (cost tiles) | `REQ-DASH-007`, `REQ-RBAC-016`, `REQ-RBAC-017` |
-| Verified employee hours | `/finance/hours` | Finance | MVP | `REQ-RBAC-016`, `REQ-RPT-010` |
-| Overtime analysis | `/finance/overtime` | Finance | MVP | `REQ-RBAC-016`, `REQ-RPT-004` |
+| Finance dashboard | `/finance` | HR | MVP (hours) / P2 (cost tiles) | `REQ-DASH-007`, `REQ-RBAC-016`, `REQ-RBAC-017` |
+| Verified employee hours | `/finance/hours` | HR | MVP | `REQ-RBAC-016`, `REQ-RPT-010` |
+| Overtime analysis | `/finance/overtime` | HR | MVP | `REQ-RBAC-016`, `REQ-RPT-004` |
 | Project costs | `/finance/project-costs` | Finance + `F` | P2 | `REQ-RBAC-017`, `REQ-RPT-004`, `REQ-DATA-005` |
 | Division costs | `/finance/division-costs` | Finance + `F` | P2 | `REQ-RBAC-017`, `REQ-RPT-004` |
 | Payroll summary and preview | `/finance/payroll` | Finance + `F` | P2 | `REQ-RPT-004`, `REQ-RPT-010` |

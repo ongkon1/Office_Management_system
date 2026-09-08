@@ -243,7 +243,7 @@ export function RequisitionList() {
             their Team Lead first. A Team Lead&rsquo;s own skips that step.
           </li>
           <li>
-            <span className="font-medium text-ink">3.</span> HR, Finance and the Super
+            <span className="font-medium text-ink">3.</span> HR and the Super
             Administrator each review it. One rejection ends it.
           </li>
         </ol>

@@ -41,13 +41,26 @@ Status rules:
 
 ### 2.2 Design Direction
 
-- Use a premium enterprise-dashboard style: full white canvas, very light aquatic sections, deep slate text, restrained teal accents, crisp borders, and controlled elevation.
+- Use a premium enterprise-dashboard style: a light canvas, PowerInAI violet identity accents, deep ink text, crisp borders, and controlled elevation.
 - Use DM Sans as the initial product typeface, with a system sans-serif fallback.
 - Use subtle translucent or glass surfaces only for navigation, overlays, and selected summary panels; data tables and forms must use solid, high-contrast surfaces.
 - Favor a compact dashboard density while preserving comfortable touch targets and readable forms.
 - Use a consistent 8-point spacing system, semantic color tokens, rounded surfaces, and a limited shadow scale.
 - Use SVG icons from one consistent icon family; do not use emoji as interface icons.
 - Use motion only to explain state changes, navigation, loading, expanding content, and feedback. Normal transitions should take 150-300 ms and respect reduced-motion preferences.
+
+### 2.2.1 Project-wide SaaS Design Enhancement
+
+The September 2026 polish pass applies through shared components rather than per-screen overrides:
+
+- Cards, charts, mobile table cards, and data tables use a consistent rounded surface and restrained elevation hierarchy.
+- Metric tiles use a slim brand rule, increased internal spacing, and clearer hover elevation while retaining their existing content and links.
+- Page headers have stronger title hierarchy and section separation; responsive gutters and vertical rhythm increase progressively by breakpoint.
+- Sidebar items use bordered active pills with text, icon, and contrast cues; the top bar and sidebar use purposeful translucency and blur only for persistent navigation.
+- Buttons and inputs use stable border/shadow feedback without layout-shifting motion. Tables gain clearer headers, alternating row surfaces, and stronger hover scanning cues.
+- The approved PowerInAI light palette, semantic status colours, routes, permissions, data contracts, and business behavior are unchanged.
+
+Verification: `npm run verify` passes with 409 tests and a 57-page production build; contrast remains 48/48; `/dashboard` passes 12/12 role/width responsive checks with 1,310 rendered elements checked for contrast.
 
 ### 2.3 Responsive Standards
 
@@ -98,6 +111,7 @@ The final route names may be refined without changing the feature ownership belo
 | 7 | Shared reporting and supporting modules | Reports, exports, notifications, search, documents, messages, profile, settings, requisition, conveyance, and employee-raised tasks are represented. |
 | 8 | Responsive, accessibility, and quality hardening | All agreed flows pass responsive, accessibility, visual, and interaction QA. |
 | 9 | Demo packaging and backend handoff | Stakeholders can review the product, and backend implementation can begin without UI restructuring. |
+| 10 | Role consolidation: Finance into HR | The product presents five roles, HR performs every Finance task, and no user gained cost access by the merge alone. |
 
 ## 5. Detailed Phase Tasks
 
@@ -648,30 +662,96 @@ Phase 8 evidence is recorded in `docs/frontend/phase-8/verification.md`: accessi
 
 ### Stakeholder Demo
 
-- [ ] `FE-0901` Create deterministic demo fixtures for all six roles and the five initial divisions.
-- [ ] `FE-0902` Create a demo scenario showing cross-division time: 3 hours PowerInAI, 2 hours Government Projects, 2 hours WesternCF, and a separate 1-hour break.
-- [ ] `FE-0903` Create under-time, complete, overtime, critical, missing, leave, WFH, correction, verified, and restricted-data scenarios.
-- [ ] `FE-0904` Add a development-only demo reset control so every presentation starts from the same state.
-- [ ] `FE-0905` Prepare a stakeholder walkthrough covering Employee, Team Lead, HR, Finance, Management, and Administrator perspectives.
-- [ ] `FE-0906` Record stakeholder feedback with owner, priority, decision, and affected requirement/task IDs.
+- [x] `FE-0901` Create deterministic demo fixtures for all six roles and the five initial divisions.
+- [x] `FE-0902` Create a demo scenario showing cross-division time: 3 hours PowerInAI, 2 hours Government Projects, 2 hours WesternCF, and a separate 1-hour break.
+- [x] `FE-0903` Create under-time, complete, overtime, critical, missing, leave, WFH, correction, verified, and restricted-data scenarios.
+- [x] `FE-0904` Add a development-only demo reset control so every presentation starts from the same state.
+- [x] `FE-0905` Prepare a stakeholder walkthrough covering Employee, Team Lead, HR, Finance, Management, and Administrator perspectives.
+- [~] `FE-0906` Record stakeholder feedback with owner, priority, decision, and affected requirement/task IDs. Register created; stakeholder sign-off is pending.
 
 ### Backend Readiness
 
-- [ ] `FE-0910` Inventory every mock query and mutation used by the frontend.
-- [ ] `FE-0911` Document request inputs, returned view models, validation errors, permission outcomes, pagination, sorting, and filters for every data interface.
-- [ ] `FE-0912` Map frontend domain types to the core entities in `project_requirement.md` without selecting the MySQL schema prematurely.
-- [ ] `FE-0913` Identify which interactions should later use server components, server actions, route handlers, background jobs, file storage, or real-time updates.
-- [ ] `FE-0914` Document authentication, role, division, project, field-level, government-project, salary/cost, and evaluation permission expectations at each boundary.
-- [ ] `FE-0915` Document calculation fixtures and expected results for backend parity tests.
-- [ ] `FE-0916` Confirm that no UI component depends directly on fixture storage or mock-only behavior.
-- [ ] `FE-0917` Produce the backend milestone plan for MySQL persistence, authentication, authorization, business logic, reporting, files, notifications, integrations, audit, testing, and deployment.
+- [x] `FE-0910` Inventory every mock query and mutation used by the frontend.
+- [x] `FE-0911` Document request inputs, returned view models, validation errors, permission outcomes, pagination, sorting, and filters for every data interface.
+- [x] `FE-0912` Map frontend domain types to the core entities in `project_requirement.md` without selecting the MySQL schema prematurely.
+- [x] `FE-0913` Identify which interactions should later use server components, server actions, route handlers, background jobs, file storage, or real-time updates.
+- [x] `FE-0914` Document authentication, role, division, project, field-level, government-project, salary/cost, and evaluation permission expectations at each boundary.
+- [x] `FE-0915` Document calculation fixtures and expected results for backend parity tests.
+- [x] `FE-0916` Confirm that no UI component imports fixture storage directly; the typed service boundary and single demo reset seam are documented in `backend-handoff.md`.
+- [x] `FE-0917` Produce the backend milestone plan for MySQL persistence, authentication, authorization, business logic, reporting, files, notifications, integrations, audit, testing, and deployment.
 
 ### Phase 9 Exit Criteria
 
-- [ ] Stakeholders approve the frontend experience or all requested changes are tracked.
-- [ ] Every visible workflow has a typed backend contract and documented permission expectation.
-- [ ] Mock adapters can be replaced incrementally inside the same Next.js application.
-- [ ] The backend milestone can start without splitting the repository or redesigning approved screens.
+- [~] Stakeholders approve the frontend experience or all requested changes are tracked. Feedback register is ready; approval remains pending.
+- [x] Every visible workflow has a typed backend contract and documented permission expectation.
+- [x] Mock adapters can be replaced incrementally inside the same Next.js application.
+- [x] The backend milestone can start without splitting the repository or redesigning approved screens.
+
+## Phase 10 - Role Consolidation: Finance into HR
+
+HR absorbs everything the Finance Manager role did, and the Finance Manager role stops existing. The product goes from six roles to five: Super Administrator, Team Lead, Employee, HR Manager, Management/View-Only.
+
+**This is a permission change before it is a UI change.** Two things must not happen by accident, and both are easy to cause with a careless find-and-replace.
+
+### The Two Traps
+
+**1. Merging the role must not grant every HR user cost and salary data.**
+
+`finance.cost.view` is granted per user today, not per role: `usr-4001` has it, `usr-4002` does not, and that pair is what proves `AC-AUTH-003` — the same screen renders money for one and `Restricted` for the other. HR currently holds none of it. If the merge lets the HR *role* imply the permission, every HR account silently gains salary, cost-rate and budget visibility.
+
+`REQ-RBAC-017` already says cost data is exposed "only through separately granted financial permissions", and the capability matrix already marks HR's cost access as `F` (permission-gated), so keeping the permission separate is what the requirement already asks for. The role merges; the permission does not.
+
+**2. Removing the role must not make historical records unreadable.**
+
+`reviewerRole: 'finance_manager'` is stored on requisition and conveyance review rows, and appears in audit events. Deleting the value from `ReviewerRole` breaks every record that already carries it. The historical value must remain renderable even though no new record can be created with it.
+
+### Tasks
+
+- [x] `FE-1001` Decide and record what replaces the three-reviewer chain. HR + Finance + Super Administrator becomes **two** parallel reviewers, not three; `PARALLEL_REVIEWER_ROLES` in `src/contracts/approval.ts` shrinks and every "all three" label, count and sentence in requisition and conveyance changes with it.
+- [x] `FE-1002` Remove `finance_manager` from `RoleKey` in `src/contracts/domain.ts`, keeping a readable historical label for stored `reviewerRole` values so past decisions still render.
+- [x] `FE-1003` Fold the Finance navigation group into HR in `src/components/shell/navigation.ts`, deciding whether the section keeps the name "Finance" under HR or is renamed.
+- [x] `FE-1004` Update the 11 rules in `src/features/access/route-access.ts` so every `/finance/*` route admits HR, and confirm each still denies Employee, Team Lead and Management.
+- [x] `FE-1005` Keep `finance.cost.view` as a per-user grant. Every cost, rate, budget and payroll-money surface stays permission-gated exactly as it is; only the role check changes.
+- [x] `FE-1006` Reassign the two Finance demo accounts to HR, preserving the with-permission and without-permission pair that `AC-AUTH-003` depends on. The demo needs an HR account that sees cost and an HR account that does not.
+- [x] `FE-1007` Merge the Finance dashboard into the HR experience, deciding whether it becomes a section of `/hr` or stays at `/finance` under HR ownership.
+- [x] `FE-1008` Update `src/services/mock/finance.ts`, `reporting.ts`, `admin.ts` and `workspace.ts` so authorization asks for the permission and the HR role rather than the Finance role.
+- [x] `FE-1009` Update the requisition and conveyance fixtures, whose seeded review rows record a Finance decision, so the demo still tells a coherent story under the new chain.
+- [x] `FE-1010` Update role management in `/admin/roles` and `/admin/users` so the Finance Manager role cannot be assigned, and existing assignments are presented as historical.
+- [x] `FE-1011` Update every affected test: `route-access.test.ts`, `navigation.test.ts`, `workspace.test.ts`, `finance.test.ts`, `requisition.test.ts`, `conveyance.test.ts`, `task-review.test.ts`.
+- [x] `FE-1012` Update the flow gates that sign in as Finance: `audit:flows6`, `audit:requisition`, `audit:conveyance`, `audit:journeys`, and the responsive, accessibility and content-stress route lists.
+- [x] `FE-1013` Add a gate asserting the two traps directly — that an HR account **without** `finance.cost.view` still sees `Restricted` on every money surface, and that a stored Finance-era decision still renders on an existing requisition.
+- [x] `FE-1014` Update `docs/frontend/phase-0/demo-setup.md`, `traceability-and-priority.md`, `information-architecture.md` and `terminology-and-formats.md`, all of which name six roles.
+
+Evidence is recorded in `docs/frontend/phase-10/verification.md`: 34/34 role-consolidation checks, `verify` with 409 tests, and every existing gate re-run.
+
+### Phase 10 Exit Criteria
+
+- [x] No `finance_manager` role can be assigned, and the product presents five roles.
+- [x] An HR user without `finance.cost.view` sees no cost, rate, budget or salary value anywhere — the merge granted nothing by itself.
+- [x] An HR user with the permission can do everything a Finance Manager could.
+- [x] A requisition or conveyance record that was decided by Finance still renders its history correctly.
+- [ ] `project_requirement.md` has been amended and signed off (see below).
+
+### This Contradicts the Requirements as Written
+
+`project_requirement.md` is the source of truth and currently defines the Finance Manager role. These need amending and business sign-off **before** the build, not after:
+
+| Location | What it says today |
+|---|---|
+| §4 role list, `REQ-RBAC-003` | Names Finance Manager as an assignable role |
+| `REQ-RBAC-016`, `-017`, `-018` | Define the Finance Manager's capabilities |
+| §4 capability matrix | Has a Finance column across eleven capability rows |
+| `REQ-DASH-007` | Defines a Finance dashboard |
+| `REQ-RPT-004`, `REQ-RPT-010` | Define Finance reports and Finance-facing defaults |
+| §6.4 | Defines a four-step Finance workflow |
+
+### Open Questions
+
+1. **Does HR keep both halves of the separation of duties?** HR verifies payroll periods (`REQ-RBAC-015`) and Finance consumes the verified result (`REQ-RPT-010`, §6.4). After the merge one role both verifies the hours and produces the payroll cost from them. That may be exactly what a company this size wants, but it removes a check that currently exists, and it should be removed knowingly rather than as a side effect.
+2. **Two reviewers or one on requisition and conveyance?** HR + Super Administrator is the direct consequence. If the intent is that HR alone decides, say so — it is a different chain, not a smaller one.
+3. **Who inherits `finance.cost.view` on day one?** Named HR users, or nobody until an administrator grants it? Assumed: nobody by default, granted deliberately.
+4. **Does the Finance dashboard survive as a screen?** Assumed yes, reachable by HR, because the hours and payroll views are used regardless of which role owns them.
+5. **Do the `/finance/*` routes keep their paths?** Assumed yes — renaming them breaks every deep link and audit reference for no functional gain.
 
 ## 6. Frontend Definition of Done
 
@@ -718,6 +798,7 @@ A frontend task may be marked `[x]` only when all applicable conditions are true
 | Phase 6 - Finance and Management Experience | Done | 11/11 |
 | Phase 7 - Shared Reporting and Supporting Modules | Done | 52/52 |
 | Phase 8 - Responsive, Accessibility, and Quality Hardening | Done | 17/18 · 1 awaiting review |
-| Phase 9 - Demo Packaging and Backend Handoff | Pending | 0/14 |
+| Phase 9 - Demo Packaging and Backend Handoff | In progress | 13/14 · stakeholder sign-off pending |
+| Phase 10 - Role Consolidation: Finance into HR | Done | 14/14 · `project_requirement.md` amendment still owed |
 
 Update this table whenever tasks change status. Exit-criteria checkboxes are gates and are not included in the task totals above.

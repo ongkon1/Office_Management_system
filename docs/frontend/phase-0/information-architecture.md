@@ -61,7 +61,7 @@ Default route after login: `/dashboard`.
 
 Default route after login: `/hr`.
 
-### 1.4 Finance Manager (`REQ-NAV-004`)
+### 1.4 HR Manager (formerly Finance Manager) (`REQ-NAV-004`)
 
 | Order | Label | Route | Flag | Extra permission |
 |---:|---|---|---|---|

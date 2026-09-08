@@ -172,10 +172,10 @@
   --radius-full: 9999px;
 
   /* --- Shadow: a deliberately short scale --------------------------------- */
-  --shadow-xs: 0 1px 2px 0 rgb(24 25 43 / 0.05);
-  --shadow-sm: 0 2px 8px -2px rgb(24 25 43 / 0.08), 0 1px 2px -1px rgb(24 25 43 / 0.05);
-  --shadow-md: 0 8px 20px -6px rgb(24 25 43 / 0.12), 0 2px 8px -4px rgb(108 99 255 / 0.10);
-  --shadow-lg: 0 18px 40px -12px rgb(24 25 43 / 0.16), 0 6px 16px -8px rgb(108 99 255 / 0.14);
+  --shadow-xs: 0 1px 2px rgb(24 25 43 / 0.04), 0 1px 1px rgb(24 25 43 / 0.03);
+  --shadow-sm: 0 5px 16px -8px rgb(24 25 43 / 0.16), 0 2px 5px -3px rgb(24 25 43 / 0.08);
+  --shadow-md: 0 14px 32px -14px rgb(24 25 43 / 0.22), 0 4px 12px -6px rgb(108 99 255 / 0.12);
+  --shadow-lg: 0 24px 56px -20px rgb(24 25 43 / 0.28), 0 10px 24px -12px rgb(108 99 255 / 0.16);
 
   /* --- Motion ------------------------------------------------------------- */
   --ease-standard: cubic-bezier(0.2, 0, 0.15, 1);
@@ -276,12 +276,22 @@
 
   body {
     background-color: var(--color-canvas);
+    background-image: radial-gradient(circle at 82% -10%, rgb(108 99 255 / 0.07), transparent 28rem);
+    background-attachment: fixed;
     color: var(--color-ink);
     font-family: var(--font-sans);
     font-size: var(--text-body);
     line-height: var(--text-body--line-height);
     /* Page-level horizontal scrolling is never acceptable. */
     overflow-x: hidden;
+  }
+
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    touch-action: manipulation;
   }
 
   /* Numbers align in columns and never shift width as they tick. */

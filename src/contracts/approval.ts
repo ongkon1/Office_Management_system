@@ -3,8 +3,8 @@
  *
  * Requisition and conveyance travel the same path:
  *
- *     Employee submits    → Team Lead review → HR + Finance + Super Admin
- *     Team Lead submits   →                    HR + Finance + Super Admin
+ *     Employee submits    → Team Lead review → HR + Super Admin
+ *     Team Lead submits   →                    HR + Super Admin
  *
  * This module exists because that sentence is true of both, and two
  * hand-written copies of one workflow drift. The drift would not show up as a
@@ -30,13 +30,26 @@ export type ApprovalStage = 'team_lead_review' | 'reviewer_review' | 'decided';
 
 export type ApprovalOutcome = 'approved' | 'rejected' | 'withdrawn';
 
-/** The roles that decide, in chain order. */
+/**
+ * The roles that appear in a review timeline.
+ *
+ * `finance_manager` is still here even though nobody can hold it: it is a
+ * *stored* value on review rows recorded before HR absorbed that role, and
+ * removing it would make those rows unrenderable. It is absent from
+ * `PARALLEL_REVIEWER_ROLES` below, which is what stops a new decision ever
+ * being assigned to it (`FE-1001`, `FE-1002`).
+ */
 export type ReviewerRole = 'team_lead' | 'hr_manager' | 'finance_manager' | 'super_admin';
 
-/** The three parallel reviewers a record reaches after the Team Lead. */
+/**
+ * The parallel reviewers a record reaches after the Team Lead.
+ *
+ * Two since HR absorbed the Finance Manager. This is the list the chain reads
+ * for "who still has to decide", so shrinking it here is what makes a record
+ * decidable by HR and the administrator alone — nothing else needed changing.
+ */
 export const PARALLEL_REVIEWER_ROLES: readonly ReviewerRole[] = [
   'hr_manager',
-  'finance_manager',
   'super_admin',
 ];
 
@@ -132,7 +145,10 @@ export interface ApprovalDecisionInput {
 export const REVIEWER_ROLE_LABEL: Readonly<Record<ReviewerRole, string>> = {
   team_lead: 'Team Lead',
   hr_manager: 'HR',
-  finance_manager: 'Finance',
+  // Retired. Kept so a decision recorded before the merge still names who made
+  // it; a historical row that rendered as a blank or an id would be worse than
+  // one naming a role that no longer exists.
+  finance_manager: 'Finance (retired)',
   super_admin: 'Super Administrator',
 };
 

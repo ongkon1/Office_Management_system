@@ -9,7 +9,6 @@ const ALL_ROLES = [
   'employee',
   'team_lead',
   'hr_manager',
-  'finance_manager',
   'management',
   'super_admin',
 ] as const;
@@ -50,14 +49,14 @@ describe('buildNavigation', () => {
     expect(mvpOnly).toContain('/tasks');
   });
 
-  it('hides cost destinations from a Finance user without the financial permission', () => {
+  it('hides cost destinations from an HR user without the financial permission', () => {
     const withoutPermission = hrefsFor({
-      role: 'finance_manager',
+      role: 'hr_manager',
       flags: DEMO_FEATURE_FLAGS,
       permissions: [],
     });
     const withPermission = hrefsFor({
-      role: 'finance_manager',
+      role: 'hr_manager',
       flags: DEMO_FEATURE_FLAGS,
       permissions: ['finance.cost.view'],
     });
@@ -78,7 +77,7 @@ describe('buildNavigation', () => {
 
   it('drops a group entirely once all of its items are filtered out', () => {
     const groups = buildNavigation({
-      role: 'finance_manager',
+      role: 'hr_manager',
       // Every costing destination is either permission-gated or behind a
       // feature flag, so switching both off must remove the group rather than
       // leaving an empty heading.

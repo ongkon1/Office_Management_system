@@ -80,7 +80,7 @@ export function ChartContainer({
       <div
         role="status"
         aria-busy
-        className={cn('rounded-lg border border-border bg-surface p-4', className)}
+        className={cn('rounded-xl border border-border bg-surface p-5 shadow-sm', className)}
       >
         <span className="sr-only">Loading chart</span>
         <Skeleton height="0.875rem" width="35%" />
@@ -102,7 +102,7 @@ export function ChartContainer({
 
   return (
     <figure
-      className={cn('min-w-0 rounded-lg border border-border bg-surface p-4', className)}
+      className={cn('min-w-0 rounded-xl border border-border bg-surface p-5 shadow-sm', className)}
     >
       <figcaption className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">

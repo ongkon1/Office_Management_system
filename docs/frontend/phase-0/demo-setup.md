@@ -14,8 +14,8 @@ All values below are **development-only fixtures**. They must never be seeded in
 | 4 | Imran Hossain | `EMP-2001` | `imran.hossain@demo.local` | Team Lead | PowerInAI | Team Lead for `EMP-1001`, `EMP-1002`, `EMP-1004`. Drives `DEMO-04`, `DEMO-05`. |
 | 5 | Farhana Islam | `EMP-2002` | `farhana.islam@demo.local` | Team Lead | Government Projects | Government-project scope owner. Drives `DEMO-09` restricted-data checks. |
 | 6 | Rezaul Haque | `EMP-3001` | `rezaul.haque@demo.local` | HR Manager | PowerInAI | Verification and evaluation publication. Drives `DEMO-06`. |
-| 7 | Mahmuda Akter | `EMP-4001` | `mahmuda.akter@demo.local` | Finance Manager **with** financial permission | PowerInAI | Sees cost, rate, and payroll fields. Drives `DEMO-07`. |
-| 8 | Shakil Chowdhury | `EMP-4002` | `shakil.chowdhury@demo.local` | Finance Manager **without** financial permission | PowerInAI | Sees verified hours only; every cost field renders redacted. Drives `AC-AUTH-003`. |
+| 7 | Mahmuda Akter | `EMP-4001` | `mahmuda.akter@demo.local` | HR Manager **with** financial permission | PowerInAI | Sees cost, rate, and payroll fields. Drives `DEMO-07`. HR absorbed the Finance role in Phase 10; the permission is what grants the money, not the role. |
+| 8 | Shakil Chowdhury | `EMP-4002` | `shakil.chowdhury@demo.local` | HR Manager **without** financial permission | PowerInAI | Sees verified hours only; every cost field renders redacted. Drives `AC-AUTH-003`, and proves the role merge granted nothing by itself. |
 | 9 | Ayesha Siddika | `EMP-5001` | `ayesha.siddika@demo.local` | Management / View-Only | — | No mutating control anywhere. Drives `DEMO-08`. |
 | 10 | Arif Mahmud | `EMP-9001` | `arif.mahmud@demo.local` | Super Administrator | — | Divisions, users, roles, policies, holidays, audit. |
 | 11 | Sumaiya Noor | `EMP-1004` | `sumaiya.noor@demo.local` | Employee | WesternCF | Temporary assignment plus expired-assignment validation case. |

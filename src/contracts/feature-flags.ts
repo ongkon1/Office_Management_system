@@ -110,7 +110,7 @@ export const FEATURE_FLAGS: Readonly<Record<FeatureFlagKey, FeatureFlagDefinitio
     label: 'Requisition',
     phase: 'phase_2',
     description:
-      'Item requisition raised by an Employee or Team Lead, reviewed by the Team Lead and then by HR, Finance and the Super Administrator.',
+      'Item requisition raised by an Employee or Team Lead, reviewed by the Team Lead and then by HR and the Super Administrator.',
     defaultEnabled: true,
     routes: ['/requisitions'],
   },
@@ -119,7 +119,7 @@ export const FEATURE_FLAGS: Readonly<Record<FeatureFlagKey, FeatureFlagDefinitio
     label: 'Conveyance',
     phase: 'phase_2',
     description:
-      'Travel-expense claims with an optional receipt, reviewed by the Team Lead and then by HR, Finance and the Super Administrator.',
+      'Travel-expense claims with an optional receipt, reviewed by the Team Lead and then by HR and the Super Administrator.',
     defaultEnabled: true,
     routes: ['/conveyance'],
   },

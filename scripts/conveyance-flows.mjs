@@ -23,7 +23,8 @@ const OTHER_EMPLOYEE = 'sadia.karim@demo.local';
 const TEAM_LEAD = 'imran.hossain@demo.local';
 const OTHER_TEAM_LEAD = 'farhana.islam@demo.local';
 const HR = 'rezaul.haque@demo.local';
-const FINANCE = 'mahmuda.akter@demo.local';
+// An HR account since the role merge (`FE-1006`), kept for the money checks.
+const SECOND_HR = 'mahmuda.akter@demo.local';
 const ADMIN = 'arif.mahmud@demo.local';
 const MANAGEMENT = 'ayesha.siddika@demo.local';
 const REJECTED_SUBMITTER = 'sumaiya.noor@demo.local'; // claimed `cnv-5`
@@ -232,7 +233,7 @@ let claimedHref = null;
 
   const text = await page.locator('main').innerText();
   record(
-    /Waiting for HR, Finance and the Super Administrator/i.test(text),
+    /Waiting for HR and the Super Administrator/i.test(text),
     'FE-0765',
     "a Team Lead's own claim skips the Team Lead stage",
   );
@@ -250,7 +251,7 @@ let claimedHref = null;
 
 for (const [label, email, twoFactor] of [
   ['HR', HR, false],
-  ['Finance', FINANCE, false],
+  ['a second HR account', SECOND_HR, false],
   ['the administrator', ADMIN, true],
 ]) {
   const { context, page } = await openAs(email, { twoFactor });
@@ -332,7 +333,7 @@ for (const [label, email, twoFactor] of [
 
   const after = await page.locator('main').innerText();
   record(
-    /Waiting for HR, Finance and the Super Administrator/i.test(after),
+    /Waiting for HR and the Super Administrator/i.test(after),
     'FE-0769',
     'approval advances it to the three parallel reviewers',
   );
@@ -369,9 +370,9 @@ for (const [label, email, twoFactor] of [
 
   const after = await page.locator('main').innerText();
   record(
-    /Waiting for Finance and Super Administrator/i.test(after),
+    /Waiting for Super Administrator/i.test(after),
     'FE-0770',
-    'one approval does not decide it; the others are still named',
+    'one approval does not decide it; the remaining reviewer is still named',
   );
   record(
     !/Your decision/i.test(after),
@@ -382,12 +383,12 @@ for (const [label, email, twoFactor] of [
 }
 
 {
-  const { context, page } = await openAs(FINANCE);
+  const { context, page } = await openAs(ADMIN, { twoFactor: true });
   const before = await goto(page, PART_REVIEWED);
   record(
     /HR/.test(before) && /Approved/.test(before),
     'FE-0768',
-    'Finance can see the decision HR already recorded',
+    'the administrator can see the decision HR already recorded',
   );
 
   await page.getByRole('button', { name: 'Reject', exact: true }).first().click();
@@ -395,7 +396,9 @@ for (const [label, email, twoFactor] of [
   await page.getByRole('button', { name: 'Reject', exact: true }).last().click();
   await page.waitForTimeout(900);
   record(
-    /reason is required/i.test(await page.locator('main').innerText()),
+    // The decision dialog renders through a portal, so its validation message
+    // is never inside `main`.
+    /reason is required/i.test(await page.locator('body').innerText()),
     'FE-0770',
     'a rejection without a reason is refused with guidance',
   );
@@ -430,12 +433,12 @@ for (const [label, email, twoFactor] of [
 /* ========================================================================== */
 
 {
-  const { context, page } = await openAs(FINANCE);
+  const { context, page } = await openAs(SECOND_HR);
   const text = await goto(page, '/conveyance');
   record(
     /Only an Employee or a Team Lead can raise a conveyance claim/i.test(text),
     'FE-0772',
-    'a reviewer is told why there is no submit action',
+    'an HR reviewer is told why there is no submit action',
   );
   record(!/New claim/i.test(text), 'FE-0764', 'and is not offered the action itself');
 

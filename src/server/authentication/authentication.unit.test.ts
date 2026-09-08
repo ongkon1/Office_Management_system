@@ -7,7 +7,7 @@ function store(account: Awaited<ReturnType<AuthenticationStore['findAccount']>>)
   return { findAccount:vi.fn().mockResolvedValue(account),recordAttempt:vi.fn(),recordSecurityEvent:vi.fn(),registerFailure:vi.fn(),clearFailures:vi.fn(),createSession:vi.fn(),findSession:vi.fn().mockResolvedValue(null),touchSession:vi.fn(),revokeSession:vi.fn(),revokeAllSessions:vi.fn(),saveReset:vi.fn(),consumeReset:vi.fn().mockResolvedValue(true) };
 }
 describe('BE-0201..0206 and BE-0225 authentication behavior', () => {
-  it.each(['super_admin','team_lead','employee','hr_manager','finance_manager','management'])('authenticates the seeded %s role account',async(role)=>{
+  it.each(['super_admin','team_lead','employee','hr_manager','management'])('authenticates the seeded %s role account',async(role)=>{
     const s=store({userId:`u-${role}`,state:'active',passwordHash:await hashPassword('Demo1234!'),failedCount:0,lockedUntil:null,twoFactorEnabled:false});
     const result=await new AuthenticationService(s).login(`${role}@powerin.ai`,'Demo1234!','127.0.0.1');
     expect(result.status).toBe('success');

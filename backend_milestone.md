@@ -110,6 +110,7 @@ A backend task may be marked `[x]` only when all applicable conditions are true:
 | 9 | Production readiness and frontend cutover | Mock services are removed, data is migrated, operations are documented, and release is approved. |
 | 10 | Requisition | Employees and Team Leads raise requisitions that route through the correct review chain, visible only to the roles they have reached. |
 | 11 | Conveyance | Travel claims with optional receipts travel the same review chain, with attachment access bound to the claim's own visibility. |
+| 12 | Role consolidation: Finance into HR | The Finance Manager role is retired without rewriting history or widening anyone's access to cost data. |
 
 ## 4. Detailed Phase Tasks
 
@@ -250,51 +251,53 @@ A backend task may be marked `[x]` only when all applicable conditions are true:
 
 ### Employees, Divisions, and Assignments
 
-- [ ] `BE-0301` Implement division create, update, activate, and deactivate use cases with historical-reference protection.
-- [ ] `BE-0302` Implement employee create, update, activate, deactivate, profile read, and directory search use cases.
-- [ ] `BE-0303` Implement profile-photo attachment metadata and authorized delivery through the selected storage adapter.
-- [ ] `BE-0304` Implement employee-division assignment create, update, end, activate, deactivate, and history queries.
-- [ ] `BE-0305` Enforce one primary division for an active employee when required and validate effective assignment date ranges.
-- [ ] `BE-0306` Validate planned allocation and return a warning, rather than silently changing data, when concurrent allocation differs from 100 percent.
-- [ ] `BE-0307` Implement temporary assignments with required start/end dates and prevent new time outside their effective period.
-- [ ] `BE-0308` Implement role and Team Lead assignment changes with authorization, effective dates where required, and audit records.
+- [x] `BE-0301` Implement division create, update, activate, and deactivate use cases with historical-reference protection.
+- [x] `BE-0302` Implement employee create, update, activate, deactivate, profile read, and directory search use cases.
+- [x] `BE-0303` Implement profile-photo attachment metadata and authorized delivery through the selected storage adapter.
+- [x] `BE-0304` Implement employee-division assignment create, update, end, activate, deactivate, and history queries.
+- [x] `BE-0305` Enforce one primary division for an active employee when required and validate effective assignment date ranges.
+- [x] `BE-0306` Validate planned allocation and return a warning, rather than silently changing data, when concurrent allocation differs from 100 percent.
+- [x] `BE-0307` Implement temporary assignments with required start/end dates and prevent new time outside their effective period.
+- [x] `BE-0308` Implement role and Team Lead assignment changes with authorization, effective dates where required, and audit records.
 
 ### Projects and Membership
 
-- [ ] `BE-0310` Implement project create, update, activate/close, membership, search, filtering, and scoped detail queries.
-- [ ] `BE-0311` Enforce exactly one division per project and validate manager/member access against effective assignments.
-- [ ] `BE-0312` Implement project estimates, deadlines, priority, budget visibility, completion percentage, client/stakeholder, notes, and attachment metadata.
-- [ ] `BE-0313` Calculate actual project hours from valid time entries rather than accepting a manually edited actual-hours total.
-- [ ] `BE-0314` Protect project deactivation/closure and preserve historical tasks, time, files, and audit references.
+- [x] `BE-0310` Implement project create, update, activate/close, membership, search, filtering, and scoped detail queries.
+- [x] `BE-0311` Enforce exactly one division per project and validate manager/member access against effective assignments.
+- [x] `BE-0312` Implement project estimates, deadlines, priority, budget visibility, completion percentage, client/stakeholder, notes, and attachment metadata.
+- [x] `BE-0313` Calculate actual project hours from valid time entries rather than accepting a manually edited actual-hours total.
+- [x] `BE-0314` Protect project deactivation/closure and preserve historical tasks, time, files, and audit references.
 
 ### Tasks
 
-- [ ] `BE-0320` Implement task create, update, assign, support-member, checklist, attachment, and scoped query use cases.
-- [ ] `BE-0321` Enforce Pending, In Progress, and Completed as the initial task statuses and validate allowed transitions.
-- [ ] `BE-0322` Enforce task-project-division consistency and effective employee authorization.
-- [ ] `BE-0323` Calculate actual task time from valid linked time entries and derive overdue state from status and due date.
-- [ ] `BE-0324` Implement task list filters, pagination, sorting, due-date views, and employee/team scopes expected by the frontend.
-- [ ] `BE-0325` Add transaction, conflict, authorization, deactivation, and concurrency tests for organization, project, membership, and task workflows.
+- [x] `BE-0320` Implement task create, update, assign, support-member, checklist, attachment, and scoped query use cases.
+- [x] `BE-0321` Enforce Pending, In Progress, and Completed as the initial task statuses and validate allowed transitions.
+- [x] `BE-0322` Enforce task-project-division consistency and effective employee authorization.
+- [x] `BE-0323` Calculate actual task time from valid linked time entries and derive overdue state from status and due date.
+- [x] `BE-0324` Implement task list filters, pagination, sorting, due-date views, and employee/team scopes expected by the frontend.
+- [x] `BE-0325` Add transaction, conflict, authorization, deactivation, and concurrency tests for organization, project, membership, and task workflows.
 
 ### Employee-Raised Tasks
 
 An employee raises a task for themselves and their Team Lead endorses it. Frontend behaviour is built (`FE-0780`-`FE-0784`); this is the server half.
 
-- [ ] `BE-0316` Add the task review state, reviewer, decided-at and note columns, with a constraint that a task created by a non-Team-Lead cannot be persisted as needing no review.
-- [ ] `BE-0317` Enforce that only the creator's own current Team Lead may decide, and that nobody may endorse a task they raised.
-- [ ] `BE-0318` **Refuse a time entry against a task that is not approved**, in the same server-side validation that already refuses an inactive project. This is the rule the whole feature rests on: a filtered task list is a convenience, and the entry endpoint is the control.
-- [ ] `BE-0319` Make the decision idempotent and conflict-safe, and keep it append-only so who endorsed what stays reproducible.
-- [ ] `BE-0320` Handle the Team Lead mapping changing while a task is pending, so a raised task can never become unreviewable.
-- [ ] `BE-0321` Restrict the employee's create payload to their own assigned divisions and active projects, ignoring any assignee or supporting members it carries.
-- [ ] `BE-0322` Audit raise, approve and refuse with actor, role, before/after and reason, and notify the Team Lead on raise and the employee on decision.
-- [ ] `BE-0323` Test the time-entry refusal at every review state, review by the wrong Team Lead, self-endorsement, concurrent decisions, and Team Lead reassignment mid-review.
+- [x] `BE-0330` Add the task review state, reviewer, decided-at and note columns, with a constraint that a task created by a non-Team-Lead cannot be persisted as needing no review.
+- [x] `BE-0331` Enforce that only the creator's own current Team Lead may decide, and that nobody may endorse a task they raised.
+- [x] `BE-0332` **Refuse a time entry against a task that is not approved**, in the same server-side validation that already refuses an inactive project. This is the rule the whole feature rests on: a filtered task list is a convenience, and the entry endpoint is the control.
+- [x] `BE-0333` Make the decision idempotent and conflict-safe, and keep it append-only so who endorsed what stays reproducible.
+- [x] `BE-0334` Handle the Team Lead mapping changing while a task is pending, so a raised task can never become unreviewable.
+- [x] `BE-0335` Restrict the employee's create payload to their own assigned divisions and active projects, ignoring any assignee or supporting members it carries.
+- [x] `BE-0336` Audit raise, approve and refuse with actor, role, before/after and reason, and notify the Team Lead on raise and the employee on decision.
+- [x] `BE-0337` Test the time-entry refusal at every review state, review by the wrong Team Lead, self-endorsement, concurrent decisions, and Team Lead reassignment mid-review.
 
 ### Phase 3 Exit Criteria
 
-- [ ] The frontend employee, division, project, and task mock adapters can be replaced by real services.
-- [ ] Effective assignments and project/task scope are enforced for reads and writes.
-- [ ] Actual project/task hours reconcile to stored valid time entries.
-- [ ] A task an employee raised accepts no time until their own Team Lead has approved it, enforced at the time-entry endpoint.
+- [x] The frontend employee, division, project, and task mock adapters can be replaced by real services.
+- [x] Effective assignments and project/task scope are enforced for reads and writes.
+- [x] Actual project/task hours reconcile to stored valid time entries.
+- [x] A task an employee raised accepts no time until their own Team Lead has approved it, enforced at the time-entry endpoint.
+
+Phase 3 evidence is recorded in `docs/backend/phase-3/verification.md`: migration and recovery validation, transaction-aware MySQL repositories, organization/work services, protected profile-photo delivery, and 102 passing backend tests.
 
 ## Phase 4 - Timesheet Calculation and Correction
 
@@ -650,6 +653,38 @@ A travel-expense claim. The approval chain is **identical to Phase 10's**, which
 - [ ] The submitted timestamp is server-assigned and a future visited instant is refused.
 - [ ] A `REQ-*` requirement exists in `project_requirement.md` covering this feature.
 
+## Phase 12 - Role Consolidation: Finance into HR
+
+The server half of the frontend Phase 10 change. HR absorbs the Finance Manager role and the role is retired.
+
+**Depends on** Phase 2 (authorization and audit) and Phase 6 (Finance and reporting). It touches `src/server/authorization/policy.ts`, which already names `finance_manager`.
+
+### The Constraint That Shapes Everything
+
+A role that has been used cannot simply be deleted. `finance_manager` is recorded in requisition and conveyance review rows, in audit events, in login history and on any export already produced. Removing the value from the enum makes those rows unreadable; keeping it assignable defeats the change. The distinction the schema has to carry is **assignable now** versus **valid historically**.
+
+### Tasks
+
+- [ ] `BE-1201` Retire `finance_manager` as an assignable role while keeping it a legal stored value, so historical rows stay readable and no migration rewrites recorded history.
+- [ ] `BE-1202` Write a reversible migration that grants every current Finance Manager the HR role, and record for each user whether they held `finance.cost.view`, so the grant can be reproduced and audited.
+- [ ] `BE-1203` **Do not grant `finance.cost.view` to the HR role.** It stays a per-user permission, exactly as `REQ-RBAC-017` requires. The migration carries it across only for users who already had it.
+- [ ] `BE-1204` Update `src/server/authorization/policy.ts` so every rule that admitted a Finance Manager now admits HR, and confirm no rule silently widens beyond that.
+- [ ] `BE-1205` Update the approval chain's parallel reviewer set to match the frontend decision in `FE-1001`, and define what happens to a requisition or conveyance that is **mid-chain at migration time** and still waiting on a Finance decision.
+- [ ] `BE-1206` Keep every cost, rate, budget, payroll and export endpoint gated on the permission rather than the role, and re-verify each returns the redacted shape without it.
+- [ ] `BE-1207` Preserve audit history: a decision recorded by a Finance Manager keeps its actor role, and the migration itself is audited with actor, reason and before/after.
+- [ ] `BE-1208` Update seed data so the demo has an HR account with the financial permission and an HR account without it.
+- [ ] `BE-1209` Add authorization tests proving an HR user without `finance.cost.view` is refused every cost, rate, budget and protected-export endpoint — the regression that would otherwise ship silently.
+- [ ] `BE-1210` Add a migration test proving a Finance-era requisition, conveyance and audit row still reads correctly after the role is retired.
+- [ ] `BE-1211` Add a rehearsal migration against production-like data with owner sign-off on the resulting role and permission assignments.
+
+### Phase 12 Exit Criteria
+
+- [ ] No new user can be assigned the Finance Manager role.
+- [ ] Every former Finance Manager can do their work as an HR user.
+- [ ] No HR user gained cost, salary, rate or budget access purely from the migration.
+- [ ] Historical records naming the Finance Manager role still read correctly.
+- [ ] The migration is reversible and audited, and a rehearsal was signed off.
+
 ## 5. Backend Acceptance Scenarios
 
 ### Time and Calculation
@@ -744,13 +779,8 @@ A travel-expense claim. The approval chain is **identical to Phase 10's**, which
 |---:|---|---:|
 | Phase 0 - Architecture and Delivery Foundation | Done | 25/25 |
 | Phase 1 - MySQL Schema and Data Foundation | Done | 26/26 |
-<<<<<<< HEAD
 | Phase 2 - Authentication, Authorization, and Audit | Done | 23/23 |
-| Phase 3 - Organization, Projects, and Tasks | Pending | 0/21 |
-=======
-| Phase 2 - Authentication, Authorization, and Audit | Pending | 0/23 |
-| Phase 3 - Organization, Projects, and Tasks | Pending | 0/29 |
->>>>>>> 3e21a4f454c265035a95b163addb220dcaa965c9
+| Phase 3 - Organization, Projects, and Tasks | Done | 27/27 |
 | Phase 4 - Timesheet Calculation and Correction | Pending | 0/32 |
 | Phase 5 - HR, Attendance, WFH, Leave, Workload, and Evaluation | Pending | 0/26 |
 | Phase 6 - Reporting, Finance, and Exports | Pending | 0/19 |
@@ -759,5 +789,6 @@ A travel-expense claim. The approval chain is **identical to Phase 10's**, which
 | Phase 9 - Production Readiness and Frontend Cutover | Pending | 0/18 |
 | Phase 10 - Requisition | Pending | 0/20 |
 | Phase 11 - Conveyance | Pending | 0/22 |
+| Phase 12 - Role Consolidation: Finance into HR | Pending | 0/11 |
 
 Update this table whenever numbered tasks change status. Acceptance scenarios and phase exit criteria are tracked as gates and are not included in the numbered task totals.

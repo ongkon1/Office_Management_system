@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { Clock, FlaskConical } from 'lucide-react';
+import { CheckCircle2, Clock, FlaskConical, RotateCcw } from 'lucide-react';
 import type { AppShellView } from '@/contracts/view-models';
 import { useFeatureFlags } from '@/features/settings/flag-store';
 import { AppShell } from '@/components/shell/app-shell';
@@ -14,6 +14,9 @@ import { Avatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { formatTimestamp } from '@/lib/format';
 import { DEMO_ACCOUNTS, findAccountByUserId } from '@/services/mock/accounts';
+import { resetDemoData } from '@/services/mock/reset';
+import { resetPresentation } from '@/features/finance/presentation-store';
+import { resetFeatureFlags } from '@/features/settings/flag-store';
 import { SearchPalette } from '@/features/workspace/search';
 import { isDemoMode } from './demo-mode';
 import { useSession, useSessionExpiry } from './session-provider';
@@ -90,6 +93,7 @@ function DemoTools() {
   const { user, switchDemoAccount, simulateExpiry } = useSession();
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
+  const [resetComplete, setResetComplete] = React.useState(false);
 
   if (!isDemoMode() || !user) return null;
 
@@ -180,6 +184,48 @@ function DemoTools() {
               >
                 Expire now
               </Button>
+            </div>
+          </section>
+
+          <section className="border-t border-border pt-4">
+            <h3 className="text-label text-ink-muted">Presentation reset</h3>
+            <p className="mt-1 text-caption text-ink-subtle">
+              Restore fixture data, feature flags, saved report settings, filters, and the
+              running timer. The walkthrough restarts as Nadia Rahman on the dashboard.
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <Button
+                variant="secondary"
+                size="sm"
+                iconLeading={<RotateCcw aria-hidden className="size-4" />}
+                onClick={async () => {
+                  resetDemoData();
+                  resetFeatureFlags();
+                  resetPresentation();
+                  try {
+                    window.localStorage.removeItem('oms.team-timesheet-statuses');
+                  } catch {
+                    // Storage may be unavailable; the in-memory reset still succeeds.
+                  }
+                  const result = await switchDemoAccount?.('usr-1001');
+                  setResetComplete(true);
+                  if (result?.status === 'success') {
+                    router.replace(DEFAULT_ROUTE[result.data.primaryRole]);
+                    router.refresh();
+                  }
+                }}
+              >
+                Reset demo
+              </Button>
+              {resetComplete && (
+                <span
+                  role="status"
+                  className="inline-flex items-center gap-1.5 text-caption font-medium text-success"
+                >
+                  <CheckCircle2 aria-hidden className="size-4" />
+                  Demo restored
+                </span>
+              )}
             </div>
           </section>
         </div>

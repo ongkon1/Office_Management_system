@@ -22,7 +22,7 @@ import { PageContainer, PageHeader } from '@/components/layout/page';
 import { Skeleton } from '@/components/ui/skeleton';
 import { mockTimesheetService } from '@/services/mock/timesheet';
 import { mockStore } from '@/services/mock/store';
-import { DEMO_TODAY } from '@/fixtures';
+import { DEMO_TODAY } from '@/lib/demo-context';
 import { EntryDrawer } from './entry-drawer';
 import { TimerPanel } from './timer-panel';
 

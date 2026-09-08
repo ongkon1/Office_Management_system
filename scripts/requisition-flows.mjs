@@ -18,7 +18,8 @@ const OTHER_EMPLOYEE = 'sadia.karim@demo.local';
 const TEAM_LEAD = 'imran.hossain@demo.local';
 const OTHER_TEAM_LEAD = 'farhana.islam@demo.local';
 const HR = 'rezaul.haque@demo.local';
-const FINANCE = 'mahmuda.akter@demo.local';
+// An HR account since the role merge (`FE-1006`), kept for the money checks.
+const SECOND_HR = 'mahmuda.akter@demo.local';
 const ADMIN = 'arif.mahmud@demo.local';
 const MANAGEMENT = 'ayesha.siddika@demo.local';
 const REJECTED_SUBMITTER = 'sumaiya.noor@demo.local'; // raised `req-5`
@@ -229,7 +230,7 @@ let raisedHref = null;
 
   const text = await page.locator('main').innerText();
   record(
-    /Waiting for HR, Finance and the Super Administrator/i.test(text),
+    /Waiting for HR and the Super Administrator/i.test(text),
     'FE-0745',
     "a Team Lead's own requisition skips the Team Lead stage",
   );
@@ -247,7 +248,7 @@ let raisedHref = null;
 
 for (const [label, email, twoFactor] of [
   ['HR', HR, false],
-  ['Finance', FINANCE, false],
+  ['a second HR account', SECOND_HR, false],
   ['the administrator', ADMIN, true],
 ]) {
   const { context, page } = await openAs(email, { twoFactor });
@@ -341,7 +342,7 @@ for (const [label, email, twoFactor] of [
 
   const after = await page.locator('main').innerText();
   record(
-    /Waiting for HR, Finance and the Super Administrator/i.test(after),
+    /Waiting for HR and the Super Administrator/i.test(after),
     'FE-0749',
     'approval advances it to the three parallel reviewers',
   );
@@ -378,9 +379,9 @@ for (const [label, email, twoFactor] of [
 
   const after = await page.locator('main').innerText();
   record(
-    /Waiting for Finance and Super Administrator/i.test(after),
+    /Waiting for Super Administrator/i.test(after),
     'FE-0750',
-    'one approval does not decide it; the other two are still named',
+    'one approval does not decide it; the remaining reviewer is still named',
   );
   record(
     !/Your decision/i.test(after),
@@ -391,12 +392,12 @@ for (const [label, email, twoFactor] of [
 }
 
 {
-  const { context, page } = await openAs(FINANCE);
+  const { context, page } = await openAs(ADMIN, { twoFactor: true });
   const before = await goto(page, PART_REVIEWED);
   record(
     /HR/.test(before) && /Approved/.test(before),
     'FE-0748',
-    'Finance can see the decision HR already recorded',
+    'the administrator can see the decision HR already recorded',
   );
 
   // Rejecting requires a reason, and the reason reaches the submitter.
@@ -404,7 +405,9 @@ for (const [label, email, twoFactor] of [
   await page.waitForTimeout(500);
   await page.getByRole('button', { name: 'Reject', exact: true }).last().click();
   await page.waitForTimeout(900);
-  let text = await page.locator('main').innerText();
+  // Read the body, not `main`: the decision dialog renders through a portal,
+  // so a validation message inside it is never part of `main`.
+  let text = await page.locator('body').innerText();
   record(
     /reason is required/i.test(text),
     'FE-0750',
@@ -463,12 +466,12 @@ for (const [label, email, twoFactor] of [
 /* ========================================================================== */
 
 {
-  const { context, page } = await openAs(FINANCE);
+  const { context, page } = await openAs(SECOND_HR);
   const text = await goto(page, '/requisitions');
   record(
     /Only an Employee or a Team Lead can raise a requisition/i.test(text),
     'FE-0751',
-    'a reviewer is told why there is no submit action rather than left with a gap',
+    'an HR reviewer is told why there is no submit action rather than left with a gap',
   );
   record(
     !/Raise requisition/i.test(text),

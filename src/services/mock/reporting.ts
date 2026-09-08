@@ -219,7 +219,7 @@ const REPORT_SPECS: readonly ReportSpec[] = [
     description: 'Every recorded day with active time, break, total and classification.',
     category: 'timesheet',
     filters: ['date_range', 'employee', 'division', 'project', 'work_location', 'status', 'overtime'],
-    roles: ['team_lead', 'hr_manager', 'finance_manager', 'management', 'super_admin'],
+    roles: ['team_lead', 'hr_manager', 'management', 'super_admin'],
   },
   {
     key: 'division-contribution',
@@ -227,7 +227,7 @@ const REPORT_SPECS: readonly ReportSpec[] = [
     description: 'Active time split by division across the selected period.',
     category: 'timesheet',
     filters: ['date_range', 'employee', 'division'],
-    roles: ['team_lead', 'hr_manager', 'finance_manager', 'management', 'super_admin'],
+    roles: ['team_lead', 'hr_manager', 'management', 'super_admin'],
   },
   {
     key: 'overtime-summary',
@@ -235,7 +235,7 @@ const REPORT_SPECS: readonly ReportSpec[] = [
     description: 'Days above eight hours, with the recorded reason and classification.',
     category: 'timesheet',
     filters: ['date_range', 'employee', 'division', 'status'],
-    roles: ['team_lead', 'hr_manager', 'finance_manager', 'management', 'super_admin'],
+    roles: ['team_lead', 'hr_manager', 'management', 'super_admin'],
   },
   {
     key: 'headcount',
@@ -251,7 +251,7 @@ const REPORT_SPECS: readonly ReportSpec[] = [
     description: 'Verified hours and labour cost per employee for a payroll period.',
     category: 'finance',
     filters: ['date_range', 'employee', 'division'],
-    roles: ['finance_manager', 'super_admin'],
+    roles: ['hr_manager', 'super_admin'],
     redactsWithoutPermission: SENSITIVE_PERMISSIONS.financialDetail,
   },
   {
@@ -260,7 +260,7 @@ const REPORT_SPECS: readonly ReportSpec[] = [
     description: 'Hourly cost rate per employee and its effective date.',
     category: 'finance',
     filters: ['employee', 'division'],
-    roles: ['finance_manager', 'super_admin'],
+    roles: ['hr_manager', 'super_admin'],
     requiresPermission: SENSITIVE_PERMISSIONS.financialDetail,
   },
   {

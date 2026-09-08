@@ -18,7 +18,8 @@ const OTHER_EMPLOYEE = 'usr-1003';
 const TEAM_LEAD = 'usr-2001';
 const OTHER_TEAM_LEAD = 'usr-2002';
 const HR = 'usr-3001';
-const FINANCE = 'usr-4001';
+// `usr-4001` is an HR account now (`FE-1006`); see the requisition suite.
+const SECOND_HR = 'usr-4001';
 const ADMIN = 'usr-9001';
 const MANAGEMENT = 'usr-5001';
 
@@ -55,7 +56,7 @@ describe('who may submit', () => {
 
   it.each([
     ['HR', HR],
-    ['Finance', FINANCE],
+    ['a second HR account', SECOND_HR],
     ['the Super Administrator', ADMIN],
     ['Management', MANAGEMENT],
   ])('refuses %s at the service', async (_label, userId) => {
@@ -78,14 +79,17 @@ describe('routing, on the shared chain', () => {
     expect(result.data.reviews).toHaveLength(0);
   });
 
-  it('is approved only when all three reviewers have approved', async () => {
+  it('is approved only when every parallel reviewer has approved', async () => {
     const approve = { decision: 'approved' as const, reason: '' };
     const submitted = await mockConveyanceService.submit(TEAM_LEAD, CLAIM);
     if (submitted.status !== 'success') throw new Error('expected success');
     const id = submitted.data.id;
 
     await mockConveyanceService.decide(HR, id, approve);
-    await mockConveyanceService.decide(FINANCE, id, approve);
+    // A second HR account cannot cast a second HR vote.
+    expect((await mockConveyanceService.decide(SECOND_HR, id, approve)).status).toBe(
+      'permission_denied',
+    );
     const last = await mockConveyanceService.decide(ADMIN, id, approve);
     if (last.status !== 'success') throw new Error('expected success');
 
@@ -97,7 +101,7 @@ describe('routing, on the shared chain', () => {
     const submitted = await mockConveyanceService.submit(TEAM_LEAD, CLAIM);
     if (submitted.status !== 'success') throw new Error('expected success');
 
-    const rejected = await mockConveyanceService.decide(FINANCE, submitted.data.id, {
+    const rejected = await mockConveyanceService.decide(SECOND_HR, submitted.data.id, {
       decision: 'rejected',
       reason: 'No receipt attached.',
     });
@@ -108,11 +112,11 @@ describe('routing, on the shared chain', () => {
 });
 
 describe('visibility', () => {
-  it('hides a claim still with the Team Lead from the three reviewers', async () => {
+  it('hides a claim still with the Team Lead from the parallel reviewers', async () => {
     const submitted = await mockConveyanceService.submit(EMPLOYEE, CLAIM);
     if (submitted.status !== 'success') throw new Error('expected success');
 
-    for (const reviewer of [HR, FINANCE, ADMIN]) {
+    for (const reviewer of [HR, SECOND_HR, ADMIN]) {
       expect((await mockConveyanceService.get(reviewer, submitted.data.id)).status).toBe(
         'not_found',
       );
@@ -177,7 +181,7 @@ describe('the receipt is deny-by-default attachment data', () => {
     ['another employee', OTHER_EMPLOYEE],
     ['an unrelated Team Lead', OTHER_TEAM_LEAD],
     ['HR before the claim reaches them', HR],
-    ['Finance before the claim reaches them', FINANCE],
+    ['a second HR account before the claim reaches them', SECOND_HR],
     ['the administrator before the claim reaches them', ADMIN],
   ])('is unreachable by %s, even asked for directly', async (_label, userId) => {
     const submitted = await mockConveyanceService.submit(EMPLOYEE, {
@@ -271,7 +275,7 @@ describe('the submitted timestamp is the service’s, not the client’s', () =>
   });
 
   it('tells a reviewer why the form is unavailable to them', async () => {
-    const context = await mockConveyanceService.formContext(FINANCE);
+    const context = await mockConveyanceService.formContext(SECOND_HR);
     if (context.status !== 'success') throw new Error('expected success');
     expect(context.data.canSubmit).toBe(false);
     expect(context.data.submitBlockedReason).toBeTruthy();

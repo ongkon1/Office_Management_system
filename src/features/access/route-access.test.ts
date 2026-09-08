@@ -42,7 +42,7 @@ describe('checkRouteAccess', () => {
   it('lets each role reach its own dashboard', () => {
     expect(allow('/dashboard', userWith('employee'))).toBe(true);
     expect(allow('/hr', userWith('hr_manager'))).toBe(true);
-    expect(allow('/finance', userWith('finance_manager'))).toBe(true);
+    expect(allow('/finance', userWith('hr_manager'))).toBe(true);
   });
 
   it('keeps an Employee out of HR, Finance and administration', () => {
@@ -54,8 +54,10 @@ describe('checkRouteAccess', () => {
   });
 
   it('separates Finance cost routes from Finance hours by permission', () => {
-    const withoutPermission = userWith('finance_manager');
-    const withPermission = userWith('finance_manager', ['finance.cost.view']);
+    // HR absorbed the Finance role, but not its cost access: the permission is
+    // still what separates these, and merging the role granted nobody anything.
+    const withoutPermission = userWith('hr_manager');
+    const withPermission = userWith('hr_manager', ['finance.cost.view']);
 
     // Hours and overtime need no extra grant.
     expect(allow('/finance/hours', withoutPermission)).toBe(true);
@@ -83,7 +85,7 @@ describe('checkRouteAccess', () => {
   it('reports why access was refused, and which permission was missing', () => {
     const decision = checkRouteAccess(
       '/finance/project-costs',
-      userWith('finance_manager'),
+      userWith('hr_manager'),
       DEMO_FEATURE_FLAGS,
     );
     expect(decision).toEqual({

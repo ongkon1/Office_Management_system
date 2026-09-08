@@ -21,7 +21,7 @@ describe('BE-0210..0217 and BE-0224 authorization matrix', () => {
     expect(authorize(actor('team_lead'),'organization.read',{sensitivity},'server_component')).toBe(false);
   });
   it('omits protected fields and makes unauthorized ids indistinguishable', () => {
-    expect(mapAuthorizedFields({hours:420,cost:'10.00'},actor('finance_manager'),{cost:'labour_cost'})).toEqual({hours:420});
+    expect(mapAuthorizedFields({hours:420,cost:'10.00'},actor('hr_manager'),{cost:'labour_cost'})).toEqual({hours:420});
     expect(indistinguishableNotFound('attachment')).toEqual(indistinguishableNotFound('attachment'));
   });
 });

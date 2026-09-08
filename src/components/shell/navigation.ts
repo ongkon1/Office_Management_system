@@ -137,9 +137,15 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
         { key: 'documents', label: 'Documents', href: '/documents', iconKey: 'folder', flag: 'documents' },
       ],
     },
-  ],
+    /*
+     * Finance, absorbed into HR (`FE-1003`).
+     *
+     * The groups keep the name "Finance" rather than being merged into the
+     * administration list: the work is still finance work, and an HR user
+     * looking for payroll needs it to be findable under the word they think in.
+     * What changed is who reaches it, not what it is.
+     */
 
-  finance_manager: [
     {
       key: 'primary',
       label: null,
@@ -256,7 +262,6 @@ export const DEFAULT_ROUTE: Readonly<Record<RoleKey, string>> = {
   employee: '/dashboard',
   team_lead: '/dashboard',
   hr_manager: '/hr',
-  finance_manager: '/finance',
   management: '/dashboard',
   super_admin: '/dashboard',
 };
@@ -265,7 +270,6 @@ export const ROLE_LABEL: Readonly<Record<RoleKey, string>> = {
   employee: 'Employee',
   team_lead: 'Team Lead',
   hr_manager: 'HR Manager',
-  finance_manager: 'Finance Manager',
   management: 'Management',
   super_admin: 'Super Administrator',
 };
@@ -285,9 +289,24 @@ export function buildNavigation({
   permissions,
   badges,
 }: BuildNavigationInput): readonly NavGroupView[] {
+  const usedGroupKeys = new Set<string>();
+
   return NAVIGATION[role]
-    .map<NavGroupView>((group) => ({
-      key: group.key,
+    .map<NavGroupView>((group) => {
+      // A role can legitimately contain multiple groups with the same
+      // semantic key (for example, two `primary` sections). React keys must
+      // still be unique among siblings or the navigation can duplicate/drop
+      // groups during updates.
+      let key = group.key;
+      let duplicateIndex = 2;
+      while (usedGroupKeys.has(key)) {
+        key = `${group.key}-${duplicateIndex}`;
+        duplicateIndex += 1;
+      }
+      usedGroupKeys.add(group.key);
+
+      return {
+      key,
       label: group.label,
       items: group.items
         .filter((item) => !item.flag || isFeatureEnabled(flags, item.flag))
@@ -300,7 +319,8 @@ export function buildNavigation({
           badgeCount: badges?.[item.key],
           inMobileBottomNav: item.inMobileBottomNav ?? false,
         })),
-    }))
+      };
+    })
     .filter((group) => group.items.length > 0);
 }
 

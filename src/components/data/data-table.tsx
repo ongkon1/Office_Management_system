@@ -185,9 +185,9 @@ export function DataTable<TRow>({
                     : undefined
                 }
                 className={cn(
-                  'rounded-lg border border-border bg-surface p-3',
+                  'rounded-xl border border-border bg-surface p-4 shadow-sm',
                   onRowClick &&
-                    'cursor-pointer transition-colors hover:bg-surface-sunken focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
+                    'cursor-pointer transition-[border-color,background-color,box-shadow] hover:border-accent-border hover:bg-accent-subtle/30 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
                 )}
               >
                 {renderMobileCard(row)}
@@ -207,7 +207,7 @@ export function DataTable<TRow>({
       */}
       <div
         className={cn(
-          'table-scroll min-w-0 rounded-lg border border-border bg-surface shadow-xs',
+          'table-scroll min-w-0 rounded-xl border border-border bg-surface shadow-sm',
           renderMobileCard && 'hidden md:block',
         )}
         tabIndex={0}
@@ -217,7 +217,7 @@ export function DataTable<TRow>({
         <table className="w-full border-collapse text-body-sm">
           <caption className="sr-only">{caption}</caption>
           <thead>
-            <tr className="sticky top-0 z-10 border-b-2 border-b-brand bg-surface-sunken">
+            <tr className="sticky top-0 z-10 border-b-2 border-b-brand bg-accent-subtle/70">
               {selectable && (
                 <th scope="col" className="w-10 px-3 py-2">
                   <Checkbox
@@ -250,7 +250,7 @@ export function DataTable<TRow>({
                           : undefined
                     }
                     className={cn(
-                      'border-b border-border px-3 py-2 text-label font-medium text-ink-muted',
+                      'border-b border-border px-4 py-3 text-label font-semibold tracking-wide text-ink-muted',
                       column.align === 'right' ? 'text-right' : 'text-left',
                       column.hideBelow && HIDE_CLASSES[column.hideBelow],
                       column.widthClass,
@@ -306,8 +306,10 @@ export function DataTable<TRow>({
                       : undefined
                   }
                   className={cn(
-                    'border-b border-border last:border-b-0 transition-colors duration-150',
-                    isSelected ? 'bg-accent-subtle' : 'hover:bg-surface-sunken',
+                    'border-b border-border last:border-b-0 transition-colors duration-150 odd:bg-surface even:bg-surface-sunken/25',
+                    isSelected
+                      ? 'bg-accent-subtle even:bg-accent-subtle'
+                      : 'hover:bg-accent-subtle/45',
                     onRowClick &&
                       'cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus',
                   )}
@@ -327,7 +329,7 @@ export function DataTable<TRow>({
                     <td
                       key={column.key}
                       className={cn(
-                        'px-3 py-[var(--row-padding-y)] text-ink',
+                        'px-4 py-[var(--row-padding-y)] text-ink',
                         column.align === 'right' ? 'text-right tabular' : 'text-left',
                         column.hideBelow && HIDE_CLASSES[column.hideBelow],
                       )}

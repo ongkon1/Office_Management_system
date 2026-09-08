@@ -8,7 +8,7 @@ import { useField } from './field';
 
 /** Shared shell styling so every control lines up on the same grid. */
 const CONTROL_BASE =
-  'w-full rounded-md border bg-surface text-body text-ink transition-colors duration-150 ' +
+  'w-full rounded-md border bg-surface text-body text-ink shadow-xs transition-[border-color,box-shadow,background-color] duration-150 ' +
   'placeholder:text-ink-subtle disabled:cursor-not-allowed disabled:bg-surface-sunken ' +
   'disabled:text-ink-subtle';
 
@@ -19,7 +19,7 @@ function controlClasses(invalid: boolean, extra?: string): string {
     CONTROL_BASE,
     invalid
       ? 'border-danger'
-      : 'border-border-strong hover:border-highlight-hover focus-visible:border-focus-border',
+      : 'border-border-strong hover:border-highlight-hover focus-visible:border-focus-border focus-visible:shadow-sm',
     extra,
   );
 }

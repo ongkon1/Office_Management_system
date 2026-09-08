@@ -76,7 +76,7 @@ export function PageHeader({
   className,
 }: PageHeaderProps) {
   return (
-    <header className={cn('flex flex-col gap-3', className)}>
+    <header className={cn('flex flex-col gap-4 border-b border-border pb-5', className)}>
       {crumbs && <Breadcrumbs crumbs={crumbs} />}
 
       {backHref && (
@@ -91,7 +91,7 @@ export function PageHeader({
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-h1 text-ink">{title}</h1>
+          <h1 className="text-h1 font-semibold tracking-tight text-ink">{title}</h1>
           {description && (
             <p className="mt-1 max-w-2xl text-body-sm text-ink-muted">{description}</p>
           )}
@@ -152,7 +152,7 @@ export function PageContainer({
   return (
     <div
       className={cn(
-        'mx-auto w-full px-4 py-5 sm:px-6 lg:px-8',
+        'mx-auto w-full px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-9',
         width === 'narrow' && 'max-w-3xl',
         width === 'default' && 'max-w-[var(--content-max-width)]',
         className,
@@ -173,7 +173,7 @@ export function DashboardGrid({
 }) {
   return (
     <div
-      className={cn('grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4', className)}
+      className={cn('grid grid-cols-1 gap-4 sm:grid-cols-2 lg:gap-5 xl:grid-cols-4', className)}
     >
       {children}
     </div>

@@ -140,8 +140,8 @@ export function RequisitionForm() {
 
       <Callout tone="info" className="mt-5">
         {role === 'team_lead'
-          ? 'Your own requisition goes straight to HR, Finance and the Super Administrator.'
-          : 'Your Team Lead reviews this first. It reaches HR, Finance and the Super Administrator afterwards.'}
+          ? 'Your own requisition goes straight to HR and the Super Administrator.'
+          : 'Your Team Lead reviews this first. It reaches HR and the Super Administrator afterwards.'}
       </Callout>
 
       <Tabs

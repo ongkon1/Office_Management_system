@@ -2,7 +2,7 @@
 
 Durable context for anyone — human or AI — picking up this codebase. It records what the plan files don't: why things are the way they are, what's decided versus assumed, and the rules that are easy to break by accident.
 
-Last updated: **6 September 2026** (frontend Phases 0–8 complete including requisition and conveyance; Backend Phase 1 complete).
+Last updated: **8 September 2026** (frontend Phase 9 implementation at 13/14 pending stakeholder sign-off; Backend Phase 3 complete).
 
 ---
 
@@ -13,7 +13,7 @@ A centralized, responsive web application for tracking employee time and work ac
 | Field | Value |
 |---|---|
 | Initial divisions | PowerInAI, PowerInAI Training, Government Projects, Computer Jagat, WesternCF |
-| Roles | Super Administrator, Team Lead, Employee, HR Manager, Finance Manager, Management/View-Only |
+| Roles | Super Administrator, Team Lead, Employee, HR Manager, Management/View-Only. Finance Manager is retired for new assignments; its stored value remains valid for history. |
 | Framework | Next.js 16 (App Router) + TypeScript |
 | Styling | Tailwind CSS v4 with semantic tokens |
 | Database | MySQL (backend milestone only — not yet connected) |
@@ -135,7 +135,7 @@ Environment: Windows + WAMP, PowerShell. **Not currently a git repository.**
 
 **Authorization lives in the service, never in the component.** A service returns `permission_denied` or omits restricted fields; the UI never decides what a viewer may see. A record the viewer cannot access returns the *same* not-found presentation as a nonexistent one, so identifiers cannot be probed.
 
-**Styling.** Tailwind v4 with semantic tokens in `@theme` (`src/app/globals.css`). The palette is the PowerInAI identity (violet `#6c63ff`, pink `#ff3c7e`, ink `#18192b`) on a light canvas; the five day-status colours are deliberately *not* brand-tinted. Utilities stay inside typed component wrappers — screens compose `<Button variant="primary">`, not raw utility strings. No component library was added; overlays, tabs, tables and charts are hand-built against the tokens. Icons come from `lucide-react` only; never emoji.
+**Styling.** Tailwind v4 with semantic tokens in `@theme` (`src/app/globals.css`). The palette is the PowerInAI identity (violet `#6c63ff`, pink `#ff3c7e`, ink `#18192b`) on a light canvas; the five day-status colours are deliberately *not* brand-tinted. The September 2026 SaaS enhancement standardizes rounded elevated surfaces, responsive page rhythm, brand-rule metric cards, active navigation pills, polished controls, and more scannable tables through shared components. Utilities stay inside typed component wrappers — screens compose `<Button variant="primary">`, not raw utility strings. No component library was added; overlays, tabs, tables and charts are hand-built against the tokens. Icons come from `lucide-react` only; never emoji.
 
 > Tailwind scans source text, so an interpolated class (`` `text-${tone}` ``) is never generated and the style silently vanishes. Use an explicit static map — there's one in `src/components/ui/status-indicator.tsx`.
 
@@ -166,15 +166,16 @@ Environment: Windows + WAMP, PowerShell. **Not currently a git repository.**
 | Frontend | 6 — Finance and Management experience | Done (11/11) |
 | Frontend | 7 — Shared reporting and supporting modules | Done (52/52 · requisition, conveyance and employee-raised tasks included) |
 | Frontend | 8 — Responsive, accessibility and quality hardening | Done (17/18 · `FE-0825` awaiting visual review) |
-| Frontend | 9 — Demo packaging and backend handoff | **Next** (0/14) |
+| Frontend | 9 — Demo packaging and backend handoff | In progress (13/14; stakeholder sign-off pending) |
 | Backend | 0 — Architecture and delivery foundation | Done (25/25) |
 | Backend | 1 — MySQL schema and data foundation | Done (26/26) |
-| Backend | 2 — Authentication, authorization, and audit | **Next** (0/23) |
-| Backend | 3–9 | Pending |
+| Backend | 2 — Authentication, authorization, and audit | Done (23/23) |
+| Backend | 3 — Organization, projects, and tasks | Done (27/27) |
+| Backend | 4–9 | Pending |
 | Backend | 10 — Requisition | Pending (0/20) — new milestone |
 | Backend | 11 — Conveyance | Pending (0/22) — new milestone, depends on 10 |
 
-Gate results: contrast 48/48, responsive and rendered-contrast 300/300 (24,600 elements), accessibility 279/279, content-stress 73/73, role journeys 41/41, performance 16/16, Phase 2–7 flows 16/18/20/51/40/55, requisition 45/45, conveyance 45/45, `npm run verify` passing with 366 tests over a 67-route build.
+Gate results: contrast 48/48, accessibility 279/279, content-stress 73/73, role journeys 41/41, performance 16/16, Phase 2–7 flows 16/18/20/51/40/55, requisition 45/45, conveyance 45/45. After the SaaS polish pass, `npm run verify` passes with 409 tests and a 57-page build; the dashboard passes 12/12 targeted responsive role/width combinations with 1,310 rendered elements contrast-checked.
 
 Sign in at `/login`; every demo account uses `Demo1234!` and the sign-in page carries a picker. Auth fixtures — 2FA code, reset tokens, lockout threshold — are in `docs/frontend/phase-0/demo-setup.md` §1.1.
 
@@ -222,6 +223,8 @@ Later phases harden screens and fixtures around these assumptions, so the cost o
 | Phase 6 | `position: relative` on `.table-scroll` | `sr-only` text is absolutely positioned and escaped a static scroll container, stretching the document's scroll width even though the visible content clipped correctly |
 | Phase 7 | Feature flags moved to a runtime store | Four Phase 7 modules ship off; without a way to switch them on they would be unreachable, and a settings screen whose switches changed nothing would be worse than none. It is also how `FE-0006` is demonstrated rather than asserted |
 | Phase 7 | A report the viewer cannot run is absent, and `getReport` returns not-found | A disabled catalogue entry turns the catalogue into a directory of what other roles can see, which is the same disclosure as the data |
+| Post-8 | Finance merged into HR; the role is retired, not deleted | `RoleKey` is what can be assigned and `RetiredRoleKey` what can be stored, so the compiler separates the two. `PARALLEL_REVIEWER_ROLES` shrank to two, which is the only change the approval chain needed |
+| Post-8 | Finance to be merged into HR as its own milestone pair, not a find-and-replace | Two traps make it a permission change first: the HR *role* must not imply `finance.cost.view` (`REQ-RBAC-017` already grants it per user), and `finance_manager` must stay a legal *stored* value or every historical review row and audit event becomes unreadable |
 | Post-8 | An employee-raised task accepts no time until endorsed, enforced in three places | The dropdown, the entry validation and the review service each leave a gap the others cover; without the validation rule someone could raise a task, log a full day and be reviewed afterwards |
 | Post-8 | Task review deliberately does *not* use the shared approval chain | One endorser, and the record stops being a request afterwards. Forcing it in would add a reviewer stage and three roles to a shape with neither, plus a branch in four transition functions for one workflow |
 | Post-8 | Backend suites excluded from the frontend vitest config | The backend config gives integration tests 60s and serial execution; the frontend pattern also matched them and ran them in jsdom at 5s concurrent, so they passed alone and timed out under load |
@@ -242,9 +245,11 @@ Later phases harden screens and fixtures around these assumptions, so the cost o
 | Phase 8 | `CardHeader` defaults to `h2` | Defaulting to `h3` under the page `h1` skipped a heading level on 14 routes, leaving heading navigation unusable |
 | Phase 8 | The script-transfer budget was removed, not tuned | It measured dev-server compilation order — identical code read 5 MB cold and 1 KB warm. A check that flips with cache state is worse than none; bundle size moves to Phase 9 packaging |
 | Phase 8 | `FE-0825` left at `[~]` | Its measurable half is automated and passing; spacing, alignment and hierarchy need a person to look, and that is the same walkthrough the Phase 1 showcase criterion awaits |
+| Visual enhancement | Modern SaaS polish belongs in shared tokens and components | Card elevation, page rhythm, navigation state, controls, charts, and table scanning improve across all screens without changing routes, permissions, feature logic, or the PowerInAI palette. UI/UX Pro Max database search was unavailable because Python is not installed, so its documented enterprise SaaS defaults and accessibility priority rules were applied. |
+| Backend Phase 3 | Effective organization/work rules belong in one application service over transaction-aware repositories | This keeps assignment dates, scope, optimistic conflicts, derived actual time, task review, audit, and notifications consistent across future Server Actions and Route Handlers. Task review decisions are append-only and time validation calls the shared `taskAcceptsTime` predicate. |
 | Theme refresh | Full-white and aquatic light theme replaced the warm neutral and gold palette | Superseded by the PowerInAI re-skin above; kept because it records why a brand colour is split by job rather than used at one strength |
 | Backend Phase 0 | Contract inventory maps every current `ServiceRegistry` operation to a server use-case family | Preserves the frontend boundary and exposes missing later-phase contracts before database work |
 | Backend Phase 0 | Domain/application/infrastructure/delivery/composition dependency direction | Keeps calculations, authorization and transactions framework-independent and testable |
 | Backend Phase 0 | Drizzle/mysql2, Better Auth, Zod, BullMQ/Redis, private S3, Resend, Node 24 containers and MySQL 8.4 | Satisfies the documented transaction, security, durable-work, protected-file and deployment criteria while keeping providers behind ports |
 
-Backend Phases 0 and 1 are complete. Architecture evidence lives in `docs/backend/phase-0/`; four checksum-protected MySQL migrations, least-privilege runtime/migrator separation, deterministic development seeds, scoped repository adapters, isolated database builders, and verification evidence live in `drizzle/`, `src/server/`, `scripts/`, and `docs/backend/phase-1/`. Backend Phase 2 is next. Seed identities and organization data are demonstrations, not authoritative production inputs; provider credentials, production domains, capacity sizing, and RTO/RPO remain deployment/business inputs.
+Backend Phases 0–3 are complete. Phase 3 adds migration `0006`, transaction-aware organization/work repositories and services, protected profile-photo delivery, effective assignment and allocation validation, derived project/task actual time, and append-only employee-task endorsement. Evidence lives in `docs/backend/phase-3/verification.md`. Backend Phase 4 is next. Seed identities and organization data are demonstrations, not authoritative production inputs; provider credentials, production domains, capacity sizing, and RTO/RPO remain deployment/business inputs.

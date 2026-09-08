@@ -30,7 +30,6 @@ const ALL_ROLES: readonly RoleKey[] = [
   'employee',
   'team_lead',
   'hr_manager',
-  'finance_manager',
   'management',
   'super_admin',
 ];
@@ -66,13 +65,13 @@ export const ROUTE_RULES: readonly RouteRule[] = [
    */
   {
     path: '/requisitions',
-    roles: ['employee', 'team_lead', 'hr_manager', 'finance_manager', 'super_admin'],
+    roles: ['employee', 'team_lead', 'hr_manager', 'super_admin'],
   },
 
   // Conveyance travels the same chain, so it has the same audiences.
   {
     path: '/conveyance',
-    roles: ['employee', 'team_lead', 'hr_manager', 'finance_manager', 'super_admin'],
+    roles: ['employee', 'team_lead', 'hr_manager', 'super_admin'],
   },
 
   // Team Lead scope.
@@ -87,23 +86,30 @@ export const ROUTE_RULES: readonly RouteRule[] = [
   { path: '/employees', roles: ['hr_manager', 'super_admin'] },
   { path: '/attendance', roles: ['hr_manager', 'super_admin'] },
 
-  // Finance. Hours and overtime need no extra permission; cost does.
-  { path: '/finance', roles: ['finance_manager', 'super_admin'] },
-  { path: '/finance/hours', roles: ['finance_manager', 'super_admin'] },
-  { path: '/finance/overtime', roles: ['finance_manager', 'super_admin'] },
+  /*
+   * Finance, now owned by HR (`FE-1004`). The paths are unchanged: renaming
+   * them would break every deep link and audit reference for no gain.
+   *
+   * Note what did *not* change — `finance.cost.view` still gates every money
+   * route. HR reaching these screens is a role change; seeing cost on them is
+   * still a separate grant (`REQ-RBAC-017`).
+   */
+  { path: '/finance', roles: ['hr_manager', 'super_admin'] },
+  { path: '/finance/hours', roles: ['hr_manager', 'super_admin'] },
+  { path: '/finance/overtime', roles: ['hr_manager', 'super_admin'] },
   {
     path: '/finance/billable',
-    roles: ['finance_manager', 'super_admin'],
+    roles: ['hr_manager', 'super_admin'],
     permission: 'finance.cost.view',
   },
   {
     path: '/finance/project-costs',
-    roles: ['finance_manager', 'super_admin'],
+    roles: ['hr_manager', 'super_admin'],
     permission: 'finance.cost.view',
   },
   {
     path: '/finance/division-costs',
-    roles: ['finance_manager', 'super_admin'],
+    roles: ['hr_manager', 'super_admin'],
     permission: 'finance.cost.view',
   },
   /*
@@ -115,8 +121,8 @@ export const ROUTE_RULES: readonly RouteRule[] = [
    * withhold hours the Finance role is entitled to. The service redacts the
    * money; the route does not hide the page.
    */
-  { path: '/finance/payroll', roles: ['finance_manager', 'super_admin'] },
-  { path: '/finance/reports', roles: ['finance_manager', 'super_admin'] },
+  { path: '/finance/payroll', roles: ['hr_manager', 'super_admin'] },
+  { path: '/finance/reports', roles: ['hr_manager', 'super_admin'] },
 
   // Administration.
   { path: '/admin', roles: ['super_admin'] },

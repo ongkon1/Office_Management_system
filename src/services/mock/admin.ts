@@ -22,7 +22,7 @@ import type {
   Redactable,
   RoleKey,
 } from '@/contracts/domain';
-import { SENSITIVE_PERMISSIONS } from '@/contracts/domain';
+import { RETIRED_ROLE_LABEL, SENSITIVE_PERMISSIONS } from '@/contracts/domain';
 import type {
   AdminService,
   AuditEventView,
@@ -184,7 +184,6 @@ const ROLE_LABEL: Readonly<Record<RoleKey, string>> = {
   employee: 'Employee',
   team_lead: 'Team Lead',
   hr_manager: 'HR Manager',
-  finance_manager: 'Finance Manager',
   management: 'Management',
   super_admin: 'Super Administrator',
 };
@@ -193,7 +192,6 @@ const ROLE_DESCRIPTION: Readonly<Record<RoleKey, string>> = {
   employee: 'Records their own time and work; sees only their own data.',
   team_lead: 'Reviews assigned employees, requests corrections, manages projects and tasks.',
   hr_manager: 'Company-wide employee, attendance, request and payroll-period administration.',
-  finance_manager: 'Verified hours and, with the financial permission, labour cost and payroll.',
   management: 'Read-only company, division and project summaries.',
   super_admin: 'Full administration, including roles, policies and the audit log.',
 };
@@ -202,7 +200,6 @@ const ROLE_SCOPE: Readonly<Record<RoleKey, string>> = {
   employee: 'Own records only',
   team_lead: 'Assigned employees and their divisions',
   hr_manager: 'All divisions',
-  finance_manager: 'All divisions, verified periods',
   management: 'All divisions, read-only',
   super_admin: 'Unrestricted',
 };
@@ -291,13 +288,37 @@ function seedRolePermissions(): Record<RoleKey, PermissionKey[]> {
       SENSITIVE_PERMISSIONS.hrOverride,
       SENSITIVE_PERMISSIONS.breakOverride,
     ],
-    finance_manager: [SENSITIVE_PERMISSIONS.financialDetail, SENSITIVE_PERMISSIONS.exportProtected],
+    /*
+     * HR deliberately does *not* list the financial permissions here, even
+     * though it absorbed the Finance Manager's screens (`FE-1005`).
+     *
+     * `REQ-RBAC-017` exposes cost, rate and salary data "only through
+     * separately granted financial permissions". Adding them to the role
+     * default would hand every HR account salary visibility as a side effect
+     * of a role merge, which is exactly the failure this phase exists to
+     * avoid. They are granted per user.
+     */
     management: [],
     super_admin: Object.values(SENSITIVE_PERMISSIONS),
   };
 }
 
 let rolePermissions: Record<RoleKey, PermissionKey[]> = seedRolePermissions();
+
+/** The retired role, shown as history and never offered for assignment. */
+function retiredRoleView(): RoleAdminView {
+  return {
+    key: 'finance_manager',
+    label: RETIRED_ROLE_LABEL.finance_manager,
+    description:
+      'Retired when HR absorbed this work. Existing records that name it still read correctly, but it can no longer be assigned.',
+    // Zero by construction: no account may hold a retired role.
+    userCount: 0,
+    scopeSummary: 'Not assignable',
+    permissions: [],
+    isRetired: true,
+  };
+}
 
 function roleView(role: RoleKey): RoleAdminView {
   const granted = rolePermissions[role];
@@ -307,6 +328,7 @@ function roleView(role: RoleKey): RoleAdminView {
     description: ROLE_DESCRIPTION[role],
     userCount: DEMO_ACCOUNTS.filter((account) => account.roles.includes(role)).length,
     scopeSummary: ROLE_SCOPE[role],
+    isRetired: false,
     permissions: PERMISSION_SPECS.map<PermissionGrantView>((spec) => ({
       key: spec.key,
       label: spec.label,
@@ -665,7 +687,10 @@ export const mockAdminService: AdminService = {
   async listRoles(userId) {
     await delay();
     if (!isAdministrator(userId)) return denied(ADMIN_DENIAL.message, ADMIN_DENIAL.guidance);
-    return success((Object.keys(ROLE_LABEL) as RoleKey[]).map(roleView));
+    return success([
+      ...(Object.keys(ROLE_LABEL) as RoleKey[]).map(roleView),
+      retiredRoleView(),
+    ]);
   },
 
   async setRolePermission(userId, role, permission, granted) {

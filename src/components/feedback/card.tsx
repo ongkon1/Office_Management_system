@@ -32,8 +32,8 @@ export function Card({
         // `min-w-0` is load-bearing: a card is nearly always a grid or flex
         // child, whose default `min-width: auto` lets it grow to its content's
         // min-content width and stretch the whole track past the viewport.
-        'min-w-0 rounded-lg border border-border bg-surface shadow-xs',
-        elevation === 'raised' && 'shadow-sm',
+        'min-w-0 rounded-xl border border-border bg-surface shadow-sm',
+        elevation === 'raised' && 'border-accent-border/70 shadow-md',
         PADDING_CLASSES[padding],
         className,
       )}
@@ -166,8 +166,9 @@ export function MetricCard({ tile, loading = false, className }: MetricCardProps
       <Link
         href={tile.href}
         className={cn(
-          'group flex flex-col rounded-lg border border-border border-l-2 border-l-brand bg-surface p-4 shadow-xs',
-          'transition-colors duration-150 hover:border-highlight-hover hover:bg-surface-sunken hover:shadow-sm',
+          'group relative flex flex-col overflow-hidden rounded-xl border border-border bg-surface p-5 shadow-sm',
+          'before:absolute before:inset-x-0 before:top-0 before:h-0.5 before:bg-brand',
+          'transition-[border-color,background-color,box-shadow] duration-200 hover:border-accent-border hover:bg-accent-subtle/30 hover:shadow-md',
           className,
         )}
       >
@@ -179,7 +180,8 @@ export function MetricCard({ tile, loading = false, className }: MetricCardProps
   return (
     <div
       className={cn(
-        'flex flex-col rounded-lg border border-border border-l-2 border-l-brand bg-surface p-4 shadow-xs',
+        'relative flex flex-col overflow-hidden rounded-xl border border-border bg-surface p-5 shadow-sm',
+        'before:absolute before:inset-x-0 before:top-0 before:h-0.5 before:bg-brand',
         className,
       )}
     >

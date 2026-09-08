@@ -15,12 +15,12 @@ export type ButtonSize = 'sm' | 'md' | 'lg';
 
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   primary:
-    'bg-primary text-ink-inverse border border-primary hover:bg-primary-hover active:bg-primary-active',
+    'bg-primary text-ink-inverse border border-primary shadow-xs hover:bg-primary-hover hover:shadow-sm active:bg-primary-active active:shadow-xs',
   secondary:
-    'bg-surface text-primary border border-primary hover:border-highlight-hover hover:bg-accent-subtle active:bg-brand-light',
-  ghost: 'bg-transparent text-ink border border-transparent hover:bg-surface-sunken',
+    'bg-surface text-primary border border-primary shadow-xs hover:border-highlight-hover hover:bg-accent-subtle hover:shadow-sm active:bg-brand-light active:shadow-xs',
+  ghost: 'bg-transparent text-ink border border-transparent hover:border-border hover:bg-surface-sunken active:bg-brand-light',
   accent:
-    'bg-accent text-ink-on-accent border border-accent hover:bg-accent-hover active:bg-primary-active',
+    'bg-accent text-ink-on-accent border border-accent shadow-xs hover:bg-accent-hover hover:shadow-sm active:bg-primary-active active:shadow-xs',
   danger:
     'bg-danger text-ink-on-accent border border-danger hover:brightness-110 active:brightness-95',
   link: 'bg-transparent text-accent border border-transparent underline underline-offset-2 hover:text-accent-hover',
@@ -29,7 +29,7 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
 /** Shared by `Button` and `LinkButton` so a link never drifts from a button. */
 const BASE_CLASSES =
   'relative inline-flex shrink-0 items-center justify-center rounded-md font-medium ' +
-  'transition-colors duration-150 ease-[cubic-bezier(0.2,0,0.15,1)] ' +
+  'transition-[color,background-color,border-color,box-shadow] duration-150 ease-[cubic-bezier(0.2,0,0.15,1)] ' +
   'disabled:cursor-not-allowed disabled:opacity-55 ' +
   // A 44px hit area without a 44px visual box.
   'after:absolute after:inset-x-0 after:top-1/2 after:h-11 after:-translate-y-1/2 after:content-[""]';

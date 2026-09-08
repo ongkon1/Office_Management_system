@@ -100,10 +100,15 @@ function viewerOf(userId: string) {
   return findAccountByUserId(userId);
 }
 
-/** Finance screens are open to Finance Managers and Super Administrators. */
+/**
+ * Finance screens are open to HR and Super Administrators (`FE-1008`).
+ *
+ * Reaching the screen and seeing money on it are two different questions, and
+ * they always were. `canViewCost` below is unchanged by the role merge.
+ */
 function canViewFinance(userId: string): boolean {
   const role = viewerOf(userId)?.primaryRole;
-  return role === 'finance_manager' || role === 'super_admin';
+  return role === 'hr_manager' || role === 'super_admin';
 }
 
 /** Cost, salary and budget need the separately granted permission. */

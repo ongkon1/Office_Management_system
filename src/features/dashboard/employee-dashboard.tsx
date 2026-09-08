@@ -23,7 +23,7 @@ import {
   SplitPanel,
 } from '@/components/layout/page';
 import { mockDashboardService } from '@/services/mock/work';
-import { DEMO_TODAY } from '@/fixtures';
+import { DEMO_TODAY } from '@/lib/demo-context';
 import { ATTENDANCE_LABEL } from '@/lib/status';
 
 const QUICK_ACTION_ICONS: Record<string, React.ReactNode> = {

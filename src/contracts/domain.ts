@@ -59,13 +59,42 @@ export interface ActorRef {
 /* Access                                                                    */
 /* ------------------------------------------------------------------------- */
 
+/**
+ * The roles a user may hold (`FE-1002`).
+ *
+ * `finance_manager` was retired when HR absorbed the Finance Manager's work.
+ * It is deliberately **not** here: the type is what can be assigned, and a
+ * retired role must be unassignable. It remains a legal *stored* value —
+ * see `RetiredRoleKey` — because review rows and audit events already carry it
+ * and deleting it would make that history unreadable.
+ */
 export type RoleKey =
   | 'super_admin'
   | 'team_lead'
   | 'employee'
   | 'hr_manager'
-  | 'finance_manager'
   | 'management';
+
+/**
+ * A role that existed once and appears in stored records, but can no longer be
+ * assigned to anyone.
+ *
+ * Kept separate from `RoleKey` so the compiler enforces the distinction: a
+ * function that assigns a role cannot accept one of these, and a function that
+ * renders recorded history must handle them.
+ */
+export type RetiredRoleKey = 'finance_manager';
+
+/** Every role value that may appear in a stored record, current or retired. */
+export type StoredRoleKey = RoleKey | RetiredRoleKey;
+
+export const RETIRED_ROLE_LABEL: Readonly<Record<RetiredRoleKey, string>> = {
+  finance_manager: 'Finance Manager (retired)',
+};
+
+export function isRetiredRole(role: StoredRoleKey): role is RetiredRoleKey {
+  return role === 'finance_manager';
+}
 
 export interface Role {
   readonly key: RoleKey;

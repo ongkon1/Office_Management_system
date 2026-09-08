@@ -34,7 +34,7 @@ function NavList({
   onNavigate?: () => void;
 }) {
   return (
-    <nav aria-label="Main" className="flex flex-col gap-5 px-3 py-4">
+    <nav aria-label="Main" className="flex flex-col gap-6 px-3 py-5">
       {groups.map((group) => (
         <div key={group.key} className="flex flex-col gap-1">
           {group.label && (
@@ -70,11 +70,11 @@ function NavLink({
       onClick={onNavigate}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        'flex min-h-11 items-center gap-2.5 rounded-md px-2.5 py-2 text-body-sm',
-        'transition-colors duration-150',
+        'flex min-h-11 items-center gap-2.5 rounded-lg px-3 py-2 text-body-sm',
+        'transition-[color,background-color,box-shadow,border-color] duration-150',
         active
-          ? 'border-l-2 border-l-primary bg-accent-subtle font-medium text-ink'
-          : 'border-l-2 border-l-transparent text-ink-muted hover:bg-surface-sunken hover:text-ink',
+          ? 'border border-accent-border bg-accent-subtle font-semibold text-primary shadow-xs'
+          : 'border border-transparent text-ink-muted hover:border-border hover:bg-surface-sunken hover:text-ink',
       )}
     >
       <NavIcon
@@ -134,7 +134,7 @@ function TopBar({
       data-print="hide"
       className={cn(
         'sticky top-0 z-20 flex h-[var(--shell-topbar-height)] items-center gap-2',
-        'border-b border-border bg-surface/95 px-3 shadow-xs backdrop-blur-md sm:px-4',
+        'border-b border-border bg-surface/90 px-3 shadow-sm backdrop-blur-xl sm:px-5',
       )}
     >
       <IconButton
@@ -322,7 +322,7 @@ export function AppShell({ view, children, onOpenSearch, onSignOut }: AppShellPr
           data-print="hide"
           className={cn(
             'sticky top-0 hidden h-dvh w-[var(--shell-sidebar-width)] shrink-0 flex-col',
-            'border-r border-border bg-surface shadow-xs md:flex',
+            'border-r border-border bg-surface/95 shadow-sm backdrop-blur-xl md:flex',
           )}
         >
           <div className="flex h-[var(--shell-topbar-height)] shrink-0 items-center gap-2.5 border-b border-border px-4">
@@ -395,7 +395,7 @@ export function AppShell({ view, children, onOpenSearch, onSignOut }: AppShellPr
           <main
             id="main-content"
             tabIndex={-1}
-            className="min-w-0 flex-1 pb-[var(--shell-bottom-nav-height)] md:pb-0"
+            className="min-w-0 flex-1 bg-surface-sunken/35 pb-[var(--shell-bottom-nav-height)] md:pb-0"
           >
             {children}
           </main>

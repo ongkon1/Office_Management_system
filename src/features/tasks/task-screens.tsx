@@ -21,7 +21,7 @@ import { Alert, Callout, EmptyState } from '@/components/feedback/alert';
 import { Tabs } from '@/components/feedback/disclosure';
 import { PageContainer, PageHeader } from '@/components/layout/page';
 import { mockTaskService } from '@/services/mock/work';
-import { DEMO_TODAY } from '@/fixtures';
+import { DEMO_TODAY } from '@/lib/demo-context';
 
 type TaskFilter = 'all' | 'pending' | 'in_progress' | 'completed' | 'overdue' | 'upcoming';
 
