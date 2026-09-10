@@ -44,7 +44,7 @@ const roleDefaults: Record<RoleKey, ReadonlySet<string>> = {
 };
 
 export function hasPermission(actor: ActorPolicyContext, permission: string): boolean {
-  return actor.permissions.has(permission) || actor.roles.some((role) => roleDefaults[role].has('*') || roleDefaults[role].has(permission));
+  return actor.permissions.has(permission) || actor.roles.some((role) => roleDefaults[role]?.has('*') || roleDefaults[role]?.has(permission));
 }
 
 export function authorize(actor: ActorPolicyContext, action: string, resource: ResourcePolicyContext, entryPoint: EntryPoint): boolean {

@@ -230,6 +230,7 @@ export interface TimesheetDayView {
 }
 
 export interface TimeEntryView {
+  readonly version?: number;
   readonly id: string;
   readonly division: DivisionRef;
   readonly project: ProjectRef | null;
@@ -240,7 +241,7 @@ export interface TimeEntryView {
   readonly workLocationLabel: string;
   readonly workDescription: string;
   readonly completedWork: string;
-  readonly attachmentCount: number;
+  readonly attachmentCount: number | 'restricted';
   readonly supportingLink: string | null;
   readonly isDraft: boolean;
   readonly canEdit: boolean;

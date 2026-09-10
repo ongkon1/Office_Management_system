@@ -409,6 +409,8 @@ export type EntryMethod = 'manual_clock' | 'manual_duration' | 'timer' | 'copied
 export type TimeEntryState = 'draft' | 'saved' | 'locked';
 
 export interface TimeEntry extends AuditableRecord {
+  /** Backend optimistic concurrency token. */
+  readonly version?: number;
   readonly id: string;
   readonly employeeId: string;
   /** Employee's local calendar work date (`REQ-TIME-028`). */
@@ -426,7 +428,7 @@ export interface TimeEntry extends AuditableRecord {
   readonly workDescription: string;
   readonly completedWork: string;
   readonly supportingLink: string | null;
-  readonly attachmentIds: readonly string[];
+  readonly attachmentIds: readonly string[] | 'restricted';
   readonly state: TimeEntryState;
   /** Set when this entry crosses midnight and was split by policy. */
   readonly crossMidnightGroupId: string | null;
@@ -494,6 +496,7 @@ export interface DailySummary {
   readonly criticalExplanation: string | null;
   readonly divisionContributions: readonly DivisionContribution[];
   readonly projectContributions: readonly ProjectContribution[];
+  readonly taskContributions?: readonly { readonly taskId: string; readonly activeMinutes: DurationMinutes }[];
   readonly entryIds: readonly string[];
   readonly attendance: AttendanceState;
   readonly isLocked: boolean;
@@ -724,6 +727,7 @@ export interface EvaluationFacts {
   readonly estimateVariancePercent: number;
   readonly divisionContributions: readonly DivisionContribution[];
   readonly projectContributions: readonly ProjectContribution[];
+  readonly taskContributions?: readonly { readonly taskId: string; readonly activeMinutes: DurationMinutes }[];
   readonly wfhDayCount: number;
   readonly leaveDayCount: number;
   readonly remarkCount: number;

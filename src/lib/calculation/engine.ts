@@ -66,11 +66,14 @@ function sumBy<T>(items: readonly T[], select: (item: T) => number): number {
 function groupContributions(entries: readonly TimeEntry[]): {
   divisions: readonly DivisionContribution[];
   projects: readonly ProjectContribution[];
+  tasks: readonly { taskId: string; activeMinutes: DurationMinutes }[];
 } {
   const byDivision = new Map<string, number>();
   const byProject = new Map<string, number>();
+  const byTask = new Map<string, number>();
 
   for (const entry of entries) {
+    if (entry.taskId) byTask.set(entry.taskId, (byTask.get(entry.taskId) ?? 0) + entry.activeMinutes);
     byDivision.set(
       entry.divisionId,
       (byDivision.get(entry.divisionId) ?? 0) + entry.activeMinutes,
@@ -84,6 +87,7 @@ function groupContributions(entries: readonly TimeEntry[]): {
   }
 
   return {
+    tasks: [...byTask.entries()].map(([taskId, activeMinutes]) => ({ taskId, activeMinutes })),
     divisions: [...byDivision.entries()]
       .map(([divisionId, activeMinutes]) => ({ divisionId, activeMinutes }))
       .sort((a, b) => b.activeMinutes - a.activeMinutes),
@@ -268,7 +272,7 @@ export function calculateDay(input: DayCalculationInput): DailySummary {
     hasExemption: exemption !== null,
   });
 
-  const { divisions, projects } = groupContributions(entries);
+  const { divisions, projects, tasks } = groupContributions(entries);
 
   return {
     employeeId,
@@ -286,6 +290,7 @@ export function calculateDay(input: DayCalculationInput): DailySummary {
     criticalExplanation: criticalExplanation ?? null,
     divisionContributions: divisions,
     projectContributions: projects,
+    taskContributions: tasks,
     entryIds: entries.map((entry) => entry.id),
     attendance: deriveAttendance({
       hasEntries,

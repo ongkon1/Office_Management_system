@@ -1,4 +1,4 @@
-import {randomUUID}from'node:crypto';import type{Result}from'@/contracts/results';import type{ActorPolicyContext}from'@/server/authorization/policy';import{authorizeMutation,readAuthorized}from'@/server/authorization/gateway';import{allocationWarning,validateAssignment}from'./rules';
+import {randomUUID}from'node:crypto';import type{ActorPolicyContext}from'@/server/authorization/policy';import{authorizeMutation,readAuthorized}from'@/server/authorization/gateway';import{allocationWarning,validateAssignment}from'./rules';
 export interface DivisionRow{id:string;name:string;code:string;isActive:boolean;isRestricted:boolean;version:number;references:number}
 export interface EmployeeRow{id:string;userId:string;name:string;code:string;status:'active'|'inactive';version:number;photoAttachmentId:string|null}
 export interface AssignmentRow{id:string;employeeId:string;divisionId:string;leadEmployeeId:string|null;startDate:string;endDate:string|null;isPrimary:boolean;isTemporary:boolean;isActive:boolean;allocationPercent:number;version:number}

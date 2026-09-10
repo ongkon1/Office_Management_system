@@ -132,7 +132,7 @@ function toEntryView(entry: TimeEntry, locked: boolean): TimeEntryView {
     workLocationLabel: WORK_LOCATION_LABEL[entry.workLocation],
     workDescription: entry.workDescription,
     completedWork: entry.completedWork,
-    attachmentCount: entry.attachmentIds.length,
+    attachmentCount: entry.attachmentIds === 'restricted' ? 'restricted' : entry.attachmentIds.length,
     supportingLink: entry.supportingLink,
     isDraft: entry.state === 'draft',
     canEdit: !locked,

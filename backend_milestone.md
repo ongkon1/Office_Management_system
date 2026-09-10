@@ -252,15 +252,9 @@ A backend task may be marked `[x]` only when all applicable conditions are true:
 ### Employees, Divisions, and Assignments
 
 - [x] `BE-0301` Implement division create, update, activate, and deactivate use cases with historical-reference protection.
-<<<<<<< HEAD
 - [x] `BE-0302` Implement employee create, update, activate, deactivate, profile read, and directory search use cases.
 - [x] `BE-0303` Implement profile-photo attachment metadata and authorized delivery through the selected storage adapter.
 - [x] `BE-0304` Implement employee-division assignment create, update, end, activate, deactivate, and history queries.
-=======
-- [~] `BE-0302` Implement employee create, update, activate, deactivate, profile read, and directory search use cases.
-- [x] `BE-0303` Implement profile-photo attachment metadata and authorized delivery through the selected storage adapter.
-- [~] `BE-0304` Implement employee-division assignment create, update, end, activate, deactivate, and history queries.
->>>>>>> 00d146afb1dc2296921b692b63fc9173664225e3
 - [x] `BE-0305` Enforce one primary division for an active employee when required and validate effective assignment date ranges.
 - [x] `BE-0306` Validate planned allocation and return a warning, rather than silently changing data, when concurrent allocation differs from 100 percent.
 - [x] `BE-0307` Implement temporary assignments with required start/end dates and prevent new time outside their effective period.
@@ -268,34 +262,20 @@ A backend task may be marked `[x]` only when all applicable conditions are true:
 
 ### Projects and Membership
 
-<<<<<<< HEAD
 - [x] `BE-0310` Implement project create, update, activate/close, membership, search, filtering, and scoped detail queries.
 - [x] `BE-0311` Enforce exactly one division per project and validate manager/member access against effective assignments.
 - [x] `BE-0312` Implement project estimates, deadlines, priority, budget visibility, completion percentage, client/stakeholder, notes, and attachment metadata.
-=======
-- [~] `BE-0310` Implement project create, update, activate/close, membership, search, filtering, and scoped detail queries.
-- [x] `BE-0311` Enforce exactly one division per project and validate manager/member access against effective assignments.
-- [~] `BE-0312` Implement project estimates, deadlines, priority, budget visibility, completion percentage, client/stakeholder, notes, and attachment metadata.
->>>>>>> 00d146afb1dc2296921b692b63fc9173664225e3
 - [x] `BE-0313` Calculate actual project hours from valid time entries rather than accepting a manually edited actual-hours total.
 - [x] `BE-0314` Protect project deactivation/closure and preserve historical tasks, time, files, and audit references.
 
 ### Tasks
 
-<<<<<<< HEAD
 - [x] `BE-0320` Implement task create, update, assign, support-member, checklist, attachment, and scoped query use cases.
-=======
-- [~] `BE-0320` Implement task create, update, assign, support-member, checklist, attachment, and scoped query use cases.
->>>>>>> 00d146afb1dc2296921b692b63fc9173664225e3
 - [x] `BE-0321` Enforce Pending, In Progress, and Completed as the initial task statuses and validate allowed transitions.
 - [x] `BE-0322` Enforce task-project-division consistency and effective employee authorization.
 - [x] `BE-0323` Calculate actual task time from valid linked time entries and derive overdue state from status and due date.
 - [x] `BE-0324` Implement task list filters, pagination, sorting, due-date views, and employee/team scopes expected by the frontend.
-<<<<<<< HEAD
 - [x] `BE-0325` Add transaction, conflict, authorization, deactivation, and concurrency tests for organization, project, membership, and task workflows.
-=======
-- [~] `BE-0325` Add transaction, conflict, authorization, deactivation, and concurrency tests for organization, project, membership, and task workflows.
->>>>>>> 00d146afb1dc2296921b692b63fc9173664225e3
 
 ### Employee-Raised Tasks
 
@@ -308,11 +288,7 @@ An employee raises a task for themselves and their Team Lead endorses it. Fronte
 - [x] `BE-0334` Handle the Team Lead mapping changing while a task is pending, so a raised task can never become unreviewable.
 - [x] `BE-0335` Restrict the employee's create payload to their own assigned divisions and active projects, ignoring any assignee or supporting members it carries.
 - [x] `BE-0336` Audit raise, approve and refuse with actor, role, before/after and reason, and notify the Team Lead on raise and the employee on decision.
-<<<<<<< HEAD
 - [x] `BE-0337` Test the time-entry refusal at every review state, review by the wrong Team Lead, self-endorsement, concurrent decisions, and Team Lead reassignment mid-review.
-=======
-- [~] `BE-0337` Test the time-entry refusal at every review state, review by the wrong Team Lead, self-endorsement, concurrent decisions, and Team Lead reassignment mid-review.
->>>>>>> 00d146afb1dc2296921b692b63fc9173664225e3
 
 ### Phase 3 Exit Criteria
 
@@ -327,54 +303,56 @@ Phase 3 evidence is recorded in `docs/backend/phase-3/verification.md`: migratio
 
 ### Authoritative Calculation Engine
 
-- [ ] `BE-0401` Implement one framework-independent calculation engine used by entry validation, daily summaries, dashboards, reports, exports, evaluations, and APIs.
-- [ ] `BE-0402` Implement effective work-policy selection by employee, work date, and policy version.
-- [ ] `BE-0403` Calculate active time from valid entries across all divisions while retaining employee/division/project/task contribution breakdowns.
-- [ ] `BE-0404` Calculate recognized daily break separately and default a standard full day to one break hour.
-- [ ] `BE-0405` Restrict break overrides to the designated permission and require an override reason and audit event.
-- [ ] `BE-0406` Calculate daily total as active duration plus recognized break using integer duration arithmetic.
-- [ ] `BE-0407` Classify required days as Missing, Under-time, Complete, Overtime, or Critical using the approved thresholds.
-- [ ] `BE-0408` Require an overtime reason above eight total hours and a critical explanation above twelve total hours.
-- [ ] `BE-0409` Implement part-time, half-day leave, holiday, and other policy adjustments without changing the standard policy baseline.
-- [ ] `BE-0410` Implement business-timezone and cross-midnight attribution/splitting according to the configured policy.
-- [ ] `BE-0411` Persist the applied policy version so historical and verified results are reproducible after policy changes.
+- [x] `BE-0401` Implement one framework-independent calculation engine used by entry validation, daily summaries, dashboards, reports, exports, evaluations, and APIs.
+- [x] `BE-0402` Implement effective work-policy selection by employee, work date, and policy version.
+- [x] `BE-0403` Calculate active time from valid entries across all divisions while retaining employee/division/project/task contribution breakdowns.
+- [x] `BE-0404` Calculate recognized daily break separately and default a standard full day to one break hour.
+- [x] `BE-0405` Restrict break overrides to the designated permission and require an override reason and audit event.
+- [x] `BE-0406` Calculate daily total as active duration plus recognized break using integer duration arithmetic.
+- [x] `BE-0407` Classify required days as Missing, Under-time, Complete, Overtime, or Critical using the approved thresholds.
+- [x] `BE-0408` Require an overtime reason above eight total hours and a critical explanation above twelve total hours.
+- [x] `BE-0409` Implement part-time, half-day leave, holiday, and other policy adjustments without changing the standard policy baseline.
+- [x] `BE-0410` Implement business-timezone and cross-midnight attribution/splitting according to the configured policy.
+- [x] `BE-0411` Persist the applied policy version so historical and verified results are reproducible after policy changes.
 
 ### Time Entry and Timer Use Cases
 
-- [ ] `BE-0420` Implement manual clock entry and direct-duration entry create, update, read, list, and permitted delete/deactivate use cases.
-- [ ] `BE-0421` Implement copy-previous-entry as a new unverified draft with a new work date and full revalidation.
-- [ ] `BE-0422` Implement timer start with an atomic one-running-timer-per-employee invariant.
-- [ ] `BE-0423` Implement timer read/recovery and idempotent stop-to-draft behavior across refresh, retry, or duplicate submission.
-- [ ] `BE-0424` Validate required employee, date, division, project/task relationship, work location, description, completed work, and attachment/link information.
-- [ ] `BE-0425` Reject inactive projects, invalid tasks, unauthorized/effective-date divisions, invalid ranges, duplicates, and overlapping clock entries across divisions.
-- [ ] `BE-0426` Detect approved leave/holiday conflicts and return a field/record-level error or authorized exception workflow as specified.
-- [ ] `BE-0427` Recalculate affected daily, weekly, monthly, division, project, task, workload, and evaluation projections transactionally or through reliable invalidation/jobs.
-- [ ] `BE-0428` Return typed validation codes and corrective guidance matching frontend error states.
-- [ ] `BE-0429` Ensure saving a normal daily entry never creates a Team Lead approval requirement.
+- [x] `BE-0420` Implement manual clock entry and direct-duration entry create, update, read, list, and permitted delete/deactivate use cases.
+- [x] `BE-0421` Implement copy-previous-entry as a new unverified draft with a new work date and full revalidation.
+- [x] `BE-0422` Implement timer start with an atomic one-running-timer-per-employee invariant.
+- [x] `BE-0423` Implement timer read/recovery and idempotent stop-to-draft behavior across refresh, retry, or duplicate submission.
+- [x] `BE-0424` Validate required employee, date, division, project/task relationship, work location, description, completed work, and attachment/link information.
+- [x] `BE-0425` Reject inactive projects, invalid tasks, unauthorized/effective-date divisions, invalid ranges, duplicates, and overlapping clock entries across divisions.
+- [x] `BE-0426` Detect approved leave/holiday conflicts and return a field/record-level error or authorized exception workflow as specified.
+- [x] `BE-0427` Recalculate affected daily, weekly, monthly, division, project, task, workload, and evaluation projections transactionally or through reliable invalidation/jobs.
+- [x] `BE-0428` Return typed validation codes and corrective guidance matching frontend error states.
+- [x] `BE-0429` Ensure saving a normal daily entry never creates a Team Lead approval requirement.
 
 ### Remarks, Corrections, and Period Verification
 
-- [ ] `BE-0440` Implement the single general remark model linked to an employee and optionally a timesheet or task.
-- [ ] `BE-0441` Implement employee clarification, correction request, resolution state, notification trigger, and complete remark history.
-- [ ] `BE-0442` Implement correction authorization and immutable before/after history for changed time records.
-- [ ] `BE-0443` Implement HR reporting/payroll-period completeness checks and exception inventory.
-- [ ] `BE-0444` Implement HR period verification with transactionally fixed included records, calculation results, and applied policy versions.
-- [ ] `BE-0445` Implement authorized verified-period unlock or amendment with reason, audit, recalculation, and Finance visibility.
-- [ ] `BE-0446` Prevent ordinary mutations to verified records and return the frontend's locked-period conflict response.
+- [x] `BE-0440` Implement the single general remark model linked to an employee and optionally a timesheet or task.
+- [x] `BE-0441` Implement employee clarification, correction request, resolution state, notification trigger, and complete remark history.
+- [x] `BE-0442` Implement correction authorization and immutable before/after history for changed time records.
+- [x] `BE-0443` Implement HR reporting/payroll-period completeness checks and exception inventory.
+- [x] `BE-0444` Implement HR period verification with transactionally fixed included records, calculation results, and applied policy versions.
+- [x] `BE-0445` Implement authorized verified-period unlock or amendment with reason, audit, recalculation, and Finance visibility.
+- [x] `BE-0446` Prevent ordinary mutations to verified records and return the frontend's locked-period conflict response.
 
 ### Calculation and Concurrency Tests
 
-- [ ] `BE-0450` Add boundary tests for 0, 6:59, 7:00, 7:01 active hours and totals of 7:59, 8:00, above 8:00, 12:00, and above 12:00.
-- [ ] `BE-0451` Add the cross-division acceptance case of 3 hours PowerInAI, 2 hours Government Projects, 2 hours WesternCF, and a separate 1-hour break.
-- [ ] `BE-0452` Add overlap, duplicate, invalid range, inactive project, unassigned division, leave, holiday, half-day, cross-midnight, daylight-saving, and timezone tests.
-- [ ] `BE-0453` Add concurrent timer-start, duplicate timer-stop, simultaneous time edit, summary recalculation, verification, and amendment tests.
-- [ ] `BE-0454` Add reconciliation tests proving entry, dashboard, report, export, evaluation, and Finance calculations use identical results.
+- [x] `BE-0450` Add boundary tests for 0, 6:59, 7:00, 7:01 active hours and totals of 7:59, 8:00, above 8:00, 12:00, and above 12:00.
+- [x] `BE-0451` Add the cross-division acceptance case of 3 hours PowerInAI, 2 hours Government Projects, 2 hours WesternCF, and a separate 1-hour break.
+- [x] `BE-0452` Add overlap, duplicate, invalid range, inactive project, unassigned division, leave, holiday, half-day, cross-midnight, daylight-saving, and timezone tests.
+- [x] `BE-0453` Add concurrent timer-start, duplicate timer-stop, simultaneous time edit, summary recalculation, verification, and amendment tests.
+- [x] `BE-0454` Add reconciliation tests proving entry, dashboard, report, export, evaluation, and Finance calculations use identical results.
 
 ### Phase 4 Exit Criteria
 
-- [ ] Employee and Team Lead frontend time/remark mock adapters can be replaced without changing approved UI behavior.
-- [ ] Calculation, validation, timer, correction, verification, amendment, and concurrency tests pass.
-- [ ] Daily totals are reproducible from source entries, break, leave/holiday context, timezone, and policy version.
+- [x] Employee and Team Lead frontend time/remark mock adapters can be replaced without changing approved UI behavior.
+- [x] Calculation, validation, timer, correction, verification, amendment, and concurrency tests pass.
+- [x] Daily totals are reproducible from source entries, break, leave/holiday context, timezone, and policy version.
+
+Phase 4 evidence and task-to-deliverable mapping: `docs/backend/phase-4/verification.md`. All 33 numbered tasks are implemented; the prior denominator of 32 was corrected. Frontend service wiring remains scheduled for Phase 9.
 
 ## Phase 5 - HR, Attendance, WFH, Leave, Workload, and Evaluation
 
@@ -804,12 +782,8 @@ A role that has been used cannot simply be deleted. `finance_manager` is recorde
 | Phase 0 - Architecture and Delivery Foundation | Done | 25/25 |
 | Phase 1 - MySQL Schema and Data Foundation | Done | 26/26 |
 | Phase 2 - Authentication, Authorization, and Audit | Done | 23/23 |
-<<<<<<< HEAD
 | Phase 3 - Organization, Projects, and Tasks | Done | 27/27 |
-=======
-| Phase 3 - Organization, Projects, and Tasks | In progress | 20/27 |
->>>>>>> 00d146afb1dc2296921b692b63fc9173664225e3
-| Phase 4 - Timesheet Calculation and Correction | Pending | 0/32 |
+| Phase 4 - Timesheet Calculation and Correction | Done | 33/33 |
 | Phase 5 - HR, Attendance, WFH, Leave, Workload, and Evaluation | Pending | 0/26 |
 | Phase 6 - Reporting, Finance, and Exports | Pending | 0/19 |
 | Phase 7 - Notifications, Documents, Search, and Integrations | Pending | 0/23 |

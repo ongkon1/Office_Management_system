@@ -160,6 +160,9 @@ export interface TaskService {
 /* ------------------------------------------------------------------------- */
 
 export interface TimeEntryInput {
+  /** Persisted timer draft returned by stopTimer; consumed once on save. */
+  readonly draftEntryId?: string;
+  readonly draftVersion?: number;
   readonly employeeId: string;
   readonly workDate: IsoDate;
   readonly divisionId: string;
@@ -196,8 +199,8 @@ export interface TimesheetService {
   }): Promise<Result<readonly DailySummary[]>>;
 
   createEntry(input: TimeEntryInput & IdempotentInput): Promise<Result<TimeEntry>>;
-  updateEntry(id: string, input: TimeEntryInput): Promise<Result<TimeEntry>>;
-  deleteEntry(id: string): Promise<Result<void>>;
+  updateEntry(id: string, input: TimeEntryInput & { readonly expectedVersion?: number }): Promise<Result<TimeEntry>>;
+  deleteEntry(id: string, expectedVersion?: number): Promise<Result<void>>;
   /** Returns an unsaved draft on the target date (`REQ-TIME-007`). */
   copyEntry(input: { sourceEntryId: string; targetDate: IsoDate }): Promise<Result<TimeEntryInput>>;
 
