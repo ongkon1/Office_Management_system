@@ -356,49 +356,51 @@ Phase 4 evidence and task-to-deliverable mapping: `docs/backend/phase-4/verifica
 
 ## Phase 5 - HR, Attendance, WFH, Leave, Workload, and Evaluation
 
+**Implementation:** 26/26 numbered tasks verified. Task evidence and deployment boundaries: `docs/backend/phase-5/verification.md`. Browser cutover remains Backend Phase 9.
+
 ### WFH and Leave
 
-- [ ] `BE-0501` Implement employee WFH request create, update while draft, submit, cancel where allowed, history, and detail queries.
-- [ ] `BE-0502` Implement full-day/half-day, reason, planned tasks, division, availability, attachment, and request-date validation.
-- [ ] `BE-0503` Implement Team Lead approve, reject, and request-information decisions for effective assigned employees.
-- [ ] `BE-0504` Implement HR oversight and override with required reason, audit, and notification.
-- [ ] `BE-0505` Ensure approved WFH changes attendance context but never creates time automatically.
-- [ ] `BE-0506` Implement leave types, balances, request create/update/submit/cancel, Team Lead decision, HR override, and history.
-- [ ] `BE-0507` Implement full-day/half-day requirement adjustment, balance reservation/consumption, overlap checks, and transaction safety.
-- [ ] `BE-0508` Implement company, division-specific, and weekly holiday administration with effective calendars.
+- [x] `BE-0501` Implement employee WFH request create, update while draft, submit, cancel where allowed, history, and detail queries.
+- [x] `BE-0502` Implement full-day/half-day, reason, planned tasks, division, availability, attachment, and request-date validation.
+- [x] `BE-0503` Implement Team Lead approve, reject, and request-information decisions for effective assigned employees.
+- [x] `BE-0504` Implement HR oversight and override with required reason, audit, and notification.
+- [x] `BE-0505` Ensure approved WFH changes attendance context but never creates time automatically.
+- [x] `BE-0506` Implement leave types, balances, request create/update/submit/cancel, Team Lead decision, HR override, and history.
+- [x] `BE-0507` Implement full-day/half-day requirement adjustment, balance reservation/consumption, overlap checks, and transaction safety.
+- [x] `BE-0508` Implement company, division-specific, and weekly holiday administration with effective calendars.
 
 ### Attendance and Missing-Time Processing
 
-- [ ] `BE-0510` Implement authoritative attendance-day derivation from employee schedule, holidays, leave, WFH, duty location, and valid time.
-- [ ] `BE-0511` Distinguish Office, WFH, Official Travel, Field Duty, Training Duty, approved leave, absence, holiday, and missing timesheet.
-- [ ] `BE-0512` Ensure approved full-day leave and holidays do not create missing-timesheet exceptions.
-- [ ] `BE-0513` Implement scheduled daily/monthly missing-time and exception detection with idempotent results.
-- [ ] `BE-0514` Implement HR attendance, leave, WFH, pattern, and exception queries with permission-safe aggregation.
+- [x] `BE-0510` Implement authoritative attendance-day derivation from employee schedule, holidays, leave, WFH, duty location, and valid time.
+- [x] `BE-0511` Distinguish Office, WFH, Official Travel, Field Duty, Training Duty, approved leave, absence, holiday, and missing timesheet.
+- [x] `BE-0512` Ensure approved full-day leave and holidays do not create missing-timesheet exceptions.
+- [x] `BE-0513` Implement scheduled daily/monthly missing-time and exception detection with idempotent results.
+- [x] `BE-0514` Implement HR attendance, leave, WFH, pattern, and exception queries with permission-safe aggregation.
 
 ### Workload Planning
 
-- [ ] `BE-0520` Implement weekly active capacity from effective work policy, leave, and holidays.
-- [ ] `BE-0521` Implement planned division/project allocation, actual time, remaining capacity, and over/under-allocation calculations.
-- [ ] `BE-0522` Keep the default 35 active hours distinct from the 40-hour scheduled week and exclude breaks from task capacity.
-- [ ] `BE-0523` Implement workload warnings, upcoming-deadline queries, and scoped workload-calendar data.
+- [x] `BE-0520` Implement weekly active capacity from effective work policy, leave, and holidays.
+- [x] `BE-0521` Implement planned division/project allocation, actual time, remaining capacity, and over/under-allocation calculations.
+- [x] `BE-0522` Keep the default 35 active hours distinct from the 40-hour scheduled week and exclude breaks from task capacity.
+- [x] `BE-0523` Implement workload warnings, upcoming-deadline queries, and scoped workload-calendar data.
 
 ### Evaluations
 
-- [ ] `BE-0530` Implement evaluation periods for monthly, quarterly, half-yearly, annual, project-based, and probation types.
-- [ ] `BE-0531` Implement eligible employee/reviewer assignment, lifecycle state, due dates, and reminder scheduling.
-- [ ] `BE-0532` Generate factual evaluation inputs from required/active/break/overtime time, missing records, task outcomes, estimates, division/project contribution, WFH, leave, and remarks.
-- [ ] `BE-0533` Implement employee self-evaluation drafts and submissions.
-- [ ] `BE-0534` Implement Team Lead scoring/comments for every required evaluation area.
-- [ ] `BE-0535` Implement versioned default weighting of 30/25/15/10/10/10 and validate that weights total 100 percent.
-- [ ] `BE-0536` Calculate evaluation results without treating hours as the sole performance measure.
-- [ ] `BE-0537` Implement HR review, publication, employee visibility, history, and restrictions on unpublished/private evaluation content.
-- [ ] `BE-0538` Add workflow, permission, effective-date, balance, capacity, weighting, publication, and concurrency tests for all Phase 5 modules.
+- [x] `BE-0530` Implement evaluation periods for monthly, quarterly, half-yearly, annual, project-based, and probation types.
+- [x] `BE-0531` Implement eligible employee/reviewer assignment, lifecycle state, due dates, and reminder scheduling.
+- [x] `BE-0532` Generate factual evaluation inputs from required/active/break/overtime time, missing records, task outcomes, estimates, division/project contribution, WFH, leave, and remarks.
+- [x] `BE-0533` Implement employee self-evaluation drafts and submissions.
+- [x] `BE-0534` Implement Team Lead scoring/comments for every required evaluation area.
+- [x] `BE-0535` Implement versioned default weighting of 30/25/15/10/10/10 and validate that weights total 100 percent.
+- [x] `BE-0536` Calculate evaluation results without treating hours as the sole performance measure.
+- [x] `BE-0537` Implement HR review, publication, employee visibility, history, and restrictions on unpublished/private evaluation content.
+- [x] `BE-0538` Add workflow, permission, effective-date, balance, capacity, weighting, publication, and concurrency tests for all Phase 5 modules.
 
 ### Phase 5 Exit Criteria
 
-- [ ] WFH, leave, attendance, holiday, workload, and evaluation frontend adapters use authoritative services.
-- [ ] Attendance and workload results reconcile to time, assignments, policies, leave, and holidays.
-- [ ] Evaluation facts are reproducible and private/unpublished content is permission-safe.
+- [~] WFH, leave, attendance, holiday, workload, and evaluation frontend adapters use authoritative services. Database-backed adapters are implemented and tested; browser registry cutover and competency-form wiring remain Phase 9.
+- [x] Attendance and workload results reconcile to time, assignments, policies, leave, and holidays.
+- [x] Evaluation facts are reproducible and private/unpublished content is permission-safe.
 
 ## Phase 6 - Reporting, Finance, and Exports
 
@@ -784,7 +786,7 @@ A role that has been used cannot simply be deleted. `finance_manager` is recorde
 | Phase 2 - Authentication, Authorization, and Audit | Done | 23/23 |
 | Phase 3 - Organization, Projects, and Tasks | Done | 27/27 |
 | Phase 4 - Timesheet Calculation and Correction | Done | 33/33 |
-| Phase 5 - HR, Attendance, WFH, Leave, Workload, and Evaluation | Pending | 0/26 |
+| Phase 5 - HR, Attendance, WFH, Leave, Workload, and Evaluation | Implementation done; browser cutover gate pending Phase 9 | 26/26 |
 | Phase 6 - Reporting, Finance, and Exports | Pending | 0/19 |
 | Phase 7 - Notifications, Documents, Search, and Integrations | Pending | 0/23 |
 | Phase 8 - Quality, Performance, Backup, and Security Hardening | Pending | 0/23 |

@@ -2,7 +2,7 @@
 
 Durable context for anyone — human or AI — picking up this codebase. It records what the plan files don't: why things are the way they are, what's decided versus assumed, and the rules that are easy to break by accident.
 
-Last updated: **8 September 2026** (frontend Phase 9 implementation at 13/14 pending stakeholder sign-off; Backend Phase 3 complete).
+Last updated: **10 September 2026** (Backend Phase 5 implementation verified; browser cutover remains Phase 9).
 
 ---
 
@@ -171,7 +171,9 @@ Environment: Windows + WAMP, PowerShell. **Not currently a git repository.**
 | Backend | 1 — MySQL schema and data foundation | Done (26/26) |
 | Backend | 2 — Authentication, authorization, and audit | Done (23/23) |
 | Backend | 3 — Organization, projects, and tasks | Done (27/27) |
-| Backend | 4–9 | Pending |
+| Backend | 4 — Timesheet calculation and correction | Done (33/33) |
+| Backend | 5 — HR workflows | Implementation done (26/26); browser cutover gate pending Phase 9 |
+| Backend | 6–9 | Pending |
 | Backend | 10 — Requisition | Pending (0/20) — new milestone |
 | Backend | 11 — Conveyance | Pending (0/22) — new milestone, depends on 10 |
 
@@ -252,4 +254,4 @@ Later phases harden screens and fixtures around these assumptions, so the cost o
 | Backend Phase 0 | Domain/application/infrastructure/delivery/composition dependency direction | Keeps calculations, authorization and transactions framework-independent and testable |
 | Backend Phase 0 | Drizzle/mysql2, Better Auth, Zod, BullMQ/Redis, private S3, Resend, Node 24 containers and MySQL 8.4 | Satisfies the documented transaction, security, durable-work, protected-file and deployment criteria while keeping providers behind ports |
 
-Backend Phases 0–4 are complete. Phase 3 adds migration `0006`, transaction-aware organization/work repositories and services, protected profile-photo delivery, effective assignment and allocation validation, derived project/task actual time, and append-only employee-task endorsement. Evidence lives in `docs/backend/phase-3/verification.md`. Backend Phase 4 adds authoritative MySQL time entries/timers, shared calculation and UTC validation, transactional summaries/audit/outbox, general remarks, and frozen HR verification/amendment history. All 33 tasks are done; evidence and migration reconciliation notes are in `docs/backend/phase-4/verification.md`. Final checks: 168 backend tests, 409 frontend tests, typecheck/lint/build passing. The local MySQL test runtime is WAMP 9.1; the approved deployment target remains 8.4 LTS. Backend Phase 5 is next; frontend cutover remains Phase 9. Seed identities and organization data are demonstrations, not authoritative production inputs; provider credentials, production domains, capacity sizing, and RTO/RPO remain deployment/business inputs.
+Backend Phases 0–4 are complete. Phase 3 adds migration `0006`, transaction-aware organization/work repositories and services, protected profile-photo delivery, effective assignment and allocation validation, derived project/task actual time, and append-only employee-task endorsement. Evidence lives in `docs/backend/phase-3/verification.md`. Backend Phase 4 adds authoritative MySQL time entries/timers, shared calculation and UTC validation, transactional summaries/audit/outbox, general remarks, and frozen HR verification/amendment history. All 33 tasks are done; evidence and migration reconciliation notes are in `docs/backend/phase-4/verification.md`. Final checks: 168 backend tests, 409 frontend tests, typecheck/lint/build passing. The local MySQL test runtime is WAMP 9.1; the approved deployment target remains 8.4 LTS. Backend Phase 5 now implements all 26 numbered tasks: authoritative HR requests, attendance, holidays, workload and evaluations, migration 0009 and durable scheduled jobs. Evidence: `docs/backend/phase-5/verification.md`. Backend tests pass 195/195. Browser cutover remains Phase 9, including wiring `EvaluationScore.competencies` into the review form; submission requires all nine qualitative competencies beneath the six weighted groups. Production policies and live Redis worker setup remain deployment inputs. Seed identities and organization data are demonstrations, not authoritative production inputs; provider credentials, production domains, capacity sizing, and RTO/RPO remain deployment/business inputs.

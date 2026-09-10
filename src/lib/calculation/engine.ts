@@ -165,7 +165,7 @@ function deriveAttendance(input: {
   if (leave?.portion === 'full_day') return 'approved_leave';
 
   if (!hasEntries) {
-    return leave?.portion === 'half_day' ? 'half_day_leave' : 'missing_timesheet';
+    return leave?.portion === 'half_day' ? 'half_day_leave' : approvedWfh ? 'wfh' : 'missing_timesheet';
   }
 
   if (leave?.portion === 'half_day') return 'half_day_leave';

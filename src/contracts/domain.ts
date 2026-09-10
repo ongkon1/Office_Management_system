@@ -256,6 +256,8 @@ export interface WorkPolicy extends AuditableRecord {
 export type HolidayScope = 'company' | 'division' | 'weekly';
 
 export interface Holiday extends AuditableRecord {
+  readonly effectiveFrom?: IsoDate;
+  readonly effectiveTo?: IsoDate | null;
   readonly id: string;
   readonly name: string;
   readonly scope: HolidayScope;
@@ -577,6 +579,7 @@ export type RequestWorkflowState =
 export type DayPortion = 'full_day' | 'half_day';
 
 export interface WfhRequest extends AuditableRecord {
+  readonly version?: number;
   readonly id: string;
   readonly employeeId: string;
   readonly requestDate: IsoDate;
@@ -586,7 +589,7 @@ export interface WfhRequest extends AuditableRecord {
   readonly plannedTasks: string;
   readonly divisionId: string;
   readonly contactAvailability: string;
-  readonly attachmentIds: readonly string[];
+  readonly attachmentIds: readonly string[] | 'restricted';
   readonly state: RequestWorkflowState;
   readonly decision: RequestDecision | null;
 }
@@ -624,6 +627,7 @@ export interface LeaveBalance {
 }
 
 export interface LeaveRequest extends AuditableRecord {
+  readonly version?: number;
   readonly id: string;
   readonly employeeId: string;
   readonly leaveType: LeaveTypeKey;
@@ -632,7 +636,7 @@ export interface LeaveRequest extends AuditableRecord {
   readonly portion: DayPortion;
   readonly totalDays: number;
   readonly reason: string;
-  readonly attachmentIds: readonly string[];
+  readonly attachmentIds: readonly string[] | 'restricted';
   readonly state: RequestWorkflowState;
   readonly decision: RequestDecision | null;
 }
@@ -707,8 +711,12 @@ export interface EvaluationWeighting {
   readonly weights: Readonly<Record<EvaluationAreaKey, number>>;
 }
 
+/** Qualitative coverage required by REQ-EVAL-004, grouped under the six weighted areas. */
+export type EvaluationCompetencyKey = 'work_quality' | 'timeliness' | 'responsibility' | 'communication' | 'teamwork' | 'problem_solving' | 'initiative' | 'documentation' | 'learning_improvement';
+
 export interface EvaluationScore {
   readonly area: EvaluationAreaKey;
+  readonly competencies?: readonly { readonly area: EvaluationCompetencyKey; readonly score: number; readonly comment: string }[];
   /** 1-5. */
   readonly score: number;
   readonly comment: string | null;
@@ -734,6 +742,7 @@ export interface EvaluationFacts {
 }
 
 export interface Evaluation extends AuditableRecord {
+  readonly version?: number;
   readonly id: string;
   readonly periodId: string;
   readonly employeeId: string;
@@ -921,3 +930,11 @@ export interface AuditEvent {
   readonly before: Redactable<Readonly<Record<string, unknown>>> | null;
   readonly after: Redactable<Readonly<Record<string, unknown>>> | null;
 }
+
+/** A self-service draft does not disclose unpublished reviewer content. */
+export type EvaluationRead = Omit<Evaluation, 'reviewerScores' | 'reviewerSummary' | 'weightedScore' | 'selfEvaluation'> & {
+  readonly reviewerScores: readonly EvaluationScore[] | 'restricted';
+  readonly reviewerSummary: string | null | 'restricted';
+  readonly weightedScore: number | null | 'restricted';
+  readonly selfEvaluation: SelfEvaluation | null | 'restricted';
+};

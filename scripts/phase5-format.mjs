@@ -1,0 +1,4 @@
+import fs from 'node:fs';
+import ts from 'typescript';
+const paths=fs.readdirSync('src/server/hr').filter(p=>p.endsWith('.ts')).map(p=>'src/server/hr/'+p).concat(['src/app/api/hr/route.ts']);
+for(const path of paths){const source=ts.createSourceFile(path,fs.readFileSync(path,'utf8'),ts.ScriptTarget.Latest,true,ts.ScriptKind.TS);const result=ts.transform(source,[context=>root=>{function visit(node){node=ts.visitEachChild(node,visit,context);if(ts.isBlock(node))return ts.factory.createBlock(node.statements,true);if(ts.isObjectLiteralExpression(node)&&node.properties.length>3)return ts.factory.createObjectLiteralExpression(node.properties,true);return node;}return ts.visitNode(root,visit);}]);fs.writeFileSync(path,ts.createPrinter({newLine:ts.NewLineKind.LineFeed}).printFile(result.transformed[0]));result.dispose();}

@@ -25,7 +25,6 @@ import type {
   DurationMinutes,
   Employee,
   EmployeeDivisionAssignment,
-  Evaluation,
   EvaluationPeriod,
   EvaluationScore,
   ExportFormat,
@@ -299,6 +298,7 @@ export interface LeaveService {
     reason: string;
     attachmentIds: readonly string[];
   }): Promise<Result<LeaveRequest>>;
+  update(id: string, input: Partial<LeaveRequest>): Promise<Result<LeaveRequest>>;
   submit(id: string): Promise<Result<LeaveRequest>>;
   cancel(id: string): Promise<Result<LeaveRequest>>;
   decide(input: {
@@ -340,17 +340,18 @@ export interface EvaluationService {
   createPeriod(
     input: Omit<EvaluationPeriod, 'id' | 'createdAt' | 'createdBy' | 'updatedAt' | 'updatedBy'>,
   ): Promise<Result<EvaluationPeriod>>;
-  listEvaluations(query: ListQuery): Promise<Result<Paginated<Evaluation>>>;
-  getById(id: string): Promise<Result<Evaluation>>;
-  saveSelfEvaluation(input: { id: string; selfEvaluation: SelfEvaluation }): Promise<Result<Evaluation>>;
-  submitSelfEvaluation(input: { id: string }): Promise<Result<Evaluation>>;
+  listEvaluations(query: ListQuery): Promise<Result<Paginated<import('./domain').EvaluationRead>>>;
+  getById(id: string): Promise<Result<import('./domain').EvaluationRead>>;
+  saveSelfEvaluation(input: { id: string; selfEvaluation: SelfEvaluation; expectedVersion?: number }): Promise<Result<import('./domain').EvaluationRead>>;
+  submitSelfEvaluation(input: { id: string }): Promise<Result<import('./domain').EvaluationRead>>;
   saveReviewerScores(input: {
     id: string;
+    expectedVersion?: number;
     scores: readonly EvaluationScore[];
     summary: string | null;
-  }): Promise<Result<Evaluation>>;
-  submitReview(input: { id: string }): Promise<Result<Evaluation>>;
-  publish(input: { id: string }): Promise<Result<Evaluation>>;
+  }): Promise<Result<import('./domain').EvaluationRead>>;
+  submitReview(input: { id: string }): Promise<Result<import('./domain').EvaluationRead>>;
+  publish(input: { id: string }): Promise<Result<import('./domain').EvaluationRead>>;
 }
 
 /* ------------------------------------------------------------------------- */
