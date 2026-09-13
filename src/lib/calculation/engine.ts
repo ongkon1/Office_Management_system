@@ -368,3 +368,16 @@ export function aggregateSummaries(
     missingDayCount: countOf('missing'),
   };
 }
+
+/** Allocate a day's separate minutes once across its active contribution rows. */
+export function allocateMinutes(minutes: number, weights: readonly number[]): readonly number[] {
+  if (!Number.isSafeInteger(minutes) || minutes < 0 || weights.some(w => !Number.isSafeInteger(w) || w < 0)) throw new Error('Invalid minute allocation');
+  const total = weights.reduce((n, w) => n + w, 0);
+  if (!weights.length) return [];
+  if (!total) return weights.map((_, i) => i === 0 ? minutes : 0);
+  const shares = weights.map(w => Math.floor(minutes * w / total));
+  const order = weights.map((w, i) => ({ i, remainder: minutes * w % total })).sort((a, b) => b.remainder - a.remainder || a.i - b.i);
+  const remaining = minutes - shares.reduce((n, v) => n + v, 0);
+  for (let i = 0; i < remaining; i++) shares[order[i].i]++;
+  return shares;
+}

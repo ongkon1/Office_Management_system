@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { parseIsoDate } from '@/lib/format';
 import type { Failure } from '@/contracts/results';
-export const dateSchema = z.string().refine((value) => Boolean(parseIsoDate(value)), 'Enter a valid calendar date.');
+export const dateSchema = z.string().refine((value) => Boolean(parseIsoDate(value)) && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(`${value}T00:00:00Z`)) && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value, 'Enter a valid calendar date.');
 const id = z.string().min(1).max(36);
 export const timerInputSchema = z.object({
     divisionId: id, projectId: id.nullable(), taskId: id.nullable(),

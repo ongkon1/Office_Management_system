@@ -404,39 +404,41 @@ Phase 4 evidence and task-to-deliverable mapping: `docs/backend/phase-4/verifica
 
 ## Phase 6 - Reporting, Finance, and Exports
 
+**Implementation evidence:** [Phase 6 verification and operational handoff](docs/backend/phase-6/verification.md). All 19 numbered tasks are implemented and verified; browser registry cutover remains Phase 9.
+
 ### Reporting Foundation
 
-- [ ] `BE-0601` Implement a permission-aware report query layer that reuses authoritative calculation and authorization services.
-- [ ] `BE-0602` Implement validated filters for date/period, employee, division, project, task, Team Lead, employment type, work location, WFH/Office, overtime, and status.
-- [ ] `BE-0603` Implement daily, weekly, monthly, employee, division, project, task, overtime, under-time, missing, critical, and WFH reports.
-- [ ] `BE-0604` Implement HR attendance, leave, WFH, evaluation, performance history, workload, assignment, and remark reports.
-- [ ] `BE-0605` Implement pagination, stable sorting, grouping, totals, timezone, applied-policy version, and generated-at metadata.
-- [ ] `BE-0606` Prevent aggregates, counts, filters, and empty groups from revealing unauthorized records.
+- [x] `BE-0601` Implement a permission-aware report query layer that reuses authoritative calculation and authorization services.
+- [x] `BE-0602` Implement validated filters for date/period, employee, division, project, task, Team Lead, employment type, work location, WFH/Office, overtime, and status.
+- [x] `BE-0603` Implement daily, weekly, monthly, employee, division, project, task, overtime, under-time, missing, critical, and WFH reports.
+- [x] `BE-0604` Implement HR attendance, leave, WFH, evaluation, performance history, workload, assignment, and remark reports.
+- [x] `BE-0605` Implement pagination, stable sorting, grouping, totals, timezone, applied-policy version, and generated-at metadata.
+- [x] `BE-0606` Prevent aggregates, counts, filters, and empty groups from revealing unauthorized records.
 
 ### Finance
 
-- [ ] `BE-0610` Implement effective-dated employee/project cost rates with currency and separately protected access.
-- [ ] `BE-0611` Implement billable/non-billable classification and reconciliation to verified active hours.
-- [ ] `BE-0612` Implement employee, overtime, project, division, labour-cost, payroll-period, and budget-versus-actual reports.
-- [ ] `BE-0613` Default Finance reporting to HR-verified periods and clearly flag explicitly authorized unverified data.
-- [ ] `BE-0614` Implement payroll-ready data mapping with configurable approved fields and no implicit external payroll submission.
-- [ ] `BE-0615` Ensure salary, rate, budget, labour-cost, and payroll fields are omitted without the required financial permission.
+- [x] `BE-0610` Implement effective-dated employee/project cost rates with currency and separately protected access.
+- [x] `BE-0611` Implement billable/non-billable classification and reconciliation to verified active hours.
+- [x] `BE-0612` Implement employee, overtime, project, division, labour-cost, payroll-period, and budget-versus-actual reports.
+- [x] `BE-0613` Default Finance reporting to HR-verified periods and clearly flag explicitly authorized unverified data.
+- [x] `BE-0614` Implement payroll-ready data mapping with configurable approved fields and no implicit external payroll submission.
+- [x] `BE-0615` Ensure salary, rate, budget, labour-cost, and payroll fields are omitted without the required financial permission.
 
 ### Export Processing
 
-- [ ] `BE-0620` Implement durable asynchronous export jobs for Excel, CSV, and PDF plus a server-renderable print dataset.
-- [ ] `BE-0621` Capture requester, permission snapshot or revalidation strategy, filters, timezone, policy version, format, status, and timestamps.
-- [ ] `BE-0622` Generate exports with bounded memory, safe temporary storage, formula-injection protection, and consistent formatting.
-- [ ] `BE-0623` Store export artifacts with protected, expiring access and recheck authorization at download time.
-- [ ] `BE-0624` Implement queued, processing, ready, expired, cancelled, and failed states with idempotent retry.
-- [ ] `BE-0625` Audit export request, completion, failure, download, expiry, and deletion events.
-- [ ] `BE-0626` Add reconciliation, permission, large-data, injection, expiration, retry, and format-content tests.
+- [x] `BE-0620` Implement durable asynchronous export jobs for Excel, CSV, and PDF plus a server-renderable print dataset.
+- [x] `BE-0621` Capture requester, permission snapshot or revalidation strategy, filters, timezone, policy version, format, status, and timestamps.
+- [x] `BE-0622` Generate exports with bounded memory, safe temporary storage, formula-injection protection, and consistent formatting.
+- [x] `BE-0623` Store export artifacts with protected, expiring access and recheck authorization at download time.
+- [x] `BE-0624` Implement queued, processing, ready, expired, cancelled, and failed states with idempotent retry.
+- [x] `BE-0625` Audit export request, completion, failure, download, expiry, and deletion events.
+- [x] `BE-0626` Add reconciliation, permission, large-data, injection, expiration, retry, and format-content tests.
 
 ### Phase 6 Exit Criteria
 
-- [ ] Report and Finance frontend mock adapters are replaced by permission-safe services.
-- [ ] Report totals reconcile across grouping dimensions and to verified source records.
-- [ ] Excel, CSV, PDF, and print data are generated asynchronously or safely, audited, and access-controlled.
+- [~] Report and Finance frontend mock adapters are replaced by permission-safe services. — Database-backed contract adapters and API are verified; browser registry cutover is tracked in Phase 9, consistent with Phases 4/5.
+- [x] Report totals reconcile across grouping dimensions and to verified source records.
+- [x] Excel, CSV, PDF, and print data are generated asynchronously or safely, audited, and access-controlled. — Real format and database lifecycle tests pass; production Redis/S3 configuration is a deployment prerequisite.
 
 ## Phase 7 - Notifications, Documents, Search, and Integrations
 
@@ -787,7 +789,7 @@ A role that has been used cannot simply be deleted. `finance_manager` is recorde
 | Phase 3 - Organization, Projects, and Tasks | Done | 27/27 |
 | Phase 4 - Timesheet Calculation and Correction | Done | 33/33 |
 | Phase 5 - HR, Attendance, WFH, Leave, Workload, and Evaluation | Implementation done; browser cutover gate pending Phase 9 | 26/26 |
-| Phase 6 - Reporting, Finance, and Exports | Pending | 0/19 |
+| Phase 6 - Reporting, Finance, and Exports | Implementation done; browser cutover gate pending Phase 9 | 19/19 |
 | Phase 7 - Notifications, Documents, Search, and Integrations | Pending | 0/23 |
 | Phase 8 - Quality, Performance, Backup, and Security Hardening | Pending | 0/23 |
 | Phase 9 - Production Readiness and Frontend Cutover | Pending | 0/18 |
