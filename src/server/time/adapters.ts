@@ -2,7 +2,7 @@ import type { DailySummary, TimeEntry } from '@/contracts/domain';
 import type { ListQuery, Paginated } from '@/contracts/query';
 import type { Result } from '@/contracts/results';
 import { success } from '@/contracts/results';
-import type { TimesheetService, PeriodService, RemarkService, TimeEntryInput } from '@/contracts/services';
+import type { PeriodService, RemarkService, TimeEntryInput } from '@/contracts/services';
 import type { TimesheetDayView, TimesheetDayRowView, PeriodTotalsView } from '@/contracts/view-models';
 import { aggregateSummaries, requiresCriticalExplanation, requiresOvertimeReason } from '@/lib/calculation/engine';
 import { localParts } from '@/lib/calculation/instants';
@@ -23,7 +23,8 @@ export function paginate<T>(items: readonly T[], query: ListQuery): Result<Pagin
 }
 function totals(label: string, days: readonly DailySummary[]): PeriodTotalsView { const t = aggregateSummaries(days); return { label, active: toDurationView(t.activeMinutes), break: toDurationView(t.breakMinutes), total: toDurationView(t.totalMinutes), overtime: toDurationView(t.overtimeMinutes), requiredActive: toDurationView(t.requiredActiveMinutes), completeDayCount: t.completeDayCount, underTimeDayCount: t.underTimeDayCount, overtimeDayCount: t.overtimeDayCount, criticalDayCount: t.criticalDayCount, missingDayCount: t.missingDayCount }; }
 function row(s: DailySummary, c: DayContext): TimesheetDayRowView { return { date: s.workDate, dateLabel: formatDate(s.workDate), weekdayLabel: formatDateWithWeekday(s.workDate).slice(0, 3), active: toDurationView(s.activeMinutes), break: toDurationView(s.breakMinutes), total: toDurationView(s.totalMinutes), status: toDayStatusView(s.status), attendance: s.attendance, attendanceLabel: s.attendance, divisionCodes: s.divisionContributions.map((d) => c.divisions.find((v) => v.id === d.divisionId)?.code ?? 'Restricted'), clientContributions: toClientContributions(s.activeMinutes, s.projectContributions.map((p) => ({ clientId: c.projects.find((v) => v.id === p.projectId)?.client ?? null, activeMinutes: p.activeMinutes }))), isLocked: s.isLocked, href: `/timesheets/${s.workDate}` }; }
-export class BackendTimesheetService implements TimesheetService {
+/** Legacy backend adapter retained until Modify Phase B2 implements WorkLog services. */
+export class BackendTimesheetService {
     constructor(readonly application: TimeApplication) { }
     async getDay(input: {
         employeeId: string;

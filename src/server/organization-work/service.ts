@@ -130,7 +130,7 @@ export class OrganizationWorkService {
 
   async validateTaskForTime(taskId:string):Promise<Result<void>>{
     const task=await this.repository.getTask(taskId);
-    if(!task||!task.isActive||!taskAcceptsTime(task.reviewState)) return validation('taskId','TASK_NOT_APPROVED','This task cannot receive time yet.','Choose an approved active task or ask the Team Lead to review it.');
+    if(!task||!task.isActive||!taskAcceptsTime(task)) return validation('taskId','TASK_NOT_AVAILABLE_FOR_WORK','This task cannot receive work yet.','Start an approved active task, or ask the Team Lead to review or reopen it.');
     const project=await this.repository.getProject(task.projectId);
     if(!project||!project.isActive||!project.acceptsTime) return validation('projectId','PROJECT_NOT_ACTIVE','The project is not accepting time.','Choose an active project.');
     return success(undefined);

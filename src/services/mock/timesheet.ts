@@ -9,11 +9,15 @@
 import type {
   DailySummary,
   IsoDate,
+  Task,
   TimeEntry,
   TimerSession,
 } from '@/contracts/domain';
-import type { DateRange } from '@/contracts/query';
-import { success } from '@/contracts/results';
+import { canTransition, transitionRequiresNote } from '@/contracts/task-transition';
+import type { TaskStatusTransition } from '@/contracts/task-transition';
+import type { WorkLog, WorkLogInput } from '@/contracts/work-log';
+import type { DateRange, ListQuery, Paginated } from '@/contracts/query';
+import { success, type Result } from '@/contracts/results';
 import type {
   StartTimerInput,
   TimeEntryInput,
@@ -30,6 +34,7 @@ import type {
 import { calculateDay, aggregateSummaries } from '@/lib/calculation/engine';
 import {
   validateEntry,
+  validateWorkLog,
   draftMinutes,
   type EntryDraft,
 } from '@/lib/calculation/validation';
@@ -38,6 +43,7 @@ import {
   daysBetween,
   formatDate,
   formatDateWithWeekday,
+  formatDurationDelta,
   formatTimeRange,
 } from '@/lib/format';
 import { toDayStatusView, toDurationView, WORK_LOCATION_LABEL } from '@/lib/status';
@@ -49,7 +55,7 @@ import {
 } from '@/fixtures';
 import { DIVISIONS } from './accounts';
 import { mockStore } from './store';
-import { effectiveDivisionIds } from './organization';
+import { effectiveDivisionIds, projectById } from './organization';
 
 const LATENCY_MS = 220;
 
@@ -421,8 +427,105 @@ function toStoredEntry(input: TimeEntryInput, id: string): TimeEntry {
 
 /** Idempotency keys already applied, so a retry cannot duplicate time. */
 const appliedKeys = new Map<string, string>();
+const workLogMetadata = new Map<string, Pick<WorkLogInput, 'source' | 'idempotencyKey'>>();
+const taskTransitions: TaskStatusTransition[] = [];
+const transitionKeys = new Map<string, string>();
 
-export const mockTimesheetService: TimesheetService = {
+/** Temporary concrete-method compatibility for the pre-F3 screens. */
+interface LegacyTimesheetCompatibility {
+  listEntries(query: ListQuery): Promise<Result<Paginated<TimeEntry>>>;
+  createEntry(input: TimeEntryInput & { readonly idempotencyKey: string }): Promise<Result<TimeEntry>>;
+  updateEntry(id: string, input: TimeEntryInput & { readonly expectedVersion?: number }): Promise<Result<TimeEntry>>;
+  deleteEntry(id: string): Promise<Result<void>>;
+  copyEntry(input: { readonly sourceEntryId: string; readonly targetDate: IsoDate }): Promise<Result<TimeEntryInput>>;
+  previewCalculation(input: TimeEntryInput): Promise<Result<EntryCalculationPreview>>;
+  getRunningTimer(): Promise<Result<TimerSession | null>>;
+  startTimer(input: StartTimerInput & { readonly idempotencyKey: string }): Promise<Result<TimerSession>>;
+  stopTimer(input: { readonly sessionId: string; readonly idempotencyKey: string }): Promise<Result<TimeEntryInput>>;
+  cancelTimer(input: { readonly sessionId: string }): Promise<Result<void>>;
+}
+
+function entryAsWorkLog(entry: TimeEntry): WorkLog | null {
+  if (!entry.projectId || !entry.taskId || entry.startTime || entry.endTime) return null;
+  const metadata = workLogMetadata.get(entry.id);
+  return {
+    id: entry.id,
+    version: entry.version,
+    employeeId: entry.employeeId,
+    workDate: entry.workDate,
+    divisionId: entry.divisionId,
+    projectId: entry.projectId,
+    taskId: entry.taskId,
+    durationMinutes: entry.activeMinutes,
+    workLocation: entry.workLocation,
+    workDescription: entry.workDescription,
+    completedWork: entry.completedWork,
+    supportingLink: entry.supportingLink,
+    attachmentIds: entry.attachmentIds === 'restricted' ? [] : entry.attachmentIds,
+    overtimeReason: mockStore.dayReason(entry.employeeId, entry.workDate).overtimeReason ?? null,
+    criticalExplanation: mockStore.dayReason(entry.employeeId, entry.workDate).criticalExplanation ?? null,
+    source: metadata?.source ?? (entry.entryMethod === 'imported' ? 'imported' : 'migrated_clock_entry'),
+    idempotencyKey: metadata?.idempotencyKey ?? `legacy:${entry.id}`,
+    state: entry.state,
+    policyVersion: entry.policyVersion,
+    createdAt: entry.createdAt,
+    createdBy: entry.createdBy,
+    updatedAt: entry.updatedAt,
+    updatedBy: entry.updatedBy,
+  };
+}
+
+function workLogValidationContext(input: WorkLogInput, excludeWorkLogId?: string) {
+  const dayEntries = mockStore.entriesFor(input.employeeId, input.workDate);
+  const divisions = effectiveDivisionIds(input.employeeId, input.workDate);
+  const leave = mockStore.approvedLeaveOn(input.employeeId, input.workDate);
+  return {
+    policy: STANDARD_POLICY,
+    existingWorkLogs: dayEntries
+      .map(entryAsWorkLog)
+      .filter((item): item is WorkLog => item !== null),
+    historicalEntries: dayEntries.filter((entry) => Boolean(entry.startTime && entry.endTime)),
+    effectiveDivisionIds: divisions,
+    projects: PROJECTS,
+    tasks: mockStore.tasks(),
+    leave: leave ? { portion: leave.portion, leaveType: leave.leaveType } : null,
+    holidayName: holidayOn(input.workDate, divisions),
+    isPeriodLocked: mockStore.isDateLocked(input.workDate),
+    breakOverrideMinutes: mockStore.breakOverride(input.employeeId, input.workDate),
+    excludeWorkLogId,
+  };
+}
+
+function toStoredWorkLogEntry(input: WorkLogInput, id: string): TimeEntry {
+  const actor = { userId: 'usr-mock', displayName: 'You' };
+  const stamp = new Date().toISOString();
+  return {
+    id,
+    employeeId: input.employeeId,
+    workDate: input.workDate,
+    divisionId: input.divisionId,
+    projectId: input.projectId,
+    taskId: input.taskId,
+    entryMethod: input.source === 'imported' ? 'imported' : 'manual_duration',
+    workLocation: input.workLocation,
+    startTime: null,
+    endTime: null,
+    activeMinutes: input.durationMinutes,
+    workDescription: input.workDescription,
+    completedWork: input.completedWork,
+    supportingLink: input.supportingLink,
+    attachmentIds: input.attachmentIds,
+    state: 'saved',
+    crossMidnightGroupId: null,
+    policyVersion: STANDARD_POLICY.version,
+    createdAt: stamp,
+    createdBy: actor,
+    updatedAt: stamp,
+    updatedBy: actor,
+  };
+}
+
+const mockTimesheetServiceImpl = {
   async getDay({ employeeId, date }) {
     await delay();
     return success(buildDayView(employeeId, date));
@@ -455,6 +558,30 @@ export const mockTimesheetService: TimesheetService = {
     return success(view);
   },
 
+  async listWorkLogs(query) {
+    await delay();
+    const employeeId = query.filters?.employeeIds?.[0];
+    const range = query.filters?.dateRange;
+    const entries =
+      employeeId && range
+        ? mockStore.entriesBetween(employeeId, range.from, range.to)
+        : [...mockStore.allEntries()];
+    const items = entries
+      .map(entryAsWorkLog)
+      .filter((item): item is WorkLog => item !== null);
+    return success({
+      items,
+      pageInfo: {
+        page: 1,
+        pageSize: items.length || 1,
+        totalItems: items.length,
+        totalPages: 1,
+        hasPreviousPage: false,
+        hasNextPage: false,
+      },
+    });
+  },
+
   async listEntries(query) {
     await delay();
     const employeeId = query.filters?.employeeIds?.[0];
@@ -480,6 +607,277 @@ export const mockTimesheetService: TimesheetService = {
   async getDailySummaries({ employeeId, range }) {
     await delay();
     return success(rangeSummaries(employeeId, range.from, range.to));
+  },
+
+  async createWorkLog(input: WorkLogInput) {
+    await delay();
+    const previousId = appliedKeys.get(input.idempotencyKey);
+    if (previousId) {
+      const previous = mockStore.findEntry(previousId);
+      const workLog = previous ? entryAsWorkLog(previous) : null;
+      if (workLog) return success(workLog);
+    }
+
+    const errors = validateWorkLog(input, workLogValidationContext(input));
+    if (errors.length) {
+      return {
+        status: 'validation_failure' as const,
+        code: 'VALIDATION_FAILED' as const,
+        message: errors.length === 1 ? 'This work log cannot be saved yet.' : `${errors.length} fields need attention.`,
+        fieldErrors: errors,
+        focusField: errors[0].field,
+      };
+    }
+
+    const id = nextId('wl');
+    const entry = toStoredWorkLogEntry(input, id);
+    mockStore.addEntry(entry);
+    workLogMetadata.set(id, { source: input.source, idempotencyKey: input.idempotencyKey });
+    appliedKeys.set(input.idempotencyKey, id);
+    if (input.overtimeReason || input.criticalExplanation) {
+      mockStore.setDayReason(input.employeeId, input.workDate, {
+        overtimeReason: input.overtimeReason ?? undefined,
+        criticalExplanation: input.criticalExplanation ?? undefined,
+      });
+    }
+    return success(entryAsWorkLog(entry)!);
+  },
+
+  async updateWorkLog(
+    id: string,
+    input: WorkLogInput & { readonly expectedVersion?: number },
+  ) {
+    await delay();
+    const existingEntry = mockStore.findEntry(id);
+    const existing = existingEntry ? entryAsWorkLog(existingEntry) : null;
+    if (!existing || !existingEntry) {
+      return { status: 'not_found' as const, code: 'NOT_FOUND' as const, message: 'That work log no longer exists.' };
+    }
+    if (mockStore.isDateLocked(existing.workDate)) {
+      return {
+        status: 'conflict' as const,
+        code: 'PERIOD_LOCKED' as const,
+        message: 'This period has been verified and is locked.',
+        guidance: 'Request an amendment with a reason instead of editing directly.',
+      };
+    }
+    if (
+      input.expectedVersion !== undefined &&
+      existing.version !== undefined &&
+      input.expectedVersion !== existing.version
+    ) {
+      return {
+        status: 'conflict' as const,
+        code: 'CONFLICT' as const,
+        message: 'This work log changed after you opened it.',
+        guidance: 'Reload it and apply your changes to the latest version.',
+      };
+    }
+    const errors = validateWorkLog(input, workLogValidationContext(input, id));
+    if (errors.length) {
+      return {
+        status: 'validation_failure' as const,
+        code: 'VALIDATION_FAILED' as const,
+        message: errors.length === 1 ? 'This work log cannot be saved yet.' : `${errors.length} fields need attention.`,
+        fieldErrors: errors,
+        focusField: errors[0].field,
+      };
+    }
+    const nextEntry: TimeEntry = {
+      ...toStoredWorkLogEntry(input, id),
+      version: (existing.version ?? 0) + 1,
+      createdAt: existing.createdAt,
+      createdBy: existing.createdBy,
+    };
+    mockStore.updateEntry(id, nextEntry);
+    workLogMetadata.set(id, { source: input.source, idempotencyKey: input.idempotencyKey });
+    return success(entryAsWorkLog(nextEntry)!);
+  },
+
+  async deleteWorkLog(id: string) {
+    await delay();
+    const entry = mockStore.findEntry(id);
+    if (!entry || !entryAsWorkLog(entry)) {
+      return { status: 'not_found' as const, code: 'NOT_FOUND' as const, message: 'That work log no longer exists.' };
+    }
+    if (mockStore.isDateLocked(entry.workDate)) {
+      return {
+        status: 'conflict' as const,
+        code: 'PERIOD_LOCKED' as const,
+        message: 'This period has been verified and is locked.',
+        guidance: 'Request an amendment with a reason instead of deleting.',
+      };
+    }
+    mockStore.removeEntry(id);
+    workLogMetadata.delete(id);
+    return success(undefined);
+  },
+
+  async copyWorkLog({ sourceWorkLogId, targetDate }: { sourceWorkLogId: string; targetDate: IsoDate }) {
+    await delay();
+    const entry = mockStore.findEntry(sourceWorkLogId);
+    const source = entry ? entryAsWorkLog(entry) : null;
+    if (!source) {
+      return { status: 'not_found' as const, code: 'NOT_FOUND' as const, message: 'That work log no longer exists.' };
+    }
+    const draft: Omit<WorkLogInput, 'idempotencyKey'> = {
+      employeeId: source.employeeId,
+      workDate: targetDate,
+      divisionId: source.divisionId,
+      projectId: source.projectId,
+      taskId: source.taskId,
+      durationMinutes: source.durationMinutes,
+      workLocation: source.workLocation,
+      workDescription: source.workDescription,
+      completedWork: '',
+      supportingLink: null,
+      attachmentIds: [],
+      overtimeReason: source.overtimeReason,
+      criticalExplanation: source.criticalExplanation,
+      source: 'manual',
+    };
+    return success(draft);
+  },
+
+  async previewWorkLog(input: WorkLogInput) {
+    await delay(80);
+    const context = workLogValidationContext(input);
+    const actor = { userId: 'preview', displayName: 'Preview' };
+    const stamp = `${input.workDate}T00:00:00+06:00`;
+    const candidate: WorkLog = {
+      ...input,
+      id: 'preview',
+      state: 'saved',
+      policyVersion: STANDARD_POLICY.version,
+      createdAt: stamp,
+      createdBy: actor,
+      updatedAt: stamp,
+      updatedBy: actor,
+    };
+    const projected = calculateDay({
+      employeeId: input.employeeId,
+      workDate: input.workDate,
+      workLogs: [...context.existingWorkLogs.filter((item) => item.state !== 'draft'), candidate],
+      historicalEntries: context.historicalEntries,
+      policy: STANDARD_POLICY,
+      breakOverrideMinutes: context.breakOverrideMinutes,
+      leave: context.leave,
+      holidayName: context.holidayName,
+    });
+    return success({
+      entryDuration: toDurationView(input.durationMinutes),
+      dayActive: toDurationView(projected.activeMinutes),
+      dayBreak: toDurationView(projected.breakMinutes),
+      dayTotal: toDurationView(projected.totalMinutes),
+      remainingActive: toDurationView(projected.remainingActiveMinutes),
+      resultingStatus: toDayStatusView(projected.status),
+      requiresOvertimeReason: projected.totalMinutes > STANDARD_POLICY.overtimeThresholdMinutes,
+      requiresCriticalExplanation: projected.totalMinutes > STANDARD_POLICY.criticalThresholdMinutes,
+    });
+  },
+
+  async transitionTask(input) {
+    await delay();
+    const replayId = transitionKeys.get(input.idempotencyKey);
+    if (replayId) {
+      const replay = taskTransitions.find((item) => item.id === replayId);
+      if (replay) return success(replay);
+    }
+    const task = mockStore.findTask(input.taskId);
+    if (!task) {
+      return { status: 'not_found' as const, code: 'NOT_FOUND' as const, message: 'That task was not found.' };
+    }
+    if (task.status !== input.fromStatus || !canTransition(input.fromStatus, input.toStatus, input.actorRole)) {
+      return {
+        status: 'conflict' as const,
+        code: 'CONFLICT' as const,
+        message: 'The task can no longer make that move.',
+        guidance: 'Reload the task and choose an action available for its current status.',
+      };
+    }
+    if (transitionRequiresNote(input.fromStatus, input.toStatus) && !input.note?.trim()) {
+      return {
+        status: 'validation_failure' as const,
+        code: 'VALIDATION_FAILED' as const,
+        message: 'A reason is required for this task move.',
+        fieldErrors: [{ field: 'note', code: 'TRANSITION_NOTE_REQUIRED', message: 'A reason is required.', guidance: 'Explain why this task is being reopened or completed directly.' }],
+        focusField: 'note',
+      };
+    }
+    const stamp = new Date().toISOString();
+    const transition: TaskStatusTransition = {
+      id: nextId('trn'),
+      taskId: task.id,
+      fromStatus: input.fromStatus,
+      toStatus: input.toStatus,
+      actor: { userId: 'usr-mock', displayName: 'You' },
+      actorRole: input.actorRole,
+      changedAt: stamp,
+      note: input.note?.trim() || null,
+      idempotencyKey: input.idempotencyKey,
+    };
+    taskTransitions.push(transition);
+    transitionKeys.set(input.idempotencyKey, transition.id);
+    mockStore.updateTask(task.id, {
+      ...task,
+      status: input.toStatus,
+      completedDate: input.toStatus === 'completed' ? DEMO_TODAY : null,
+      updatedAt: stamp,
+      updatedBy: transition.actor,
+    } as Task & typeof task);
+    return success(transition);
+  },
+
+  async getTaskHistory(taskId: string) {
+    await delay();
+    const task = mockStore.findTask(taskId);
+    if (!task) {
+      return { status: 'not_found' as const, code: 'NOT_FOUND' as const, message: 'That task was not found.' };
+    }
+    const logs = mockStore.entriesForTask(taskId).map(entryAsWorkLog).filter((item): item is WorkLog => item !== null);
+    const actualMinutes = logs.reduce((sum, item) => sum + item.durationMinutes, 0);
+    const dailyActuals = [...new Set(logs.map((item) => item.workDate))].sort().map((workDate) => {
+      const dayLogs = logs.filter((item) => item.workDate === workDate);
+      const minutes = dayLogs.reduce((sum, item) => sum + item.durationMinutes, 0);
+      return { workDate, workDateLabel: formatDate(workDate), actual: toDurationView(minutes), workLogIds: dayLogs.map((item) => item.id) };
+    });
+    const workLogViews = logs.map((item) => {
+      const division = Object.values(DIVISIONS).find((candidate) => candidate.id === item.divisionId)!;
+      const project = projectById(item.projectId)!;
+      return {
+        id: item.id,
+        version: item.version,
+        workDate: item.workDate,
+        workDateLabel: formatDate(item.workDate),
+        employeeId: item.employeeId,
+        division: { id: division.id, name: division.name, code: division.code },
+        project: { id: project.id, name: project.name, code: project.code },
+        task: { id: task.id, title: task.title },
+        duration: toDurationView(item.durationMinutes),
+        workLocation: item.workLocation,
+        workLocationLabel: WORK_LOCATION_LABEL[item.workLocation],
+        workDescription: item.workDescription,
+        completedWork: item.completedWork,
+        supportingLink: item.supportingLink,
+        attachmentCount: item.attachmentIds.length,
+        source: item.source,
+        state: item.state,
+        createdAt: item.createdAt,
+        createdBy: item.createdBy,
+        canEdit: item.state !== 'locked',
+        canDelete: item.state !== 'locked',
+      };
+    });
+    const items = [
+      ...taskTransitions.filter((item) => item.taskId === taskId).map((transition) => ({ kind: 'transition' as const, transition, at: transition.changedAt })),
+      ...workLogViews.map((workLog) => ({ kind: 'work_log' as const, workLog, at: workLog.createdAt })),
+    ].sort((a, b) => a.at.localeCompare(b.at)).map((item) => (
+      item.kind === 'transition'
+        ? { kind: 'transition' as const, transition: item.transition }
+        : { kind: 'work_log' as const, workLog: item.workLog }
+    ));
+    const varianceMinutes = actualMinutes - task.estimatedMinutes;
+    return success({ taskId, items, estimatedMinutes: task.estimatedMinutes, actualMinutes, variance: { minutes: varianceMinutes, label: formatDurationDelta(varianceMinutes) }, dailyActuals });
   },
 
   async createEntry(input) {
@@ -743,6 +1141,9 @@ export const mockTimesheetService: TimesheetService = {
     mockStore.setTimer(null);
     return success(undefined);
   },
-};
+} satisfies TimesheetService & LegacyTimesheetCompatibility;
+
+export const mockTimesheetService: TimesheetService & LegacyTimesheetCompatibility =
+  mockTimesheetServiceImpl;
 
 export type { DateRange, StartTimerInput };

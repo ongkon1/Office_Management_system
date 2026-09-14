@@ -36,6 +36,7 @@ Everything below already exists. Read the relevant one *before* starting work ra
 | `MEMORY.md` | You want fast orientation: project state, conventions, decision log, what's assumed vs decided. |
 | `frontend_milestone.md` | You are doing frontend work. `FE-*` tasks, Phases 0–9, progress table. |
 | `backend_milestone.md` | You are doing backend work. `BE-*` tasks, Phases 0–9. Backend Phase 0 is blocked until frontend contracts are stable. |
+| `modify_milestone.md` | You are implementing the approved task-based work-logging replacement. Phase 0 is done; follow F1–F4 before B1–B4 and preserve all historical clock records. |
 | `docs/frontend/phase-0/traceability-and-priority.md` | You need a screen's route, roles, requirement ids, or MVP/Phase-2/3/4 label. |
 | `docs/frontend/phase-0/information-architecture.md` | You are building navigation, a screen flow, breadcrumbs, deep links, or mobile behavior. Covers all six roles and ten flows. |
 | `docs/frontend/phase-0/terminology-and-formats.md` | You are about to display a date, time, duration, money, percentage, status, name, or empty value. **Also lists forbidden wording.** |
@@ -55,15 +56,17 @@ Everything below already exists. Read the relevant one *before* starting work ra
 Each of these has a natural-looking wrong implementation that passes casual review and corrupts payroll or leaks protected data. Full detail in `project_requirement.md` §3, §5.3, §12.
 
 - **A normal full day is 7 active hours + 1 separate break hour = 8 total.** Both thresholds must be met for "Complete".
-- **The break is one recognized value per day.** It is *never* added per entry. This is the single most common misreading of the domain.
+- **The break is one recognized value per day.** It is *never* added per work log. This is the single most common misreading of the domain.
 - **Classification:** Missing / Under-time / Complete / Overtime (above 8:00 through **exactly 12:00**, reason required) / Critical (above 12:00, explanation required + Team Lead and HR notification). Two traps: exactly 12:00 is **Overtime**, and Under-time triggers on failing *either* threshold, not both.
-- **There is no daily Team Lead approval anywhere in this product.** Team Leads do exception review and correction requests; HR verifies and locks payroll periods. Approval wording is allowed only on WFH requests, leave requests, and HR period verification — never on a daily time record. Do not add an approve button, an "awaiting approval" state, or approval language to a timesheet.
+- **There is no daily Team Lead approval anywhere in this product.** Team Leads do exception review and correction requests; HR verifies and locks payroll periods. Approval wording is allowed only on WFH requests, leave requests, employee-raised task review, and HR period verification — never on a daily work log. Do not add an approve button, an "awaiting approval" state, or approval language to a timesheet.
 - **One general remark type.** Not multiple remark categories.
-- **Time aggregates across all divisions for the local day, but overlapping entries are rejected even across different divisions.** An employee cannot be in two places at once.
+- **New active time comes only from explicit duration-based work logs against eligible In Progress tasks.** A task transition creates no minutes. New logs have no start/end range, so overlap detection does not apply; reject a save that would raise active work above 24:00 for one local date.
+- **Task workflow has three stored statuses:** Pending, In Progress, Completed. All is a combined view; Overdue and Upcoming are derived filters, not statuses. Pending tasks reject logs, and Completed tasks reject logs until reopened with a required reason.
+- **Historical clock entries are immutable operational history.** Preserve their original ranges and calculation behavior. The B4 production deployment UTC instant is the cutover boundary, based on record creation time rather than work date.
 - **Deny by default** for government-project, salary, cost, evaluation, export, attachment, and audit data. Hiding it in the UI is *not* the control. A restricted field is omitted or explicitly marked `Restricted` — never blanked, never zeroed.
 - **Durations are integer minutes. Money is a fixed-precision decimal string plus a currency code.** No floating-point hours, no bare numbers for money. `6:59` must never render as `7:00`.
 - **Status is never colour alone** — always shape + text + colour.
-- Store UTC instants **plus** local work date, timezone, and applied policy version, so verified history stays reproducible after a policy change.
+- Store work-log local date, timezone, integer duration and audit instants; store task-transition instants separately; retain UTC ranges and applied policy version for historical clock entries so verified history stays reproducible.
 - **Authorization is applied before aggregation.** Counts, totals, empty groups, search results, file names, and error timings must not reveal records the viewer cannot see. An unauthorized record returns the same not-found response as a nonexistent one.
 
 ---
@@ -89,11 +92,17 @@ contribution split. The preview, timesheet views, dashboards and later reports
 all call it. Never recompute hours anywhere else — not in a component, not in a
 service, not in an aggregate.
 
-**A task an employee raised accepts no time until their Team Lead approves it.**
+**A task accepts work only while In Progress and otherwise eligible.** A task an employee raised also accepts no work until their Team Lead approves it.
 `taskAcceptsTime` in `src/contracts/domain.ts` is the single predicate; it is
 read by `selectableTasks`, by `validation.ts` and by the review service, so the
 rule cannot drift between them. This is *not* the approval chain below — one
 person endorses a task and it then becomes ordinary work.
+
+Task-transition history and work logs are separate contracts. Pending → In
+Progress and In Progress → Completed may carry an optional note; Completed →
+In Progress requires a reason; Team Lead-only Pending → Completed requires a
+note. Transition timestamps must remain unreachable from the calculation
+engine.
 
 Requisition and conveyance share **one** approval chain —
 `src/contracts/approval.ts` and `src/services/mock/approval-chain.ts`. A second
@@ -108,7 +117,7 @@ project with no client and work on no project at all share one reported "Not
 recorded" bucket, and the split always sums back to the day's active total.
 It adds integer minutes; it never derives a duration.
 
-`src/lib/calculation/validation.ts` holds the entry rules. Every error it
+`src/lib/calculation/validation.ts` holds the work-log rules. Every error it
 returns carries a field, a message **and** corrective guidance, because
 `REQ-TIME-025` requires all three.
 
@@ -156,6 +165,7 @@ WCAG 2.2 AA. Visible labels, field-level errors, `aria-describedby` wiring (hand
 project_requirement.md          Requirements (REQ-*, AC-*)
 frontend_milestone.md           Frontend plan (FE-*)
 backend_milestone.md            Backend plan (BE-*)
+modify_milestone.md             Task-based replacement plan (MOD-*, MFE-*, MBE-*)
 MEMORY.md                       Project context and decision log
 AGENTS.md                       This file (CLAUDE.md imports it)
 
@@ -261,8 +271,9 @@ React Compiler lint errors (`set-state-in-effect`, render-phase mutation) are re
 | Backend | 10 — Requisition | Pending (0/20) — new milestone |
 | Backend | 11 — Conveyance | Pending (0/22) — new milestone, depends on 10 |
 | Backend | 12 — Role consolidation: Finance into HR | Pending (0/11) — new milestone |
+| Modify | F1 — Frontend contracts, calculation and validation | Done (9/9); Phase F2 is next |
 
-Gates: contrast 48/48, responsive 268/268, accessibility 217/217, content-stress 63/63, role journeys 41/41, performance 16/16, Phase 2 flows 16/16, Phase 3 flows 18/18, Phase 4 flows 20/20, Phase 5 flows 51/51, Phase 6 flows 40/40, Phase 7 flows 55/55, `verify` passing with 264 tests.
+Gates: contrast 48/48, responsive 268/268, accessibility 217/217, content-stress 63/63, role journeys 41/41, performance 16/16, Phase 2 flows 16/16, Phase 3 flows 18/18, Phase 4 flows 20/20, Phase 5 flows 51/51, Phase 6 flows 40/40, Phase 7 flows 55/55. Modify F1 verification passes with 435 frontend/shared tests and a 60-route production build.
 
 Signing in: `/login`, password `Demo1234!` for every demo account, picker on the sign-in page. Auth fixtures (2FA code, reset tokens, lockout) are in `docs/frontend/phase-0/demo-setup.md` §1.1.
 

@@ -184,7 +184,7 @@ describe('an unapproved task cannot receive time', () => {
     );
   });
 
-  it('accepts time once the Team Lead approves it', async () => {
+  it('accepts time once the Team Lead approves it and the employee starts it', async () => {
     const created = await mockTaskReviewService.create(EMPLOYEE, FORM);
     if (created.status !== 'success') throw new Error('expected success');
 
@@ -192,6 +192,16 @@ describe('an unapproved task cannot receive time', () => {
       decision: 'approved',
       note: '',
     });
+
+    const started = await mockTimesheetService.transitionTask({
+      taskId: created.data.id,
+      fromStatus: 'pending',
+      toStatus: 'in_progress',
+      actorRole: 'employee',
+      note: null,
+      idempotencyKey: `transition-${Math.random()}`,
+    });
+    expect(started.status).toBe('success');
 
     expect(selectableTasks('prj-vp2').map((task) => task.id)).toContain(created.data.id);
 

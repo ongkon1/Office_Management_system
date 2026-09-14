@@ -332,9 +332,19 @@ export type TaskStatus = 'pending' | 'in_progress' | 'completed';
  */
 export type TaskReviewState = 'not_required' | 'pending_review' | 'approved' | 'rejected';
 
-/** A task may only receive time once its origin has been endorsed. */
-export function taskAcceptsTime(reviewState: TaskReviewState): boolean {
-  return reviewState === 'not_required' || reviewState === 'approved';
+/**
+ * The single task eligibility predicate for new work logs.
+ *
+ * Review approval alone is insufficient: Pending has not started and Completed
+ * must be reopened before more work can be recorded (`REQ-WORK-016`).
+ */
+export function taskAcceptsTime(
+  task: Pick<Task, 'reviewState' | 'status'>,
+): boolean {
+  return (
+    task.status === 'in_progress' &&
+    (task.reviewState === 'not_required' || task.reviewState === 'approved')
+  );
 }
 
 export interface Task extends AuditableRecord {
@@ -376,6 +386,7 @@ export interface Attachment {
   readonly ownerType:
     | 'employee'
     | 'time_entry'
+    | 'work_log'
     | 'project'
     | 'task'
     | 'wfh_request'
@@ -437,6 +448,16 @@ export interface TimeEntry extends AuditableRecord {
   /** Policy version applied when this entry was calculated. */
   readonly policyVersion: number;
 }
+
+/**
+ * A pre-cutover clock record retained exactly as recorded (`REQ-TIME-005`).
+ * New capture must use `WorkLog` from `./work-log`, never this shape.
+ */
+export type HistoricalClockEntry = TimeEntry & {
+  readonly entryMethod: 'manual_clock' | 'timer';
+  readonly startTime: IsoDateTime;
+  readonly endTime: IsoDateTime;
+};
 
 export interface TimerSession {
   readonly id: string;

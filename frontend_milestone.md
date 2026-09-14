@@ -205,7 +205,7 @@ The `contracts/` files move into the application's import alias during `FE-0102`
 ### Application Shell
 
 - [x] `FE-0122` Build the responsive desktop sidebar, tablet mode, mobile header, and navigation drawer.
-- [x] `FE-0123` Build the top bar with page context, global search trigger, notifications, profile menu, and active timer indicator.
+- [x] `FE-0123` Build the top bar with page context, global search trigger, notifications, profile menu, and active timer indicator. **Original scope delivered; the timer-indicator portion is superseded by `modify_milestone.md` Phase F3 (`MFE-0306`).**
 - [x] `FE-0124` Build permission-aware navigation groups for every role and feature flag.
 - [x] `FE-0125` Build consistent content widths, dashboard grids, split panels, sticky action regions, and mobile safe-area behavior.
 - [x] `FE-0126` Add subtle shell and overlay motion with reduced-motion fallbacks.
@@ -288,7 +288,7 @@ Routes navigation links to but a later phase builds resolve to a registered "pla
 ### Employee Dashboard
 
 - [x] `FE-0301` Build today's summary for active work, break, total, remaining active time, and progress toward the eight-hour schedule.
-- [x] `FE-0302` Build today's divisions, active tasks, upcoming deadlines, active timer, and quick actions.
+- [x] `FE-0302` Build today's divisions, active tasks, upcoming deadlines, active timer, and quick actions. **Original scope delivered; active-timer content is superseded by `MFE-0306`, which replaces it with today's active total and Log Work.**
 - [x] `FE-0303` Build weekly/monthly totals, overtime, missing dates, recent remarks, WFH/leave status, division contribution, and recently completed tasks.
 - [x] `FE-0304` Add loading, empty, first-use, incomplete-day, complete-day, overtime, critical, and offline dashboard states.
 - [x] `FE-0305` Make every dashboard metric open the corresponding filtered detail view.
@@ -304,17 +304,17 @@ Routes navigation links to but a later phase builds resolve to a registered "pla
 
 ### Time Entry and Timer
 
-- [x] `FE-0320` Build a time-entry drawer or page supporting manual start/end entry and direct duration entry.
+- [x] `FE-0320` Build a time-entry drawer or page supporting manual start/end entry and direct duration entry. **Original scope delivered; manual start/end is superseded by `MFE-0301` and `MFE-0305`; duration entry is retargeted to task work logs.**
 - [x] `FE-0321` Add date, division, project, task, work location, description, completed work, attachment/link, and break inputs.
 - [x] `FE-0322` Dynamically constrain projects and tasks by the selected division and mock assignment dates.
 - [x] `FE-0323` Show an immediate calculation preview for entry duration, daily active work, break, total, remaining time, and resulting status.
-- [x] `FE-0324` Show field-level validation for invalid ranges, overlap, duplicates, inactive projects, unassigned divisions, approved leave, and missing information.
+- [x] `FE-0324` Show field-level validation for invalid ranges, overlap, duplicates, inactive projects, unassigned divisions, approved leave, and missing information. **Original scope delivered; clock-range and overlap rules are superseded by `MFE-0105`; the remaining validation rules stay applicable to work logs.**
 - [x] `FE-0325` Require and progressively reveal an overtime reason above eight total hours and a critical explanation above twelve hours.
 - [x] `FE-0326` Build save-draft, save, cancel, discard-confirmation, and unsaved-change behavior.
-- [x] `FE-0327` Build copy-previous-entry selection and present copied data as a clearly identified editable draft.
-- [x] `FE-0328` Build the timer start flow with division/project/task/location context.
-- [x] `FE-0329` Build global running-timer presentation, elapsed time, pause/stop behavior if approved, and stop-to-draft review.
-- [x] `FE-0330` Prevent two visually active timers and show recovery UI for a timer restored after refresh.
+- [x] `FE-0327` Build copy-previous-entry selection and present copied data as a clearly identified editable draft. **Original scope delivered; retargeted to copied work-log drafts by `MFE-0307`.**
+- [x] `FE-0328` Build the timer start flow with division/project/task/location context. **Original scope delivered; superseded and removed by `MFE-0305`.**
+- [x] `FE-0329` Build global running-timer presentation, elapsed time, pause/stop behavior if approved, and stop-to-draft review. **Original scope delivered; superseded and removed by `MFE-0305` and `MFE-0306`.**
+- [x] `FE-0330` Prevent two visually active timers and show recovery UI for a timer restored after refresh. **Original scope delivered; superseded and removed by `MFE-0305`.**
 
 ### Tasks, Divisions, Remarks, and Profile
 
@@ -629,7 +629,7 @@ Phase 7 evidence is recorded in `docs/frontend/phase-7/verification.md`: shared 
 - [x] `FE-0802` Correct navigation, table, form, chart, dialog, drawer, sticky-action, and safe-area issues at every target width.
 - [x] `FE-0803` Test long employee names, long project/task titles, many divisions, large currency values, translated-length labels, and empty values.
 - [x] `FE-0804` Verify there is no unintentional page-level horizontal scrolling.
-- [x] `FE-0805` Verify timer and primary actions remain reachable on small screens and with the on-screen keyboard visible.
+- [x] `FE-0805` Verify timer and primary actions remain reachable on small screens and with the on-screen keyboard visible. **Original scope delivered; the timer check is superseded by task-board and Log Work checks in `MFE-0408`–`MFE-0410`.**
 
 ### Accessibility QA
 

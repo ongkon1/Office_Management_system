@@ -13,7 +13,7 @@ import type {
   RemarkSummaryView,
   TaskSummaryView,
 } from '@/contracts/view-models';
-import { addDays, daysBetween, formatDate, formatDateWithWeekday } from '@/lib/format';
+import { addDays, daysBetween, formatDate, formatDateWithWeekday, formatDurationDelta } from '@/lib/format';
 import { toDurationView, REMARK_STATE_LABEL, TASK_STATUS_LABEL } from '@/lib/status';
 import { DEMO_TODAY, LEAVE_TYPES, STANDARD_POLICY } from '@/fixtures';
 import { DIVISIONS, findAccountByUserId } from './accounts';
@@ -66,6 +66,21 @@ function divisionRef(divisionId: string) {
 export function toTaskSummary(task: Task): TaskSummaryView {
   const project = projectById(task.projectId);
   const actual = actualTaskMinutes(task.id);
+  const taskEntries = mockStore
+    .entriesForTask(task.id)
+    .filter((entry) => entry.state !== 'draft');
+  const dailyActuals = [...new Set(taskEntries.map((entry) => entry.workDate))]
+    .sort()
+    .map((workDate) => {
+      const entries = taskEntries.filter((entry) => entry.workDate === workDate);
+      const minutes = entries.reduce((sum, entry) => sum + entry.activeMinutes, 0);
+      return {
+        workDate,
+        workDateLabel: formatDate(workDate),
+        actual: toDurationView(minutes),
+        workLogIds: entries.map((entry) => entry.id),
+      };
+    });
   const isOverdue =
     task.status !== 'completed' && task.dueDate !== null && task.dueDate < DEMO_TODAY;
 
@@ -85,6 +100,11 @@ export function toTaskSummary(task: Task): TaskSummaryView {
     isOverdue,
     estimated: toDurationView(task.estimatedMinutes),
     actual: toDurationView(actual),
+    variance: {
+      minutes: actual - task.estimatedMinutes,
+      label: formatDurationDelta(actual - task.estimatedMinutes),
+    },
+    dailyActuals,
     review: toReviewStateView(task),
     variancePercent:
       task.estimatedMinutes > 0

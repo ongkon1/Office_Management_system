@@ -2,7 +2,7 @@
 
 Durable context for anyone — human or AI — picking up this codebase. It records what the plan files don't: why things are the way they are, what's decided versus assumed, and the rules that are easy to break by accident.
 
-Last updated: **13 September 2026** (Backend Phase 6 implementation verified; browser cutover remains Phase 9).
+Last updated: **14 September 2026** (Modify Phase F1 complete; task-board delivery begins with Phase F2).
 
 ---
 
@@ -28,13 +28,14 @@ The product connects working hours to divisions, projects, and tasks, and gives 
 
 **One repository, frontend first.** The frontend milestone ships against typed mock adapters; the backend milestone later replaces those adapters *inside the same repo* without redesigning approved screens. The project is never split into separate frontend and backend applications.
 
-Three files at the repo root are the plan of record:
+Four files at the repo root are the plan of record:
 
 | File | Contains |
 |---|---|
 | `project_requirement.md` | `REQ-*` business requirements, `AC-*` acceptance scenarios. The requirements source of truth. |
 | `frontend_milestone.md` | `FE-*` tasks, Phases 0–9. |
 | `backend_milestone.md` | `BE-*` tasks, Phases 0–9. Backend Phase 0 is blocked until frontend contracts are stable. |
+| `modify_milestone.md` | Approved clock-to-task work-logging replacement: `MOD-*`, frontend `MFE-*`, and backend `MBE-*` tasks. Phase 0 is complete. |
 
 Work proceeds **one phase at a time** — a phase is started by name, and every task in it is completed before moving on. Task status uses exactly one marker: `[ ]` pending, `[~]` in progress, `[x]` done. When status changes, update both the task line and the "Current Progress Summary" table at the bottom of the file.
 
@@ -44,15 +45,18 @@ Work proceeds **one phase at a time** — a phase is started by name, and every 
 
 Each of these has a natural-looking wrong implementation that would pass a casual review and corrupt payroll or leak protected data. Full detail is in `project_requirement.md` §3, §5.3 and §12; this is the short list.
 
-- **A normal full day is 7 active hours + 1 separate break hour = 8 total.** Both thresholds must be met for "Complete". The break is **one recognized value per day** — it is never added per entry.
+- **A normal full day is 7 active hours + 1 separate break hour = 8 total.** Both thresholds must be met for "Complete". The break is **one recognized value per day** — it is never added per work log.
 - **Classification:** Missing / Under-time / Complete / Overtime (above 8:00 through **exactly 12:00**, reason required) / Critical (above 12:00, explanation required plus Team Lead and HR notification). Exactly 12:00 is Overtime, not Critical.
-- **There is no daily Team Lead approval, anywhere in the product.** Team Leads do exception-based review and correction requests; HR verifies and locks payroll periods. Approval language belongs only on WFH requests, leave requests, and HR period verification — never on a daily time record.
+- **There is no daily Team Lead approval, anywhere in the product.** Team Leads do exception-based review and correction requests; HR verifies and locks payroll periods. Approval language belongs only on WFH requests, leave requests, employee-raised task review, and HR period verification — never on a daily work log.
 - **One general remark type.** Not multiple remark categories.
-- **Time aggregates across all divisions for the local day, but overlapping entries are rejected even across different divisions.**
+- **New active time comes only from explicit duration work logs against eligible In Progress tasks.** Status transitions create no minutes. Pending and Completed tasks reject logs; reopening requires a reason.
+- **All, Overdue, and Upcoming are task views, not stored statuses.** Stored workflow states remain Pending, In Progress, and Completed.
+- **New work logs have no clock range, so overlap detection is not claimed.** Reject active time above 24:00 on one local date; keep overtime/critical and estimate-variance exception review.
+- **Historical clock entries remain read-only and reproducible.** The audited B4 production deployment instant is the cutover boundary, determined by record creation time rather than reported work date.
 - **Deny by default** for government-project, salary, cost, evaluation, export, attachment, and audit data. UI hiding is never the control. A restricted field is omitted or explicitly marked `Restricted` — never blanked, never zeroed.
 - **Durations are integer minutes. Money is a fixed-precision decimal string plus a currency code.** Never floating-point hours, never a bare number for money. `6:59` must never render as `7:00`.
 - **Status is never communicated by colour alone** — always shape + text + colour.
-- Store UTC instants **plus** the local work date, timezone, and applied policy version, so historical and verified results stay reproducible after a policy change.
+- Store work-log local date, timezone, integer duration and audit instants; keep task-transition timestamps separate from calculation inputs; retain original UTC ranges and policy versions for historical clock entries.
 
 ---
 
@@ -62,6 +66,7 @@ Each of these has a natural-looking wrong implementation that would pass a casua
 project_requirement.md          Requirements (REQ-*, AC-*)
 frontend_milestone.md           Frontend plan (FE-*)
 backend_milestone.md            Backend plan (BE-*)
+modify_milestone.md             Task-based replacement plan (MOD-*, MFE-*, MBE-*)
 MEMORY.md                       This file
 
 docs/
@@ -177,8 +182,9 @@ Environment: Windows + WAMP, PowerShell. **Not currently a git repository.**
 | Backend | 7–9 | Pending |
 | Backend | 10 — Requisition | Pending (0/20) — new milestone |
 | Backend | 11 — Conveyance | Pending (0/22) — new milestone, depends on 10 |
+| Modify | F1 — Frontend contracts, calculation and validation | Done (9/9); Phase F2 is next |
 
-Gate results: contrast 48/48, accessibility 279/279, content-stress 73/73, role journeys 41/41, performance 16/16, Phase 2–7 flows 16/18/20/51/40/55, requisition 45/45, conveyance 45/45. After the SaaS polish pass, `npm run verify` passes with 409 tests and a 57-page build; the dashboard passes 12/12 targeted responsive role/width combinations with 1,310 rendered elements contrast-checked.
+Gate results: contrast 48/48, accessibility 279/279, content-stress 73/73, role journeys 41/41, performance 16/16, Phase 2–7 flows 16/18/20/51/40/55, requisition 45/45, conveyance 45/45. Modify Phase F1 passes route type generation, TypeScript, ESLint, 435 frontend/shared tests and a 60-route production build; the dashboard passes 12/12 targeted responsive role/width combinations with 1,310 rendered elements contrast-checked.
 
 Sign in at `/login`; every demo account uses `Demo1234!` and the sign-in page carries a picker. Auth fixtures — 2FA code, reset tokens, lockout threshold — are in `docs/frontend/phase-0/demo-setup.md` §1.1.
 
@@ -204,6 +210,13 @@ Later phases harden screens and fixtures around these assumptions, so the cost o
 |---|---|---|
 | Phase 0 | Durations as integer minutes, money as decimal string + currency code | Floating-point hours and JS numbers produce payroll errors |
 | Phase 0 | Restricted fields typed `Redactable<T>` | Makes "you may not see this" representable, so it can't be mistaken for zero or absent |
+| Modify Phase 0 | Replaced new clock/timer capture with duration-based task work logs | The user reports how much work was done against an eligible task; exact attendance intervals are outside this milestone |
+| Modify Phase 0 | Task transitions and work logs are separate records | Dragging or changing status must never create or infer active minutes |
+| Modify Phase 0 | Pending rejects logs; Completed rejects logs until reopened | Keeps workflow state and recorded work consistent; reopen requires a reason and preserves completion history |
+| Modify Phase 0 | All/Overdue/Upcoming are derived views | Prevents filter concepts from becoming incompatible stored workflow statuses |
+| Modify Phase 0 | Reuse `time_entries` for duration work logs and preserve historical clock rows | Avoids permanent two-source reconciliation while keeping verified history reproducible |
+| Modify Phase 0 | Reject daily active time above 24:00 | Duration-only logs cannot detect overlap; 24 hours is the physically certain hard ceiling while >12:00 remains Critical |
+| Modify Phase 0 | Cutover is the audited B4 production deployment UTC instant | Record creation time determines the capture model; backdated work dates do not rewrite historical/new classification |
 | Phase 1 | Tailwind v4 + tokens over CSS Modules or shadcn/ui | Fastest to the premium spec; reshaping a vendored library's conventions costs more than building to tokens |
 | Phase 1 | Hand-built charts (inline SVG) instead of a charting library | Full control of the colour-safe series and the always-present data-table equivalent |
 | Phase 1 | Added two custom audit gates | Both found real defects on first run — a 1.70:1 control border, two chart series 1.02 apart in luminance, 8 undersized touch targets, and a component stealing focus on mount |

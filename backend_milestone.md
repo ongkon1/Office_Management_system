@@ -317,17 +317,17 @@ Phase 3 evidence is recorded in `docs/backend/phase-3/verification.md`: migratio
 - [x] `BE-0407` Classify required days as Missing, Under-time, Complete, Overtime, or Critical using the approved thresholds.
 - [x] `BE-0408` Require an overtime reason above eight total hours and a critical explanation above twelve total hours.
 - [x] `BE-0409` Implement part-time, half-day leave, holiday, and other policy adjustments without changing the standard policy baseline.
-- [x] `BE-0410` Implement business-timezone and cross-midnight attribution/splitting according to the configured policy.
+- [x] `BE-0410` Implement business-timezone and cross-midnight attribution/splitting according to the configured policy. **Original scope delivered; under `modify_milestone.md` this remains applicable to historical clock rows only (`MFE-0107`, `MBE-0207`).**
 - [x] `BE-0411` Persist the applied policy version so historical and verified results are reproducible after policy changes.
 
 ### Time Entry and Timer Use Cases
 
-- [x] `BE-0420` Implement manual clock entry and direct-duration entry create, update, read, list, and permitted delete/deactivate use cases.
-- [x] `BE-0421` Implement copy-previous-entry as a new unverified draft with a new work date and full revalidation.
-- [x] `BE-0422` Implement timer start with an atomic one-running-timer-per-employee invariant.
-- [x] `BE-0423` Implement timer read/recovery and idempotent stop-to-draft behavior across refresh, retry, or duplicate submission.
+- [x] `BE-0420` Implement manual clock entry and direct-duration entry create, update, read, list, and permitted delete/deactivate use cases. **Original scope delivered; manual clock writes are superseded by `MBE-0201` and `MBE-0202`; duration writes become task work logs.**
+- [x] `BE-0421` Implement copy-previous-entry as a new unverified draft with a new work date and full revalidation. **Original scope delivered; retargeted to work-log drafts by `MBE-0209`.**
+- [x] `BE-0422` Implement timer start with an atomic one-running-timer-per-employee invariant. **Original scope delivered; timer writes are retired by `MBE-0103` and `MBE-0202`.**
+- [x] `BE-0423` Implement timer read/recovery and idempotent stop-to-draft behavior across refresh, retry, or duplicate submission. **Original scope delivered; timer operations are retired by `MBE-0202`, with cutover handling defined by `MBE-0105`.**
 - [x] `BE-0424` Validate required employee, date, division, project/task relationship, work location, description, completed work, and attachment/link information.
-- [x] `BE-0425` Reject inactive projects, invalid tasks, unauthorized/effective-date divisions, invalid ranges, duplicates, and overlapping clock entries across divisions.
+- [x] `BE-0425` Reject inactive projects, invalid tasks, unauthorized/effective-date divisions, invalid ranges, duplicates, and overlapping clock entries across divisions. **Original scope delivered; range and overlap checks remain historical-only, while work-log validation is replaced by `MBE-0203`–`MBE-0205`.**
 - [x] `BE-0426` Detect approved leave/holiday conflicts and return a field/record-level error or authorized exception workflow as specified.
 - [x] `BE-0427` Recalculate affected daily, weekly, monthly, division, project, task, workload, and evaluation projections transactionally or through reliable invalidation/jobs.
 - [x] `BE-0428` Return typed validation codes and corrective guidance matching frontend error states.

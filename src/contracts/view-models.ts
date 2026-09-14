@@ -9,6 +9,7 @@
  */
 
 import type { TaskReviewStateView } from './task-review';
+import type { DurationVarianceView, TaskDailyActualView } from './work-log';
 import type {
   AttendanceState,
   DayStatus,
@@ -321,6 +322,8 @@ export interface TaskSummaryView {
   readonly isOverdue: boolean;
   readonly estimated: DurationView;
   readonly actual: DurationView;
+  readonly variance: DurationVarianceView;
+  readonly dailyActuals: readonly TaskDailyActualView[];
   readonly variancePercent: number | null;
   /**
    * Present on every task. `not_required` for one a Team Lead assigned; the

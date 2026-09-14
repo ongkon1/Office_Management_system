@@ -4,9 +4,10 @@
 
 | Document field | Value |
 |---|---|
-| Version | 1.1 |
-| Status | Baseline requirements plus Meeting Minutes and AI task-generation amendment |
-| Source baseline | Multi-Division Timesheet & Work Management System Feature Requirements, Version 1.0, June 2026; Meeting Minutes to AI Task Generation and Assignment feature brief, September 2026 |
+| Version | 1.2 |
+| Status | Approved baseline including task-based work logging and Meeting Minutes amendment |
+| Amendment approval | Task-based work-logging decisions approved for milestone delivery on 14 September 2026 |
+| Source baseline | Multi-Division Timesheet & Work Management System Feature Requirements, Version 1.0, June 2026; Meeting Minutes to AI Task Generation and Assignment feature brief, September 2026; Recommended Task-Based Timesheet Model, 14 September 2026 |
 | Product owner | PowerInAI |
 | Initial divisions | PowerInAI, PowerInAI Training, Government Projects, Computer Jagat, WesternCF |
 | Intended audience | Product owners, designers, developers, QA engineers, operations, HR, Finance, and management |
@@ -27,7 +28,7 @@ The system must:
 
 ### 1.1 Success Measures
 
-- Employees can record a complete day against one or more divisions without double-counting time.
+- Employees can record a complete day as duration-based work logs against authorized tasks in one or more divisions.
 - Team Leads can identify missing, unusual, incomplete, under-time, and overtime records without a daily approval queue.
 - HR can verify each payroll period and produce reliable attendance and evaluation information.
 - Finance can report verified hours and authorized cost information by employee, division, project, and payroll period.
@@ -45,7 +46,7 @@ The full product vision includes identity and access, employee and division admi
 The MVP must include:
 
 - Secure login, roles, permissions, the five initial divisions, employee profiles, and multi-division assignments.
-- Projects, basic tasks, daily timesheets, manual and duration entry, timer operation, copied entries, active-time and break calculations, validation, and overtime highlighting.
+- Projects, basic tasks and status transitions, daily duration-based work logs, copied work logs, active-time and break calculations, validation, and overtime highlighting.
 - Work-location recording, including Office and WFH.
 - A single general remark model and correction workflow without daily Team Lead approval.
 - Employee, Team Lead, HR, and Finance dashboard summaries required for core operations.
@@ -71,10 +72,15 @@ The MVP must include:
 | Under-time | A day with an entry where active work is below 7 hours or the daily total is below 8 hours. |
 | Overtime | A daily total greater than 8 hours and no more than 12 hours. |
 | Critical exception | A daily total greater than 12 hours. |
-| Missing timesheet | A required working day with no time entry and no approved leave, holiday, or other approved exemption. |
+| Missing timesheet | A required working day with no valid work log or applicable historical clock entry and no approved leave, holiday, or other approved exemption. |
 | Verified period | A payroll/reporting period reviewed and locked or explicitly verified by HR. It is not a daily Team Lead approval. |
 | Planned allocation | The expected division or project allocation percentage/hours assigned to an employee. |
 | Actual contribution | Valid active work recorded in timesheets for a division or project. |
+| Work log | An employee-reported duration of active work for one local work date, attributed to an authorized division, project, and task. A work log has no start or end time. |
+| Task transition | An append-only record that a task moved between Pending, In Progress, and Completed. Its timestamp records workflow history and never creates active minutes. |
+| Historical clock entry | A read-only time entry created before the task-based cutover, retaining its original start/end range and calculation treatment. |
+| Actual time | The sum of valid work-log minutes attributed to a task, project, division, employee, or period; it is never a manually maintained total. |
+| Estimate variance | Actual time minus estimated time, displayed as a signed duration such as `+1:15` or `-0:30`. |
 | General remark | The single remark type used for clarification, correction, work quality, performance, or other review feedback. |
 | WFH | Work From Home. |
 | Meeting minute | A saved human-authored meeting record associated with a client and project and preserved independently of AI processing. |
@@ -103,7 +109,7 @@ The MVP must include:
 #### Employee
 
 - `REQ-RBAC-010`: The system must allow employees to view their assignments, projects, tasks, time, remarks, evaluations, leave, and WFH records.
-- `REQ-RBAC-011`: The system must allow employees to create and correct their time entries, operate their timers, provide clarifications, request WFH, and apply for leave.
+- `REQ-RBAC-011`: The system must allow employees to create and correct their work logs, move authorized tasks through permitted statuses, provide transition notes and clarifications, request WFH, and apply for leave.
 - `REQ-RBAC-012`: The system must prevent employees from viewing another employee's private, evaluation, salary, or cost information unless a separate role grants access.
 
 #### HR Manager
@@ -156,32 +162,40 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 - `REQ-ORG-006`: Each division assignment must store division, employee role, Team Lead, allocation percentage, expected weekly hours, start date, end date, and active status.
 - `REQ-ORG-007`: The system must retain historical assignment periods and must prevent destructive deletion when an assignment or employee is referenced by operational records.
 - `REQ-ORG-008`: The system must support dated temporary assignments for events, campaigns, government work, training, client projects, content creation, emergency support, and implementation work.
-- `REQ-ORG-009`: Every temporary assignment must have a start date and end date and must become unavailable for new time entries outside that range.
+- `REQ-ORG-009`: Every temporary assignment must have a start date and end date and must become unavailable for new work logs outside that range.
 - `REQ-ORG-010`: The system must validate allocation percentages and visibly warn when an employee's concurrent planned allocation differs from 100 percent.
 
 ### 5.2 Projects and Tasks
 
 - `REQ-WORK-001`: The system must associate each project with exactly one division and store its name, code, manager, team members, client/stakeholder, dates, priority, description, estimated hours, budget, completion percentage, documents, attachments, and notes.
-- `REQ-WORK-002`: The system must calculate actual project hours from valid time entries rather than manually maintained totals.
+- `REQ-WORK-002`: The system must calculate actual project hours from valid work logs and applicable historical clock entries rather than manually maintained totals.
 - `REQ-WORK-003`: The system must store task title, division, project, assignee, supporting members, creator, priority, dates, estimate, description, checklist, attachments, and status.
 - `REQ-WORK-004`: Task status must support Pending, In Progress, and Completed.
 - `REQ-WORK-005`: Employees must be able to record time directly against an authorized task.
 - `REQ-WORK-006`: A task view must show estimated and actual time, assigned employee, division, dated work entries, completed-work details, due date, and overdue state.
-- `REQ-WORK-007`: The system must derive task actual time from valid linked time entries.
+- `REQ-WORK-007`: The system must derive task actual time from valid linked work logs and applicable historical clock entries.
 - `REQ-WORK-008`: The system must prevent new time from being recorded against an inactive project, completed/closed project that disallows time, or unauthorized task.
 - `REQ-WORK-009`: Project and task attachments must inherit division-, project-, and role-based access controls.
+- `REQ-WORK-010`: Task workflow status must allow Pending to In Progress, In Progress to Completed, and Completed to In Progress; reopening a Completed task must require a reason and preserve the original completion event.
+- `REQ-WORK-011`: A Team Lead may move a Pending task directly to Completed only with a required note; employees must use the normal Pending to In Progress to Completed path.
+- `REQ-WORK-012`: Every task transition must be append-only and must store task, previous status, new status, actor, business-timezone-aware timestamp, note when supplied, and an idempotency key.
+- `REQ-WORK-013`: Moving a task between statuses must not create, change, infer, or prove active-work minutes.
+- `REQ-WORK-014`: Employees must be able to supply an optional note when starting or completing a task; reopening and a Team Lead's direct Pending-to-Completed transition must require a note.
+- `REQ-WORK-015`: Employees must have All, Pending, In Progress, Completed, Overdue, and Upcoming task views; All is a combined filter, while Overdue and Upcoming must be derived from due dates rather than stored as workflow statuses.
+- `REQ-WORK-016`: A task must accept new work logs only while In Progress, assigned or explicitly available to the employee, approved where employee-raised-task review applies, and attached to an active project and effective division assignment.
+- `REQ-WORK-017`: Task actual time and estimate variance must be derived from work logs, must not overwrite the estimate, and must not cap actual time at the estimate.
 
 ### 5.3 Timesheet Management
 
 - `REQ-TIME-001`: Employees must have daily, weekly, monthly, calendar, and list views of their timesheets.
 - `REQ-TIME-002`: Authorized Team Leads and HR users must have employee-, division-, project-, and month-based summary views.
-- `REQ-TIME-003`: The system must provide focused views for missing timesheets, under-time, overtime, critical exceptions, and WFH entries.
-- `REQ-TIME-004`: A time entry must store date, employee, division, project, task, entry method, work location, work description, completed work, and optional attachment or supporting link.
-- `REQ-TIME-005`: Clock-based entries must store start and end time; duration-based entries must store an explicit duration.
-- `REQ-TIME-006`: The system must support manual start/end entry, direct duration entry, start/stop timer, and copying an earlier entry as a new draft.
-- `REQ-TIME-007`: A copied entry must use the target date, must not copy approval/verification state, and must be revalidated before saving.
-- `REQ-TIME-008`: An employee must not have more than one running timer at a time.
-- `REQ-TIME-009`: Stopping a timer must create or update a draft time entry that the employee reviews and saves.
+- `REQ-TIME-003`: The system must provide focused views for missing timesheets, under-time, overtime, critical exceptions, and WFH work logs.
+- `REQ-TIME-004`: A work log must store local work date, employee, division, project, task, positive integer duration minutes, work location, work description, completed work, source, idempotency key, and optional attachment or supporting link.
+- `REQ-TIME-005`: New work logs must not store or request a start time or end time. Historical clock entries created before the approved cutover must retain their original ranges and remain readable and reproducible.
+- `REQ-TIME-006`: The system must support direct duration-based work logging and copying an earlier work log as a new draft; it must not offer a timer or manual start/end entry for new records.
+- `REQ-TIME-007`: A copied work log must use the target date, must not copy verification state, must be visibly identified as a draft, and must be fully revalidated before saving.
+- `REQ-TIME-008`: The system must allow multiple append-only work logs for the same authorized task and local work date and must show their task/day total.
+- `REQ-TIME-009`: Starting, completing, reopening, assigning, or reassigning a task must not automatically create a work log; logging active work must always be a separate explicit action.
 - `REQ-TIME-010`: Work location must support Office, WFH, Hybrid, Field Work, Client Office, Official Travel, and Training Venue.
 - `REQ-TIME-011`: The system must aggregate valid active work across every division for the employee's local calendar day while preserving the contribution of each division, project, and task.
 - `REQ-TIME-012`: The system must display active work, recognized break, and daily total as separate values.
@@ -192,15 +206,19 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 - `REQ-TIME-017`: The system must use accessible text/status indicators in addition to the intended grey/red, yellow, green, orange, and red visual highlighting.
 - `REQ-TIME-018`: The system must require an overtime reason whenever the daily total exceeds 8 hours.
 - `REQ-TIME-019`: The system must require an explanation and notify the employee's Team Lead and HR whenever the daily total exceeds 12 hours.
-- `REQ-TIME-020`: The system must detect overlapping entries for the same employee, including entries assigned to different divisions.
-- `REQ-TIME-021`: The system must reject duplicate entries and end times earlier than or equal to start times.
-- `REQ-TIME-022`: The system must reject entries missing a valid division, required task/project relationship, description, completed-work information, or required break information.
-- `REQ-TIME-023`: The system must reject time against an inactive project or a division to which the employee was not assigned on the entry date.
-- `REQ-TIME-024`: The system must flag or reject time entered during approved leave according to the leave type and duration and must explain the conflict.
-- `REQ-TIME-025`: Every validation response must identify the affected field or entry and state how the user can correct it.
-- `REQ-TIME-026`: Saving a daily entry must not require Team Lead approval.
+- `REQ-TIME-020`: The system must not infer clock ranges or claim overlap detection for duration-only work logs. If exact attendance intervals are required, they must be provided by a separately approved attendance capability and must not be derived from task-transition timestamps.
+- `REQ-TIME-021`: The system must prevent duplicate work logs through idempotent submission and must reject a save that would raise the employee's active work above 24 hours for the local work date.
+- `REQ-TIME-022`: The system must reject work logs missing a valid division, required task/project relationship, description, completed-work information, or required break information.
+- `REQ-TIME-023`: The system must reject a work log against an inactive project or a division to which the employee was not assigned on the work date.
+- `REQ-TIME-024`: The system must flag or reject a work log during approved leave according to the leave type and duration and must explain the conflict.
+- `REQ-TIME-025`: Every validation response must identify the affected field or work log and state how the user can correct it.
+- `REQ-TIME-026`: Saving a daily work log must not require Team Lead approval.
 - `REQ-TIME-027`: Changes made after HR verification must require an authorized unlock or amendment workflow and must preserve the before/after values and reason.
-- `REQ-TIME-028`: All daily and period calculations must use a configured business timezone and must handle cross-midnight work by splitting or attributing time according to that configured policy.
+- `REQ-TIME-028`: All daily and period calculations must use the configured business timezone. New work logs must belong to one explicit local work date; cross-midnight splitting or attribution applies only to historical clock entries.
+- `REQ-TIME-029`: Work-log duration must be stored as integer minutes, entered and displayed as `H:MM`, and must never be calculated from task-transition timestamps.
+- `REQ-TIME-030`: The system must derive each day's active work from valid work logs plus preserved historical clock entries applicable to that date, using one authoritative calculation contract.
+- `REQ-TIME-031`: Editing or correcting a work log must preserve before/after history, actor, timestamp, and reason where required, and must continue to use the verified-period amendment rules.
+- `REQ-TIME-032`: New work-log creation must be idempotent; retrying the same idempotency key must return the original result and must not create additional minutes.
 
 ### 5.4 General Remarks and Corrections
 
@@ -210,7 +228,7 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 - `REQ-RMK-004`: Employees must be able to view remarks addressed to them and add a clarification response.
 - `REQ-RMK-005`: A correction request must identify the record to change and must notify the employee.
 - `REQ-RMK-006`: Correcting a record must preserve its change history and must not erase the original remark or employee response.
-- `REQ-RMK-007`: Team Leads must be able to review missing, under-time, overtime, critical, overlapping, incomplete, leave-conflicting, and otherwise unusual records without approving every normal daily entry.
+- `REQ-RMK-007`: Team Leads must be able to review missing, under-time, overtime, critical, incomplete, leave-conflicting, material estimate-variance, and otherwise unusual records without approving every normal daily record.
 
 ### 5.5 Work From Home
 
@@ -219,7 +237,7 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 - `REQ-WFH-003`: The primary Team Lead must be able to approve, reject, request information, and add a general remark to a WFH request.
 - `REQ-WFH-004`: Authorized HR users must be able to oversee and override a WFH decision with a required reason and audit record.
 - `REQ-WFH-005`: Employees must be notified of WFH requests, information requests, approval, rejection, and overrides.
-- `REQ-WFH-006`: An approved WFH day must not itself create working hours; the employee must record normal time, break, division, project/task, and completed work with WFH as the location.
+- `REQ-WFH-006`: An approved WFH day must not itself create working hours; the employee must record normal work logs, break, division, project/task, and completed work with WFH as the location.
 - `REQ-WFH-007`: WFH reporting must provide employee history, WFH-day counts, division summaries, decisions, hours, and completed-work information.
 
 ### 5.6 Leave and Attendance
@@ -234,11 +252,11 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 
 ### 5.7 Dashboards
 
-- `REQ-DASH-001`: The Employee dashboard must show today's active work, break, total, remaining active requirement, total-schedule progress, divisions, active tasks, deadlines, and active timer.
+- `REQ-DASH-001`: The Employee dashboard must show today's active work, break, total, remaining active requirement, total-schedule progress, divisions, active tasks, deadlines, and recent work logs.
 - `REQ-DASH-002`: The Employee dashboard must show weekly/monthly totals, overtime, missing dates, recent remarks, WFH requests, leave balance, division contribution, and recently completed tasks.
-- `REQ-DASH-003`: The Employee dashboard must provide direct actions to add time, start a timer, add completed work, request WFH, and apply for leave when those modules are enabled.
+- `REQ-DASH-003`: The Employee dashboard must provide direct actions to log work, open My Tasks, add completed-work details, request WFH, and apply for leave when those modules are enabled.
 - `REQ-DASH-004`: The Team Lead dashboard must show assigned headcount, employees working today, and office/WFH/field/travel/leave status.
-- `REQ-DASH-005`: The Team Lead dashboard must identify missing, under-time, overtime, and critical records and summarize division hours, project progress, pending/overdue tasks, recent entries, requests, workload warnings, and evaluation status.
+- `REQ-DASH-005`: The Team Lead dashboard must identify missing, under-time, overtime, and critical records and summarize division hours, project progress, pending/overdue tasks, recent work logs, requests, workload warnings, and evaluation status.
 - `REQ-DASH-006`: The HR dashboard must show total/active employees, division headcount, attendance states, missing timesheets, under-time, overtime, monthly hours, evaluation periods, performance trends, WFH trends, workload concerns, and assignment information.
 - `REQ-DASH-007`: The Finance dashboard must show verified employee, division, project, and overtime hours plus authorized labour costs, billable/non-billable hours, payroll summaries, budget variance, and export history.
 - `REQ-DASH-008`: Every dashboard metric must respect the viewer's access scope and must link to a filtered detail view where detail access is allowed.
@@ -310,7 +328,7 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 ### 5.15 Integrations and External Interfaces
 
 - `REQ-INT-001`: The integration framework must support Google Calendar and Microsoft Outlook Calendar connectors.
-- `REQ-INT-002`: Calendar events may be converted only into draft time entries and must require employee review and confirmation before saving.
+- `REQ-INT-002`: Calendar events may be converted only into duration-based draft work logs and must require employee review and confirmation before saving.
 - `REQ-INT-003`: The integration framework must support future Gmail, Microsoft 365, Google Drive, OneDrive, Google Meet, Zoom, Slack, and Jira connections where approved.
 - `REQ-INT-004`: The integration framework must support future biometric attendance, payroll, accounting, and HR system connections.
 - `REQ-INT-005`: The system must provide versioned REST API and webhook capabilities for authorized integrations and may support automation platforms such as Zapier or Make.
@@ -350,17 +368,19 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 ### 6.1 Employee Time Workflow
 
 1. The employee must authenticate and see authorized assignments and tasks.
-2. The employee must select the work date, division, project/task, entry method, and work location.
-3. The employee must enter or record active work and completed-work details.
-4. The system must validate authorization, dates, overlap, leave conflicts, and required fields.
+2. The employee must move an authorized Pending task to In Progress, optionally recording a transition note; this status change must not create active time.
+3. The employee must choose Log Work and enter the local work date, task, duration in `H:MM`, division/project attribution, work location, description, and completed-work details.
+4. The system must validate authorization, task availability and status, effective assignments, date, duration, daily cap, duplicate submission, leave conflicts, and required fields.
 5. The system must calculate active work, break, daily total, remaining time, and daily status across all divisions.
-6. The employee must provide an overtime reason when required and save the entry without daily Team Lead approval.
-7. If a Team Lead requests correction, the employee must amend the record or provide clarification; the audit history must remain intact.
+6. The employee must provide an overtime reason when required and save the work log without daily Team Lead approval.
+7. When work is finished, the employee must optionally log the final duration, then move the task from In Progress to Completed with an optional note; completion itself must add no minutes.
+8. If work resumes, the employee must reopen the task to In Progress with a required reason before adding another work log.
+9. If a Team Lead requests correction, the employee must amend the work log or provide clarification; the audit history must remain intact.
 
 ### 6.2 Team Lead Review Workflow
 
 1. The Team Lead must see summaries and exceptions for assigned employees.
-2. The Team Lead must inspect missing, under-time, overtime, critical, completed-work, task, and workload information.
+2. The Team Lead must inspect missing, under-time, overtime, critical, completed-work, task, workload, and material estimate-variance information.
 3. The Team Lead must add a general remark and correction request when clarification is needed.
 4. The Team Lead must review assigned WFH and leave requests.
 5. The Team Lead must use verified operational information in periodic evaluations.
@@ -416,8 +436,8 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 |---|---|
 | Access | User, Role, Permission, UserRole, LoginHistory, Session/AuthenticationEvent |
 | Organization | Employee, Division, EmployeeDivisionAssignment, Team, WorkPolicy, HolidayCalendar |
-| Work | Project, ProjectMember, Task, TaskMember, TaskChecklistItem |
-| Time | TimeEntry, TimerSession, DailyBreak, DailySummary, TimesheetPeriod, Verification/Amendment |
+| Work | Project, ProjectMember, Task, TaskMember, TaskChecklistItem, TaskStatusTransition |
+| Time | WorkLog, HistoricalClockEntry, DailyBreak, DailySummary, TimesheetPeriod, Verification/Amendment |
 | HR | LeaveRequest, WFHRequest, AttendanceDay, EvaluationPeriod, Evaluation, EvaluationResponse, GeneralRemark |
 | Finance/reporting | CostRate, Budget, PayrollPeriod, ReportDefinition, ReportExport |
 | Collaboration | Document, DocumentVersion, Message, Comment, Announcement, Notification, Attachment |
@@ -426,9 +446,9 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 
 ### 7.2 Relationship and Integrity Rules
 
-- `REQ-DATA-001`: Every time entry must belong to one employee and one division and may belong to an authorized project and task consistent with that division.
+- `REQ-DATA-001`: Every new work log must belong to one employee, one division, one project, and one authorized task consistent with that division and project.
 - `REQ-DATA-002`: An employee-division assignment must be effective on the work date for new time to be accepted.
-- `REQ-DATA-003`: A task linked to a time entry must belong to the selected project and division.
+- `REQ-DATA-003`: A task linked to a work log must belong to the selected project and division.
 - `REQ-DATA-004`: Daily summaries must be reproducible from source entries, daily break, work policy, leave, holidays, and the applicable policy version.
 - `REQ-DATA-005`: Cost rates must be effective-dated and access-restricted so historical reports use the rate applicable to the reported work date or configured payroll policy.
 - `REQ-DATA-006`: Attachments must identify their owning record, uploader, access scope, upload timestamp, media type, size, and integrity reference.
@@ -465,7 +485,7 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 - `REQ-NFR-PERF-001`: Under the agreed production load, 95 percent of normal interactive read requests must complete within 2 seconds and write requests within 3 seconds, excluding file transfer and report generation.
 - `REQ-NFR-PERF-002`: Dashboard and standard filtered report requests must complete within 5 seconds for an agreed normal reporting period and data volume.
 - `REQ-NFR-PERF-003`: Long-running exports must execute asynchronously, show progress/status, and notify the requester when ready or failed.
-- `REQ-NFR-PERF-004`: Timer capture and saved time data must remain consistent after refresh, reconnect, retry, or duplicate client submission.
+- `REQ-NFR-PERF-004`: Work-log and task-transition saves must remain consistent and idempotent after refresh, reconnect, retry, or duplicate client submission.
 - `REQ-NFR-PERF-005`: Production availability, recovery-time objective, and recovery-point objective must be agreed before go-live and verified through an operational test.
 
 ### 9.3 Backup and Recovery
@@ -477,7 +497,7 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 ### 9.4 Accessibility and Responsive Use
 
 - `REQ-NFR-UX-001`: The product must support current mobile-phone, tablet, laptop, and desktop layouts without loss of core functionality.
-- `REQ-NFR-UX-002`: Mobile users must be able to add time, operate timers, view time/tasks/remarks/notifications, upload files, request WFH, and apply for leave.
+- `REQ-NFR-UX-002`: Mobile users must be able to log work, move tasks through permitted statuses without relying on drag, view time/tasks/remarks/notifications, upload files, request WFH, and apply for leave.
 - `REQ-NFR-UX-003`: User interfaces must meet WCAG 2.2 AA requirements for keyboard access, focus visibility, semantics, contrast, error identification, and non-colour status communication.
 - `REQ-NFR-UX-004`: Date, time, duration, status, and calculation messages must be presented consistently and in plain language.
 
@@ -485,14 +505,14 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 
 - `REQ-NFR-OPS-001`: Working-hour, overtime, evaluation, holiday, and notification policies must be configurable and versioned rather than embedded only in application code.
 - `REQ-NFR-OPS-002`: The system must provide structured operational logs, error monitoring, job monitoring, and integration-delivery diagnostics without exposing restricted data.
-- `REQ-NFR-OPS-003`: Calculation logic used by entry views, dashboards, reports, exports, evaluations, and APIs must have a single authoritative implementation or contract.
+- `REQ-NFR-OPS-003`: Calculation logic used by work-log views, dashboards, reports, exports, evaluations, and APIs must have a single authoritative implementation or contract.
 - `REQ-NFR-OPS-004`: Public APIs and webhooks must be documented, versioned, authenticated, rate-limited, and backward-compatible within their published version.
 
 ## 10. Delivery Phases
 
 | Phase | Required outcome |
 |---|---|
-| Phase 1 - Core System / MVP | Identity and roles, five initial divisions, employees and assignments, projects/basic tasks, timesheets and timers, calculations/validation, work locations, remarks/corrections, core dashboards, basic reports and exports. |
+| Phase 1 - Core System / MVP | Identity and roles, five initial divisions, employees and assignments, projects/basic task workflow, duration-based work logs, calculations/validation, work locations, remarks/corrections, core dashboards, basic reports and exports. |
 | Phase 2 - HR and Evaluation | Leave, WFH request decisions, evaluations, workload planning, notifications, Finance reports, project costing, and improved mobile workflows. |
 | Phase 3 - Collaboration | Division/project/direct messages, task comments, documents, knowledge base, announcements, and advanced search. |
 | Phase 4 - Advanced Features | AI summaries, workload forecasting, anomaly detection, automated monthly summaries, natural-language reporting, and payroll/accounting integrations. |
@@ -502,6 +522,9 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 
 - [ ] Employees can belong to and record authorized time for multiple divisions.
 - [ ] Time can be linked to a division, project, and task and includes completed-work details.
+- [ ] Employees can move authorized tasks through Pending, In Progress, and Completed with the required optional/mandatory transition notes and a non-destructive history.
+- [ ] Task status changes create no minutes; actual time comes only from explicit duration-based work logs.
+- [ ] New records require no start/end time or timer, while historical clock entries remain reproducible.
 - [ ] Office, WFH, Hybrid, Field Work, Client Office, Official Travel, and Training Venue are supported.
 - [ ] Seven active hours plus a separate one-hour break produces a complete eight-hour day.
 - [ ] Under-time, overtime, critical, missing, and normal states are calculated consistently.
@@ -516,6 +539,7 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 
 - The product owner must supply the authoritative employee list, division membership, Team Lead mapping, holiday calendars, employment schedules, leave balances, and initial projects.
 - HR must approve the work-policy definitions, payroll periods, verification process, leave rules, and retention periods.
+- HR must confirm whether exact attendance intervals are a compliance obligation; if required, a separately owned attendance capability must be approved before task-based cutover.
 - Finance must approve cost-rate handling, billable classifications, budget rules, payroll export fields, and permissions before Finance features are released.
 - Security owners must approve authentication, 2FA, government-project access, audit retention, backup, and integration credential handling.
 - Email, calendar, storage, conferencing, biometric, payroll, accounting, SSO, webhook, or automation capabilities depend on approved external accounts and provider APIs.
@@ -533,6 +557,17 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 - Team Leads make the primary WFH and leave decision for assigned employees; HR may oversee and override with a reason and audit trail.
 - Employees and assignments referenced by historical records are deactivated, not physically deleted.
 - `Verified` refers to HR period verification and does not imply that Team Leads approved every entry.
+- New active time is recorded only as explicit duration-based work logs against In Progress tasks; task transitions never create minutes.
+- Work logs may be appended more than once for a task and date, are deduplicated by idempotency key, and may not raise a local day's active total above 24:00.
+- Pending tasks reject work logs; Completed tasks reject work logs until reopened with a required reason.
+- A Team Lead may move Pending directly to Completed only with a required note; an employee follows Pending to In Progress to Completed.
+- Actual time is never capped at the estimate, and estimate variance is informational with an optional note.
+- Copy previous remains available for work logs and always creates a revalidated draft for the target date.
+- New records have no timer or clock range. Historical clock entries remain read-only and retain their original timestamps and calculation treatment.
+- Exact attendance intervals, if required, are a separate future capability and are never inferred from task-transition timestamps.
+- Exact attendance intervals are not required for the approved task-based milestone. A later legal or HR requirement must be scoped and approved as a separate attendance capability.
+- The task-based cutover boundary is the audited production deployment instant after backend Phase B4 verification. The exact UTC instant must be persisted as release metadata; record creation time, not the work date being reported, determines whether capture is historical clock-based or task-based.
+- A timer running at cutover must be stopped into an audited, uncounted draft for employee review. Existing timer drafts remain reviewable and become duration-only work logs only when saved, with source provenance retained.
 - Costs and salaries are optional protected data even for Finance users and require explicit permission.
 - All stored timestamps use a consistent canonical representation and are displayed/calculated using the configured business timezone.
 - Technical framework, database engine, cloud provider, and deployment topology are intentionally not prescribed by this requirements document.
@@ -548,7 +583,10 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 | No daily approval misunderstood as no control | Unverified data reaches Finance | Use exception review, HR period verification, locks, and audited amendments. |
 | Excessive permissions | Exposure of government, salary, cost, or evaluation data | Deny by default and test role-, scope-, and field-level access. |
 | Retrospective policy changes | Historical totals change unexpectedly | Version policies and bind verified periods to the applied version. |
-| Timer/network retries | Duplicate or lost time | Make timer/save operations idempotent and recoverable. |
+| Work-log or transition retries | Duplicate time or duplicate history | Make work-log and transition operations idempotent with unique request keys. |
+| Duration logs cannot prove clock overlap | Inflated or double-counted active time may go undetected | Enforce a 24:00 daily plausibility cap, retain overtime/critical review, show task estimate variance, and decide separately whether exact attendance evidence is required. |
+| Task movement is mistaken for time worked | Dragging a card creates false active time | Separate transition and work-log entities and prohibit calculation code from reading transition timestamps. |
+| Task-based migration changes verified history | Payroll and reporting totals change | Preserve historical rows, compare before/after summaries, require a reversible audited migration, and obtain HR sign-off. |
 | Scope growth into collaboration suite | MVP delay | Enforce phase boundaries and treat Phase 3/4 features as deferred. |
 | Poor source data | Incorrect assignments and reports | Validate and obtain owner sign-off on migrated/seed data. |
 | AI invents tasks, dates, or assignees | Incorrect commitments and workload | Validate structured output, apply confidence/match thresholds, preserve provenance, allow unassigned tasks, and make origin visible. |
@@ -564,7 +602,7 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 - `AC-CALC-002`: Given 6 hours 59 minutes active work and a 1-hour break on a standard day, the system must show Under-time.
 - `AC-CALC-003`: Given 7 hours 1 minute active work and a 1-hour break, the system must show an 8-hour 1-minute total, require an overtime reason, and show Overtime.
 - `AC-CALC-004`: Given a total of exactly 12 hours, the system must show Overtime; given 12 hours 1 minute, it must require an explanation, show Critical, and notify the Team Lead and HR.
-- `AC-CALC-005`: Given valid entries in two divisions that overlap in clock time, the system must reject the conflict even though the divisions differ.
+- `AC-CALC-005`: Given a proposed work log that would raise the employee's active work above 24 hours on one local date, the system must reject the log with field-level corrective guidance.
 - `AC-CALC-006`: Given approved full-day leave or an applicable holiday, the system must not show a missing timesheet for that date.
 - `AC-CALC-007`: Given half-day leave, the system must use the proportionally adjusted daily requirements.
 
@@ -584,6 +622,11 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 - `AC-WF-004`: An approved WFH request must update attendance context but must not create hours automatically.
 - `AC-WF-005`: A calendar integration must create a draft that is excluded from totals until the employee confirms and saves it.
 - `AC-WF-006`: Every protected export must appear in export history with requester, filters, format, timestamp, and status.
+- `AC-WF-007`: Moving a task from Pending to In Progress must create an append-only transition with its optional note and must not change active work, break, daily total, or any report total.
+- `AC-WF-008`: A task estimated at 8:00 with valid work logs totalling 9:15 must retain its 8:00 estimate, show 9:15 actual and `+1:15` variance, and allow completion with an optional note.
+- `AC-WF-009`: A Completed task must reject a work log submitted through either the interface or API; after reopening to In Progress with a required reason, it must accept an otherwise valid work log.
+- `AC-WF-010`: Retrying the same work-log or transition request with the same idempotency key must produce exactly one operational record.
+- `AC-WF-011`: Historical clock entries must render read-only with their original ranges and must produce the same verified-period totals after migration.
 
 ### 14.4 Reporting and Quality Scenarios
 
@@ -591,7 +634,7 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 - `AC-RPT-002`: Dashboard, report, export, and evaluation totals must reconcile for the same employee, period, timezone, and policy version.
 - `AC-RPT-003`: Excel, CSV, PDF, and print outputs must contain the requested filters, reporting period, generation timestamp, and only authorized fields and rows.
 - `AC-QUAL-001`: Core employee and reviewer workflows must operate at supported mobile, tablet, laptop, and desktop widths without clipped controls or horizontal page scrolling except for intentionally scrollable data tables.
-- `AC-QUAL-002`: Keyboard-only and screen-reader testing must validate WCAG 2.2 AA behavior for authentication, time entry, timer, requests, remarks, reports, and navigation.
+- `AC-QUAL-002`: Keyboard-only and screen-reader testing must validate WCAG 2.2 AA behavior for authentication, task-board transitions, Log Work, requests, remarks, reports, and navigation; every drag operation must have a button and keyboard alternative.
 - `AC-QUAL-003`: A production-like backup must be restored and reconciled before go-live.
 
 ### 14.5 Meeting Minutes and AI Scenarios

@@ -4,11 +4,11 @@
 
 | Field | Value |
 |---|---|
-| Status | Draft - derived from `project_requirement.md` v1.1 |
-| Last updated | 13 September 2026 |
+| Status | Approved architecture baseline - derived from `project_requirement.md` v1.2 |
+| Last updated | 14 September 2026 |
 | Requirements source | `project_requirement.md` |
-| Delivery plans | `frontend_milestone.md`, `backend_milestone.md` |
-| Implemented so far | Frontend Phases 0-10; Backend Phases 0-3 (architecture, MySQL foundation, access/audit, organization/work) |
+| Delivery plans | `frontend_milestone.md`, `backend_milestone.md`, `modify_milestone.md` |
+| Implemented so far | Existing frontend/backend baseline plus Modify Phase 0; task-based coding begins in Modify Phase F1 |
 
 This document explains *how* the system is structured and *why*. It derives the structure from the requirements rather than restating them, and it distinguishes decisions that are fixed from decisions still open.
 
@@ -20,11 +20,11 @@ Most of this system is ordinary CRUD. Six requirements are not, and they are wha
 
 | # | Driver | Requirement | Structural consequence |
 |---|---|---|---|
-| D1 | **One authoritative calculation.** Entry validation, dashboards, reports, exports, evaluations, and APIs must all agree. | `REQ-NFR-OPS-003`, `REQ-DASH-009`, `AC-RPT-002` | A framework-independent calculation engine that every caller shares. No calculation may exist in a component, route handler, or SQL aggregate. |
+| D1 | **One authoritative calculation.** Work-log validation, dashboards, reports, exports, evaluations, and APIs must all agree. | `REQ-NFR-OPS-003`, `REQ-DASH-009`, `AC-RPT-002` | A framework-independent calculation engine that every caller shares. No calculation may exist in a component, route handler, or SQL aggregate. |
 | D2 | **Reproducible history.** A policy edit today must not change a verified period from last month. | `REQ-NFR-OPS-001`, `REQ-DATA-004`, `AC-WF-003` | Effective-dated, versioned policies; every stored calculation binds the policy version applied. |
 | D3 | **Deny by default, at every boundary.** Government-project, salary, cost, evaluation, export and audit data. | `REQ-NFR-SEC-001`, `REQ-NFR-SEC-004`, `AC-AUTH-001`–`005` | A single authorization service consulted by pages, actions, routes, jobs, search, reports and exports — with row *and* field-level decisions. |
-| D4 | **No daily approval, but still controlled.** Entries save without a Team Lead; control comes from exception review plus HR period verification. | `REQ-TIME-026`, `REQ-TIME-027`, Assumption §12 | Period state (`open` → `verified` → `amended`) is a first-class concept that gates mutation, not a workflow bolted onto records. |
-| D5 | **Idempotent, recoverable time capture.** Timers and saves must survive refresh, retry, and duplicate submission. | `REQ-TIME-008`, `REQ-NFR-PERF-004`, `BAC-TIME-06/07` | Database-enforced single-running-timer invariant; idempotency keys on every time mutation. |
+| D4 | **No daily approval, but still controlled.** Work logs save without a Team Lead; control comes from exception review plus HR period verification. | `REQ-TIME-026`, `REQ-TIME-027`, Assumption §12 | Period state (`open` → `verified` → `amended`) is a first-class concept that gates mutation, not a workflow bolted onto records. |
+| D5 | **Task workflow and active time are separate.** Transitions must never create minutes; work-log and transition retries must be idempotent. | `REQ-WORK-012`–`014`, `REQ-TIME-009`, `REQ-TIME-032`, `REQ-NFR-PERF-004` | Separate transition/work-log contracts and module boundaries; unique idempotency keys on both mutation types; the calculation engine cannot consume transition timestamps. |
 | D6 | **Latency budgets.** 2 s reads / 3 s writes / 5 s dashboards at p95. | `REQ-NFR-PERF-001`–`003` | Derived daily summaries are materialised, not recomputed per request; long work moves to a durable job runner. |
 | D7 | **AI is assistive, durable, and explainable.** Human-authored minutes survive every AI outcome; AI suggestions never become trusted authorization or identity decisions. | `REQ-MTG-007`–`023`, `AC-MTG-003`–`010` | Save the source first, process asynchronously, validate structured output, match against current authorized data, preserve provenance, and support retry without duplication. |
 
@@ -129,8 +129,8 @@ Modules are vertical slices with explicit dependencies. A module may depend on t
 ```
 access          identity, sessions, roles, permissions
 organization    employees, divisions, assignments, work policies, holidays
-work            projects, project members, tasks, checklists
-time            entries, timers, breaks, daily summaries, periods, verification
+work            projects, project members, tasks, checklists, status transitions
+time            work logs, historical clock entries, breaks, daily summaries, periods, verification
 hr              WFH, leave, attendance derivation
 evaluation      periods, facts, scoring, weighting, publication
 reporting       report queries, exports
@@ -154,7 +154,7 @@ Shared layers cut across all of them: **domain rules**, **application services**
 
 This is the most important component in the system, and the one most likely to be duplicated by accident.
 
-**Responsibility.** Given an employee, a work date, their valid time entries, the recognized break, the effective work policy, and leave/holiday context, produce a `DailySummary`: active minutes, break minutes, total, required active, remaining, classification, per-division and per-project contributions, attendance state, and the policy version applied.
+**Responsibility.** Given an employee, a work date, their valid duration-based work logs plus applicable historical clock entries, the recognized break, the effective work policy, and leave/holiday context, produce a `DailySummary`: active minutes, break minutes, total, required active, remaining, classification, per-division and per-project contributions, attendance state, and the policy version applied.
 
 **Properties it must have:**
 
@@ -167,17 +167,17 @@ This is the most important component in the system, and the one most likely to b
 
 | Condition on the day | Result |
 |---|---|
-| Required working day, no entry, no approved exemption | Missing |
-| Has entries, active < 7:00 **or** total < 8:00 | Under-time |
+| Required working day, no work log or historical entry, no approved exemption | Missing |
+| Has active work, active < 7:00 **or** total < 8:00 | Under-time |
 | Active = 7:00 and total = 8:00 (policy-adjusted) | Complete |
 | Total > 8:00 through exactly 12:00 | Overtime — reason required |
 | Total > 12:00 | Critical — explanation required, notify Team Lead and HR |
 
 Note the asymmetry that makes this easy to get wrong: **exactly 12:00 is Overtime**, and Under-time requires failing *either* threshold, not both.
 
-**Break handling.** The break is a single recognized daily value, not a per-entry addition (`REQ-TIME-013`, Assumption §12). This is the single most common misreading of the domain, and it is why `DailyBreak` is its own record keyed by employee and date rather than a column on a time entry.
+**Break handling.** The break is a single recognized daily value, not a per-work-log addition (`REQ-TIME-013`, Assumption §12). This is the single most common misreading of the domain, and it is why `DailyBreak` is its own record keyed by employee and date rather than a column on a work log.
 
-**Materialisation.** `DailySummary` is persisted, not computed per request, to meet **D6**. It is recalculated transactionally whenever a contributing fact changes — an entry, the break, an approved leave, a holiday, or a policy assignment. The trade is deliberate: writes get slower and more complex in exchange for dashboard and report reads that stay inside budget. Because the engine is pure, a stored summary can always be re-derived from its inputs and reconciled, which is what makes the trade safe.
+**Materialisation.** `DailySummary` is persisted, not computed per request, to meet **D6**. It is recalculated transactionally whenever a contributing fact changes — a work log, a historical-entry amendment, the break, an approved leave, a holiday, or a policy assignment. A task transition alone never invalidates or changes a daily summary. The trade is deliberate: writes get slower and more complex in exchange for dashboard and report reads that stay inside budget. Because the engine is pure, a stored summary can always be re-derived from its inputs and reconciled, which is what makes the trade safe.
 
 ---
 
@@ -221,8 +221,8 @@ Date-effectiveness deserves emphasis. A Team Lead's authority is not "these empl
 |---|---|
 | Access | User, Role, Permission, UserRole, Session, LoginHistory |
 | Organization | Employee, Division, EmployeeDivisionAssignment, Team, WorkPolicy, HolidayCalendar |
-| Work | Project, ProjectMember, Task, TaskMember, TaskChecklistItem |
-| Time | TimeEntry, TimerSession, DailyBreak, DailySummary, TimesheetPeriod, Verification, Amendment |
+| Work | Project, ProjectMember, Task, TaskMember, TaskChecklistItem, TaskStatusTransition |
+| Time | WorkLog, HistoricalClockEntry, DailyBreak, DailySummary, TimesheetPeriod, Verification, Amendment |
 | HR | LeaveRequest, WFHRequest, AttendanceDay, EvaluationPeriod, Evaluation, EvaluationResponse, GeneralRemark |
 | Finance | CostRate, Budget, PayrollPeriod, ReportDefinition, ReportExport |
 | Collaboration | Document, DocumentVersion, Message, Comment, Announcement, Notification, Attachment |
@@ -231,13 +231,14 @@ Date-effectiveness deserves emphasis. A Team Lead's authority is not "these empl
 
 ### 8.2 Time and timezone strategy
 
-Three values are stored for every time fact, and all three are needed:
+New work logs and workflow events deliberately carry different notions of time:
 
-- **UTC instant** — the unambiguous point in time.
-- **Local work date** — which day the work belongs to, decided by policy, not by UTC arithmetic.
-- **Business timezone** — how to render and re-derive it.
+- **Work log:** explicit local work date, integer duration minutes, business timezone, and UTC creation/update audit instants. It has no start/end range.
+- **Task transition:** a UTC event instant plus display timezone for history. The calculation engine cannot use it as duration evidence.
+- **Historical clock entry:** original UTC start/end instants, stored local work date, timezone, and applied policy version.
+- **Cutover metadata:** one audited UTC deployment instant. Record creation time, not the reported work date, determines whether capture follows the historical or task-based model.
 
-The local work date is stored rather than computed because cross-midnight work makes the two disagree. A shift from 22:30 to 01:15 is attributed or split according to the configured policy (`REQ-TIME-028`); once decided, that decision must survive a timezone or DST change, which it cannot if the date is derived on read.
+The local work date is stored because it is the explicit day to which a duration work log contributes. Cross-midnight attribution remains only for historical clock entries (`REQ-TIME-028`); its stored result must survive timezone or policy changes.
 
 ### 8.3 Precision
 
@@ -277,25 +278,25 @@ stateDiagram-v2
     Amended --> Verified: re-verified
 ```
 
-- Entries save with **no Team Lead approval** at any point (`REQ-TIME-026`).
-- Team Leads review by *exception* — missing, under-time, overtime, critical, overlapping, incomplete, leave-conflicting — and raise a general remark or correction request (`REQ-RMK-007`).
+- Work logs save with **no Team Lead approval** at any point (`REQ-TIME-026`).
+- Team Leads review by *exception* — missing, under-time, overtime, critical, incomplete, leave-conflicting, and material estimate variance — and raise a general remark or correction request (`REQ-RMK-007`).
 - **HR verification** fixes the period's included records, calculation results, and applied policy version, transactionally (`REQ-TIME-027`).
 - After verification, ordinary mutations are rejected with a locked-period conflict. Changes require an authorized amendment carrying a reason, preserving before/after values, recalculating affected summaries, and surfacing to Finance (`AC-WF-003`).
 - Finance reporting **defaults to verified periods**; explicitly authorized unverified data is visibly flagged (`REQ-RPT-010`).
 
-The word "verified" means HR period verification. It never implies a Team Lead approved individual entries — a distinction the UI is also required to preserve.
+The word "verified" means HR period verification. It never implies a Team Lead approved individual work logs — a distinction the UI is also required to preserve.
 
 ---
 
 ## 10. Transactions, Concurrency, and Idempotency
 
-**Transaction boundaries** wrap any operation that changes related records plus derived summaries: saving or editing an entry, stopping a timer, overriding a break, approving leave that alters requirements, verifying a period, amending a verified record, and importing external data.
+**Transaction boundaries** wrap any operation that changes related records plus derived summaries: saving or editing a work log, overriding a break, approving leave that alters requirements, verifying a period, amending a verified record, and importing external data. A task transition writes history and task state atomically but does not recalculate a daily summary unless the same user action separately saves a work log.
 
-**The single-timer invariant** (`REQ-TIME-008`) is enforced by the *database*, not by application checks. A read-then-write guard loses the race; a partial unique constraint on running timers per employee cannot. Two concurrent start requests must yield exactly one active timer (`BAC-TIME-06`).
+**Transition concurrency** uses optimistic versioning plus an append-only transition row. Two simultaneous moves from the same task version must produce one transition and one defined conflict, never two histories or a silent overwrite.
 
-**Overlap detection spans divisions.** An employee cannot be in two places at once, so entries for the same employee are checked against each other regardless of which division they belong to (`REQ-TIME-020`, `AC-CALC-005`). This is the check most likely to be scoped too narrowly.
+**Duration plausibility replaces overlap validation.** New work logs contain no clock range, so the system cannot claim overlap detection. It rejects a save that would raise active work above 24:00 for one local date and retains overtime/critical and estimate-variance exception review. Exact attendance evidence is outside this milestone and must not be inferred from transition timestamps (`REQ-TIME-020`, `AC-CALC-005`).
 
-**Idempotency keys** accompany every time mutation and export request. A retried timer-stop, a duplicate form submission, or a replayed webhook must not create a second entry or a second export (`REQ-NFR-PERF-004`, `BAC-TIME-07`). The frontend contracts already carry `IdempotentInput` on these operations.
+**Idempotency keys** accompany every work-log mutation, task transition, and export request. A retried save, duplicate move, or replayed webhook must not create a second work log, transition, or export (`REQ-TIME-032`, `REQ-NFR-PERF-004`).
 
 **Optimistic versioning** guards concurrent edits to the same record, so a stale write is rejected rather than silently overwriting a colleague's correction.
 
@@ -427,7 +428,9 @@ Also open, and required from the business rather than engineering: authoritative
 | Authorization applied after aggregation | Counts and totals leak unauthorized records | Row filtering before aggregation; explicit tests on counts, empty groups, and search |
 | Floating-point durations or money | Incorrect payroll totals | Integer minutes and fixed decimals enforced in the schema and the type system |
 | Cross-midnight or DST ambiguity | Wrong daily status and overtime | Store UTC + local work date + timezone + policy version; boundary tests |
-| Race in timer start or period verification | Duplicate time; shifting payroll totals | Database constraints, transactions, idempotency keys, version checks, concurrency tests |
+| Race in a work-log save, task transition, or period verification | Duplicate time/history; shifting payroll totals | Database constraints, transactions, idempotency keys, version checks, concurrency tests |
+| Transition timestamp reaches the calculation engine | Task movement creates false active time | Separate contracts/modules and dependency tests that prevent the engine importing transitions |
+| Duration logs are treated as attendance intervals | False claims about presence or overlap | Store no inferred ranges; expose exact attendance only through a separately approved capability |
 | Policy edit rewrites history | Past reports stop reproducing | Versioned policies; verified periods bound to the applied version |
 | Long work inside the request lifecycle | Timeouts; lost exports and notifications | Durable job runner with retries, idempotency and monitoring |
 | Permission cached past a revocation | Data leak | Cache only what is principal-scoped or permission-independent |

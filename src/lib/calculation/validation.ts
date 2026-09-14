@@ -17,6 +17,7 @@ import type {
   WorkPolicy,
 } from '@/contracts/domain';
 import type { FieldError } from '@/contracts/results';
+import type { WorkLog, WorkLogInput } from '@/contracts/work-log';
 import { formatTimeRange, formatDuration } from '@/lib/format';
 import type { LeaveContext } from './engine';
 import { calculateDay, requiresCriticalExplanation, requiresOvertimeReason } from './engine';
@@ -206,7 +207,7 @@ export function validateEntry(
         message: 'That task belongs to a different project.',
         guidance: 'Choose a task from the selected project.',
       });
-    } else if (!taskAcceptsTime(task.reviewState)) {
+    } else if (!taskAcceptsTime(task)) {
       /*
        * A task an employee raised for themselves accepts no time until their
        * Team Lead has endorsed it. Without this, someone could invent a task,
@@ -391,6 +392,204 @@ export function validateEntry(
       guidance:
         'Explain why. Your Team Lead and HR are notified for days above twelve hours.',
     });
+  }
+
+  return errors;
+}
+
+/** Context used to validate new duration-only task work logs. */
+export interface WorkLogValidationContext {
+  readonly policy: WorkPolicy;
+  readonly existingWorkLogs: readonly WorkLog[];
+  readonly historicalEntries?: readonly TimeEntry[];
+  readonly effectiveDivisionIds: readonly string[];
+  readonly projects: readonly Project[];
+  readonly tasks: readonly Task[];
+  /** Additional tasks explicitly made available to this employee. */
+  readonly availableTaskIds?: readonly string[];
+  readonly leave?: LeaveContext | null;
+  readonly holidayName?: string | null;
+  readonly isPeriodLocked?: boolean;
+  readonly breakOverrideMinutes?: DurationMinutes | null;
+  readonly excludeWorkLogId?: string;
+}
+
+function workLogError(
+  field: string,
+  code: string,
+  message: string,
+  guidance: string,
+  relatedRecordId?: string,
+): FieldError {
+  return relatedRecordId
+    ? { field, code, message, guidance, relatedRecordId }
+    : { field, code, message, guidance };
+}
+
+/**
+ * Validates new task-based work. Clock ranges and overlap are intentionally
+ * absent: a duration-only record cannot prove when work occurred.
+ */
+export function validateWorkLog(
+  draft: WorkLogInput,
+  context: WorkLogValidationContext,
+): readonly FieldError[] {
+  const errors: FieldError[] = [];
+  const {
+    policy,
+    existingWorkLogs,
+    historicalEntries = [],
+    effectiveDivisionIds,
+    projects,
+    tasks,
+    availableTaskIds = [],
+    leave,
+    holidayName,
+    isPeriodLocked,
+    breakOverrideMinutes,
+    excludeWorkLogId,
+  } = context;
+
+  if (isPeriodLocked) {
+    return [workLogError(
+      'workDate',
+      'PERIOD_LOCKED',
+      'This period has been verified by HR and is locked.',
+      'Request an amendment with a reason instead of editing the work log directly.',
+    )];
+  }
+
+  if (!draft.divisionId) {
+    errors.push(workLogError('divisionId', 'DIVISION_REQUIRED', 'A division is required.', 'Choose the division this work belongs to.'));
+  } else if (!effectiveDivisionIds.includes(draft.divisionId)) {
+    errors.push(workLogError('divisionId', 'DIVISION_NOT_EFFECTIVE', 'You were not assigned to this division on this date.', 'Choose an effective division assignment or ask HR to update it.'));
+  }
+
+  const project = projects.find((item) => item.id === draft.projectId);
+  if (!draft.projectId || !project) {
+    errors.push(workLogError('projectId', 'PROJECT_NOT_FOUND', 'That project is not available to you.', 'Choose an active project from the selected division.'));
+  } else {
+    if (!project.isActive || !project.acceptsTimeEntries) {
+      errors.push(workLogError('projectId', 'PROJECT_INACTIVE', `${project.name} is not accepting new work.`, 'Choose an active project, or ask your Team Lead to reopen it.'));
+    }
+    if (project.divisionId !== draft.divisionId) {
+      errors.push(workLogError('projectId', 'PROJECT_DIVISION_MISMATCH', 'That project belongs to a different division.', 'Choose a project from the selected division.'));
+    }
+  }
+
+  const task = tasks.find((item) => item.id === draft.taskId);
+  if (!draft.taskId || !task) {
+    errors.push(workLogError('taskId', 'TASK_NOT_FOUND', 'That task is not available to you.', 'Choose an assigned In Progress task.'));
+  } else {
+    if (task.projectId !== draft.projectId || task.divisionId !== draft.divisionId) {
+      errors.push(workLogError('taskId', 'TASK_PROJECT_MISMATCH', 'That task does not belong to the selected project and division.', 'Choose a task from the selected project.'));
+    }
+
+    const assigned =
+      task.assigneeEmployeeId === draft.employeeId ||
+      task.supportingMemberIds.includes(draft.employeeId) ||
+      availableTaskIds.includes(task.id);
+    if (!assigned) {
+      errors.push(workLogError('taskId', 'TASK_NOT_ASSIGNED', 'That task is not assigned or available to you.', 'Choose one of your assigned tasks, or ask your Team Lead to assign it.'));
+    }
+
+    if (!taskAcceptsTime(task)) {
+      const statusCode =
+        task.status === 'completed'
+          ? 'TASK_COMPLETED'
+          : task.status === 'pending'
+            ? 'TASK_NOT_STARTED'
+            : task.reviewState === 'rejected'
+              ? 'TASK_REVIEW_REJECTED'
+              : 'TASK_AWAITING_REVIEW';
+      const guidance =
+        task.status === 'completed'
+          ? 'Reopen the task with a reason before logging more work.'
+          : task.status === 'pending'
+            ? 'Start the task before logging work.'
+            : 'Wait for Team Lead review, or choose another task.';
+      errors.push(workLogError('taskId', statusCode, 'That task cannot receive work yet.', guidance));
+    }
+  }
+
+  if (!Number.isSafeInteger(draft.durationMinutes) || draft.durationMinutes <= 0) {
+    errors.push(workLogError('durationMinutes', 'DURATION_REQUIRED', 'A positive duration is required.', 'Enter the active duration as H:MM, for example 3:00.'));
+  }
+
+  if (!draft.idempotencyKey.trim()) {
+    errors.push(workLogError('idempotencyKey', 'IDEMPOTENCY_KEY_REQUIRED', 'This work log is missing its retry key.', 'Retry from the form so the save can be safely deduplicated.'));
+  } else {
+    const duplicate = existingWorkLogs.find(
+      (item) =>
+        item.id !== excludeWorkLogId &&
+        item.idempotencyKey === draft.idempotencyKey,
+    );
+    if (duplicate) {
+      errors.push(workLogError('idempotencyKey', 'DUPLICATE_SUBMISSION', 'This work log has already been saved.', 'Use the original saved work log instead of submitting it again.', duplicate.id));
+    }
+  }
+
+  const currentMinutes =
+    existingWorkLogs
+      .filter((item) => item.id !== excludeWorkLogId && item.state !== 'draft')
+      .reduce((sum, item) => sum + item.durationMinutes, 0) +
+    historicalEntries
+      .filter((item) => item.state !== 'draft')
+      .reduce((sum, item) => sum + item.activeMinutes, 0);
+  if (
+    Number.isSafeInteger(draft.durationMinutes) &&
+    draft.durationMinutes > 0 &&
+    currentMinutes + draft.durationMinutes > 24 * 60
+  ) {
+    errors.push(workLogError('durationMinutes', 'DAILY_ACTIVE_LIMIT', 'This work log would raise the day above 24:00 active work.', `Enter no more than ${formatDuration(Math.max(0, 24 * 60 - currentMinutes))}, or correct an existing work log first.`));
+  }
+
+  if (leave?.portion === 'full_day') {
+    errors.push(workLogError('workDate', 'LEAVE_CONFLICT', 'You have approved full-day leave on this date.', 'Choose another date, or ask HR to amend the leave record if you worked.'));
+  }
+  if (holidayName) {
+    errors.push(workLogError('workDate', 'HOLIDAY_CONFLICT', `${holidayName} is a holiday.`, 'Ask HR to confirm holiday work before saving it.'));
+  }
+  if (!draft.workDescription.trim()) {
+    errors.push(workLogError('workDescription', 'DESCRIPTION_REQUIRED', 'A work description is required.', 'Describe what you worked on.'));
+  }
+  if (!draft.completedWork.trim()) {
+    errors.push(workLogError('completedWork', 'COMPLETED_WORK_REQUIRED', 'Completed work is required.', 'Describe the outcome, not only the activity.'));
+  }
+
+  if (Number.isSafeInteger(draft.durationMinutes) && draft.durationMinutes > 0) {
+    const actor = { userId: 'preview', displayName: 'Preview' };
+    const stamp = `${draft.workDate}T00:00:00+06:00`;
+    const candidate: WorkLog = {
+      ...draft,
+      id: 'preview',
+      state: 'saved',
+      policyVersion: policy.version,
+      createdAt: stamp,
+      createdBy: actor,
+      updatedAt: stamp,
+      updatedBy: actor,
+    };
+    const dayTotal = calculateDay({
+      employeeId: draft.employeeId,
+      workDate: draft.workDate,
+      policy,
+      workLogs: [
+        ...existingWorkLogs.filter((item) => item.id !== excludeWorkLogId && item.state !== 'draft'),
+        candidate,
+      ],
+      historicalEntries,
+      breakOverrideMinutes,
+      leave,
+      holidayName,
+    }).totalMinutes;
+
+    if (requiresOvertimeReason(dayTotal, policy) && !draft.overtimeReason?.trim()) {
+      errors.push(workLogError('overtimeReason', 'OVERTIME_REASON_REQUIRED', `This brings the day to ${formatDuration(dayTotal)}, above eight hours.`, 'Give a reason for the overtime.'));
+    }
+    if (requiresCriticalExplanation(dayTotal, policy) && !draft.criticalExplanation?.trim()) {
+      errors.push(workLogError('criticalExplanation', 'CRITICAL_EXPLANATION_REQUIRED', `This brings the day to ${formatDuration(dayTotal)}, above twelve hours.`, 'Explain why. Your Team Lead and HR are notified for days above twelve hours.'));
+    }
   }
 
   return errors;

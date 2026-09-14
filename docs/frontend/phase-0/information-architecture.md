@@ -111,42 +111,42 @@ Default route after login: `/dashboard`.
 
 Each flow lists the start point, the success state, the failure states that must be designed, and the mobile behavior.
 
-### 2.1 Employee Time Entry
+### 2.1 Employee Log Work
 
-1. `/dashboard` → "Add time" quick action, or `/timesheets` → select date → "Add entry".
-2. Entry drawer: date, division, project, task, entry method (clock or duration), work location.
-3. Constrained selects: projects filter by division; tasks filter by project; divisions filter by assignments effective on the chosen date.
-4. Live calculation preview: entry duration, day active work, recognized break, daily total, remaining active requirement, resulting status.
-5. Description and completed work required; attachment or link optional.
-6. Above 8:00 total, the overtime reason field is revealed and required. Above 12:00 total, the critical explanation is additionally revealed and required.
-7. Save → success toast, drawer closes, day view and dashboard totals update.
+1. `/dashboard` → "Log work", `/tasks` → an In Progress task → "Log today's work", or `/timesheets` → select a date → "Log work".
+2. The work-log form shows the selected task and its division/project, then collects local work date, duration in `H:MM`, work location, description, and completed-work details; attachment or link is optional.
+3. Task selection is limited to In Progress tasks assigned or explicitly available to the employee, approved where employee-raised-task review applies, in an active project and an effective division assignment.
+4. Live calculation preview shows log duration, day active work, recognized break, daily total, remaining active requirement, and resulting status.
+5. Above 8:00 total, the overtime reason field is revealed and required. Above 12:00 total, the critical explanation is additionally revealed and required.
+6. Save → success toast, form closes, task actual/variance, day view, dashboard, and authorized summaries update.
 
-**Failure states:** end at or before start; overlap with an existing entry, including one in a different division; duplicate entry; inactive project; division not assigned on the work date; approved-leave conflict; missing description or completed work; locked/verified period; permission denied; save failure with retry.
+**Failure states:** task is Pending or Completed; task is not assigned/available; duplicate retry; duration is zero/invalid or would raise the local day above 24:00; inactive project; division not assigned on the work date; approved-leave conflict; missing description or completed work; locked/verified period; permission denied; save failure with retry.
 
-**Mobile:** the drawer becomes a full-screen sheet with a sticky footer action bar that stays reachable above the on-screen keyboard; the calculation preview pins under the header.
+**Mobile:** the form becomes a full-screen sheet with a sticky footer action bar that stays reachable above the on-screen keyboard; the calculation preview pins under the header.
 
-### 2.2 Timer
+### 2.2 Task Status Workflow
 
-1. Start from the dashboard quick action, the shell timer control, or a task detail page.
-2. Required context: division, project or task, work location.
-3. The running timer appears in the top bar on every route with elapsed time and a stop control.
-4. Stop → a clearly identified **draft** entry opens for review; the employee completes description and completed work, then saves.
+1. `/tasks` opens All, Pending, In Progress, Completed, Overdue, and Upcoming views. The first three are workflow states; Overdue and Upcoming are date-derived filters.
+2. Pending → In Progress uses drag, "Start" button, or keyboard action and opens a confirmation with `Note (optional)`.
+3. In Progress → Completed uses drag, "Complete" button, or keyboard action and opens a panel showing estimate, actual, variance, optional final Log Work, and `Note (optional)`.
+4. Completed → In Progress uses "Reopen" and requires a reason while preserving the original completion event.
+5. Every move creates an append-only task-history event and creates **no active minutes**. Logging work is always a separate explicit action.
 
-**Failure states:** an attempt to start a second timer (blocked with an explanation, never two visually active timers); timer recovered after a refresh (recovery banner); stop failing with retry; discarding a draft with confirmation.
+**Failure states:** illegal transition; stale card or concurrent move; task outside the viewer's scope; employee-raised task not yet accepted; duplicate retry; save failure with retry. A completed task refuses new work until reopened.
 
-**Mobile:** the timer indicator collapses to a compact pill in the header and remains tappable at 44 px.
+**Mobile and accessibility:** below 768 px the board becomes a status-grouped list. Every drag action has an equivalent visible button and keyboard action; drag is never the only interaction.
 
-### 2.3 Copy Previous Entry
+### 2.3 Copy Previous Work Log
 
-1. `/timesheets/[date]` → "Copy previous entry" → pick a source entry from recent days.
-2. The copy opens as an editable draft on the **target** date with no approval or verification state carried over.
-3. Full revalidation runs before save.
+1. `/timesheets/[date]` → "Copy previous" → pick a source work log from recent days.
+2. The copy opens as a clearly identified editable draft on the **target** date with no verification state carried over.
+3. Full task-status, assignment, date, duration, leave, lock, and permission validation runs before save.
 
 ### 2.4 Correction Cycle
 
 1. Team Lead: `/team/timesheets` → filter exceptions → open a timesheet detail.
 2. Add one general remark; optionally mark it a correction request naming the record to change; preview the employee notification.
-3. Employee: remark inbox → open remark → either add a clarification response or open the linked record for correction.
+3. Employee: remark inbox → open remark → either add a clarification response or open the linked work log for correction.
 4. Correction editing shows locked fields, a change summary, and requires resubmission.
 5. Team Lead: reviews the response and corrected values, then resolves the remark.
 
@@ -170,7 +170,7 @@ Each flow lists the start point, the success state, the failure states that must
 ### 2.7 Team Lead Review
 
 1. `/dashboard` → exception tile → `/team/timesheets` pre-filtered to that exception.
-2. Inspect the calculation breakdown, entries, completed work, anomalies, remarks, and change history.
+2. Inspect the calculation breakdown, work logs, completed work, task estimate variance, anomalies, remarks, and change history.
 3. Act via remark or correction request. **No approve control exists on any daily record.**
 
 ### 2.8 HR Period Verification
@@ -226,7 +226,7 @@ Each flow lists the start point, the success state, the failure states that must
 
 ### 3.5 Mobile navigation
 
-- Below 768 px: a top app bar (page context, search trigger, notifications, timer pill, profile) plus a bottom navigation bar of at most five destinations, taken from each role's table above.
+- Below 768 px: a top app bar (page context, search trigger, notifications, profile) plus a bottom navigation bar of at most five destinations, taken from each role's table above.
 - The remaining destinations live behind a "More" sheet.
 - The drawer traps focus, closes on Escape, and restores focus to its trigger.
 - Bottom navigation respects the device safe area and never covers a sticky form action bar; when both are present, the action bar sits above the navigation.
@@ -237,14 +237,15 @@ These screens are reviewed first at every target width and are the mandatory sub
 
 | Screen | Risk | Required mobile treatment |
 |---|---|---|
-| Daily timesheet grid / timeline (`/timesheets/[date]`) | Dense time blocks, overlapping labels, many columns | Stacked entry cards with a duration bar; timeline reserved for ≥ 1024 px |
+| Daily timesheet task rows (`/timesheets/[date]`) | Multiple tasks, divisions, descriptions, and daily totals | Stacked work-log cards grouped by task, each showing duration and status; no time-of-day timeline for new records |
+| Task board (`/tasks`) | Three status columns, drag interactions, long task names, and derived Overdue/Upcoming filters | Status-grouped list below 768 px with Start, Complete, Reopen, and Log Work buttons; never require drag |
 | Team timesheet table (`/team/timesheets`) | Nine-plus columns including division contributions | Card list with employee, date, total, status badge, and a detail affordance |
 | Report builder and preview (`/reports`) | Ten-plus filters plus a wide result table | Filters in a full-screen sheet with an applied-filter summary chip row; results in a labelled horizontal scroll region |
 | Employee profile (`/employees/[id]`) | Eleven tabs of dense data | Scrollable tab strip with an overflow menu; one column below 768 px |
 | Workload planner and calendar (`/workload`) | Week grid × employees × allocation | Per-employee capacity cards; the calendar becomes a vertical agenda |
 | Finance cost tables (`/finance/project-costs`, `/finance/division-costs`) | Wide numeric tables with redaction states | Card summaries with expandable breakdown; redacted fields keep their label and show an explicit restricted marker |
 | Evaluation form (`/evaluations/[id]`) | Nine scoring areas, weights, facts, and comments | One area per section with a sticky weighted-score summary |
-| Time entry drawer (`/timesheets/[date]`) | Twelve-plus inputs plus a live preview plus the on-screen keyboard | Full-screen sheet, pinned preview, sticky footer actions |
+| Log Work form (`/timesheets/[date]`) | Task context, duration and completed-work inputs plus a live preview and on-screen keyboard | Full-screen sheet, pinned preview, sticky footer actions |
 | Attendance calendar (`/attendance`) | Month grid × nine attendance states | Vertical agenda with text status labels, never colour alone |
 | Audit log viewer (`/admin/audit`) | Wide rows with before/after payloads | Row cards with an expandable detail panel |
 

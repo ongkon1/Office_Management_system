@@ -98,7 +98,7 @@ export function selectableTasks(projectId: string): readonly Task[] {
         // An employee-raised task is not selectable until it has been
         // endorsed. The rule is enforced again in validation, because a
         // filtered dropdown is a convenience and not a control.
-        taskAcceptsTime(task.reviewState),
+        taskAcceptsTime(task),
     );
 }
 

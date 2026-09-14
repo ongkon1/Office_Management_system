@@ -22,11 +22,21 @@ Covers `FE-0013`. These are the only approved user-facing terms and formats. Any
 | Amendment | An authorized change to a verified period | "Edit", "Fix", "Reopen" |
 | Planned allocation | Expected division or project allocation | "Target hours" |
 | Actual contribution | Active work recorded for a division or project | "Real hours" |
+| Work log | An explicit duration of active work recorded for one task and local work date | "Clock entry", "timer entry", "shift" |
+| Log work | The action that creates a duration-based work log | "Start timer", "clock in", "add time range" |
+| Start task | Move an authorized task from Pending to In Progress; creates no minutes | "Start timer", "begin tracking" |
+| Complete task | Move an authorized task from In Progress to Completed; creates no minutes | "Stop timer", "finish tracking" |
+| Reopen task | Move a Completed task back to In Progress with a required reason | "Amendment" when referring to a work log or verified period |
+| Actual time | Sum of valid work-log minutes for the stated scope | "Tracked time" when no clock tracking exists |
+| Estimate variance | Actual time minus estimated time | "Overtime" unless the daily policy threshold is also exceeded |
+| Historical clock entry | Read-only pre-cutover record retaining its original time range | "Work log" when the distinction matters |
 | WFH | Work From Home, as a work location and as a request type | "Remote", "Home office" |
 | Division | The top organizational unit | "Department", "Business unit", "Company" |
 | Team Lead | The assigned reviewer role | "Manager", "Supervisor", "Approver" |
 
-Explicitly forbidden across the entire interface: any word implying **daily approval** of a timesheet — "approve", "approval", "pending approval", "awaiting sign-off" — on a daily time record. Approval language is permitted only on WFH requests, leave requests, and HR period verification, where a decision genuinely exists.
+Explicitly forbidden across the entire interface: any word implying **daily approval** of a timesheet or work log — "approve", "approval", "pending approval", "awaiting sign-off" — on a daily record. Approval language is permitted only on WFH requests, leave requests, employee-raised task review, and HR period verification, where a decision genuinely exists.
+
+Task transition notes use the label `Note (optional)` for Start and Complete. Reopen uses `Reason` and must visibly indicate that it is required. A transition timestamp describes workflow history only; user-facing copy must never imply that it measures active time.
 
 ## 2. Dates
 
@@ -71,6 +81,8 @@ Durations are stored and passed as **integer minutes** everywhere in the fronten
 
 Rules: never render `7.5 hours`; never round a displayed duration — `6:59` must never appear as `7:00`. A duration column is right-aligned and uses tabular numerals.
 
+Estimate variance uses the same signed-duration format: `+1:15` means actual time is 1 hour 15 minutes above estimate; `−0:30` means it is 30 minutes below estimate. Zero variance displays `0:00`, not `+0:00`.
+
 ## 5. Money
 
 | Context | Format | Example |
@@ -106,12 +118,14 @@ Every status renders as **text plus a shape or icon plus colour** — never colo
 
 | Workflow state | Label set |
 |---|---|
-| Task | `Pending`, `In Progress`, `Completed` (plus a separate `Overdue` marker, which is derived, not a status) |
+| Task | `Pending`, `In Progress`, `Completed` (plus separate `Overdue` and `Upcoming` markers, which are derived from dates and are not statuses) |
 | Request | `Draft`, `Pending`, `Information requested`, `Approved`, `Rejected`, `Cancelled` |
 | Remark | `Open`, `Responded`, `Corrected`, `Resolved` |
 | Period | `Open`, `Pending verification`, `Verified`, `Amended` |
 | Export | `Queued`, `Processing`, `Ready`, `Expired`, `Failed`, `Cancelled` |
 | Record | `Active`, `Inactive` (never "Deleted") |
+
+Task filters use `All`, `Pending`, `In Progress`, `Completed`, `Overdue`, and `Upcoming`. `All` is a combined view, not a stored state. A task may be both In Progress and Overdue, so every card must still show its workflow status when displayed through a derived filter.
 
 ## 8. Divisions and Names
 

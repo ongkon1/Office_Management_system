@@ -41,14 +41,14 @@ import type {
   SessionUser,
   Task,
   TaskChecklistItem,
-  TimeEntry,
-  TimerSession,
   TimesheetPeriod,
   WfhRequest,
   WorkloadWeek,
   WorkLocation,
   WorkPolicy,
 } from './domain';
+import type { TaskHistoryView, TaskStatusTransition, TaskTransitionInput } from './task-transition';
+import type { WorkLog, WorkLogInput } from './work-log';
 import type { CommonFilters, DateRange, ListQuery, Paginated } from './query';
 import type { Result } from './results';
 import type {
@@ -158,6 +158,7 @@ export interface TaskService {
 /* Time                                                                      */
 /* ------------------------------------------------------------------------- */
 
+/** @deprecated Pre-F1 UI compatibility only. New capture uses `WorkLogInput`. */
 export interface TimeEntryInput {
   /** Persisted timer draft returned by stopTimer; consumed once on save. */
   readonly draftEntryId?: string;
@@ -180,6 +181,7 @@ export interface TimeEntryInput {
   readonly criticalExplanation: string | null;
 }
 
+/** @deprecated Removed from the approved service boundary; deleted in F3. */
 export interface StartTimerInput {
   readonly divisionId: string;
   readonly projectId: string | null;
@@ -191,23 +193,32 @@ export interface TimesheetService {
   getDay(input: { employeeId: string; date: IsoDate }): Promise<Result<TimesheetDayView>>;
   getWeek(input: { employeeId: string; weekStartDate: IsoDate }): Promise<Result<TimesheetWeekView>>;
   getMonth(input: { employeeId: string; month: string }): Promise<Result<TimesheetMonthView>>;
-  listEntries(query: ListQuery): Promise<Result<Paginated<TimeEntry>>>;
+  listWorkLogs(query: ListQuery): Promise<Result<Paginated<WorkLog>>>;
   getDailySummaries(input: {
     employeeId: string;
     range: DateRange;
   }): Promise<Result<readonly DailySummary[]>>;
 
-  createEntry(input: TimeEntryInput & IdempotentInput): Promise<Result<TimeEntry>>;
-  updateEntry(id: string, input: TimeEntryInput & { readonly expectedVersion?: number }): Promise<Result<TimeEntry>>;
-  deleteEntry(id: string, expectedVersion?: number): Promise<Result<void>>;
-  /** Returns an unsaved draft on the target date (`REQ-TIME-007`). */
-  copyEntry(input: { sourceEntryId: string; targetDate: IsoDate }): Promise<Result<TimeEntryInput>>;
+  createWorkLog(input: WorkLogInput): Promise<Result<WorkLog>>;
+  updateWorkLog(
+    id: string,
+    input: WorkLogInput & { readonly expectedVersion?: number },
+  ): Promise<Result<WorkLog>>;
+  deleteWorkLog(id: string, expectedVersion?: number): Promise<Result<void>>;
+  /** Returns an unsaved duration-only draft on the target date (`REQ-TIME-007`). */
+  copyWorkLog(input: {
+    sourceWorkLogId: string;
+    targetDate: IsoDate;
+  }): Promise<Result<Omit<WorkLogInput, 'idempotencyKey'>>>;
 
   /**
    * Calculates the preview without persisting anything. Uses the same
-   * calculation contract as `createEntry`, so preview and result agree.
+   * calculation contract as `createWorkLog`, so preview and result agree.
    */
-  previewCalculation(input: TimeEntryInput): Promise<Result<EntryCalculationPreview>>;
+  previewWorkLog(input: WorkLogInput): Promise<Result<EntryCalculationPreview>>;
+
+  transitionTask(input: TaskTransitionInput): Promise<Result<TaskStatusTransition>>;
+  getTaskHistory(taskId: string): Promise<Result<TaskHistoryView>>;
 
   setBreakOverride(input: {
     employeeId: string;
@@ -216,11 +227,6 @@ export interface TimesheetService {
     reason: string;
   }): Promise<Result<DailySummary>>;
 
-  getRunningTimer(): Promise<Result<TimerSession | null>>;
-  startTimer(input: StartTimerInput & IdempotentInput): Promise<Result<TimerSession>>;
-  /** Idempotent: repeating a stop with the same key never duplicates time. */
-  stopTimer(input: { sessionId: string } & IdempotentInput): Promise<Result<TimeEntryInput>>;
-  cancelTimer(input: { sessionId: string }): Promise<Result<void>>;
 }
 
 export interface TeamTimesheetService {

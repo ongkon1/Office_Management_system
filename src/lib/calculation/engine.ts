@@ -25,6 +25,7 @@ import type {
   TimeEntry,
   WorkPolicy,
 } from '@/contracts/domain';
+import type { WorkLog } from '@/contracts/work-log';
 import { parseIsoDate } from '@/lib/format';
 
 /** Leave that applies to the day, if any. */
@@ -36,8 +37,12 @@ export interface LeaveContext {
 export interface DayCalculationInput {
   readonly employeeId: string;
   readonly workDate: IsoDate;
-  /** Saved entries only. Drafts are excluded from every total. */
-  readonly entries: readonly TimeEntry[];
+  /** New saved task work logs. Drafts are excluded from every total. */
+  readonly workLogs?: readonly WorkLog[];
+  /** Preserved pre-cutover rows whose original ranges remain reproducible. */
+  readonly historicalEntries?: readonly TimeEntry[];
+  /** @deprecated Compatibility input until Modify Phase F3 removes old callers. */
+  readonly entries?: readonly TimeEntry[];
   readonly policy: WorkPolicy;
   /** Overrides the policy's recognized break when present. */
   readonly breakOverrideMinutes?: DurationMinutes | null;
@@ -63,7 +68,16 @@ function sumBy<T>(items: readonly T[], select: (item: T) => number): number {
   return items.reduce((total, item) => total + select(item), 0);
 }
 
-function groupContributions(entries: readonly TimeEntry[]): {
+interface ActiveTimeRecord {
+  readonly id: string;
+  readonly divisionId: string;
+  readonly projectId: string | null;
+  readonly taskId: string | null;
+  readonly activeMinutes: DurationMinutes;
+  readonly workLocation: TimeEntry['workLocation'];
+}
+
+function groupContributions(entries: readonly ActiveTimeRecord[]): {
   divisions: readonly DivisionContribution[];
   projects: readonly ProjectContribution[];
   tasks: readonly { taskId: string; activeMinutes: DurationMinutes }[];
@@ -152,7 +166,7 @@ export function classifyDay(input: ClassifyInput): DayStatus {
 
 function deriveAttendance(input: {
   readonly hasEntries: boolean;
-  readonly entries: readonly TimeEntry[];
+  readonly entries: readonly ActiveTimeRecord[];
   readonly leave: LeaveContext | null | undefined;
   readonly holidayName: string | null | undefined;
   readonly isWorkingDay: boolean;
@@ -205,7 +219,9 @@ export function calculateDay(input: DayCalculationInput): DailySummary {
   const {
     employeeId,
     workDate,
-    entries,
+    entries: compatibilityEntries = [],
+    historicalEntries = [],
+    workLogs = [],
     policy,
     breakOverrideMinutes,
     leave,
@@ -215,6 +231,19 @@ export function calculateDay(input: DayCalculationInput): DailySummary {
     isLocked,
     approvedWfh,
   } = input;
+
+  const entries: readonly ActiveTimeRecord[] = [
+    ...compatibilityEntries,
+    ...historicalEntries,
+    ...workLogs.map((workLog) => ({
+      id: workLog.id,
+      divisionId: workLog.divisionId,
+      projectId: workLog.projectId,
+      taskId: workLog.taskId,
+      activeMinutes: workLog.durationMinutes,
+      workLocation: workLog.workLocation,
+    })),
+  ];
 
   const workingWeekday = isWorkingWeekday(policy, workDate);
   const isFullDayLeave = leave?.portion === 'full_day';
@@ -234,7 +263,7 @@ export function calculateDay(input: DayCalculationInput): DailySummary {
   const activeMinutes = sumBy(entries, (entry) => entry.activeMinutes);
   const hasEntries = entries.length > 0;
 
-  // The break is one daily value, never added per entry (`REQ-TIME-013`,
+  // The break is one daily value, never added per work log (`REQ-TIME-013`,
   // Assumption §12), and it is recognized only on a day with recorded work.
   const policyBreak = isHalfDayLeave
     ? Math.round(policy.recognizedBreakMinutes / 2)
