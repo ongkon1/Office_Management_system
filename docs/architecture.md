@@ -4,11 +4,11 @@
 
 | Field | Value |
 |---|---|
-| Status | Draft — derived from `project_requirement.md` v1.0 |
-| Last updated | 2 September 2026 |
+| Status | Draft - derived from `project_requirement.md` v1.1 |
+| Last updated | 13 September 2026 |
 | Requirements source | `project_requirement.md` |
 | Delivery plans | `frontend_milestone.md`, `backend_milestone.md` |
-| Implemented so far | Frontend Phases 0–1; Backend Phases 0–1 (architecture, MySQL schema/data foundation) |
+| Implemented so far | Frontend Phases 0-10; Backend Phases 0-3 (architecture, MySQL foundation, access/audit, organization/work) |
 
 This document explains *how* the system is structured and *why*. It derives the structure from the requirements rather than restating them, and it distinguishes decisions that are fixed from decisions still open.
 
@@ -26,6 +26,7 @@ Most of this system is ordinary CRUD. Six requirements are not, and they are wha
 | D4 | **No daily approval, but still controlled.** Entries save without a Team Lead; control comes from exception review plus HR period verification. | `REQ-TIME-026`, `REQ-TIME-027`, Assumption §12 | Period state (`open` → `verified` → `amended`) is a first-class concept that gates mutation, not a workflow bolted onto records. |
 | D5 | **Idempotent, recoverable time capture.** Timers and saves must survive refresh, retry, and duplicate submission. | `REQ-TIME-008`, `REQ-NFR-PERF-004`, `BAC-TIME-06/07` | Database-enforced single-running-timer invariant; idempotency keys on every time mutation. |
 | D6 | **Latency budgets.** 2 s reads / 3 s writes / 5 s dashboards at p95. | `REQ-NFR-PERF-001`–`003` | Derived daily summaries are materialised, not recomputed per request; long work moves to a durable job runner. |
+| D7 | **AI is assistive, durable, and explainable.** Human-authored minutes survive every AI outcome; AI suggestions never become trusted authorization or identity decisions. | `REQ-MTG-007`–`023`, `AC-MTG-003`–`010` | Save the source first, process asynchronously, validate structured output, match against current authorized data, preserve provenance, and support retry without duplication. |
 
 A seventh, softer driver: the system must remain **one deployable application** (`frontend_milestone.md` §2.1). That constrains the container view but not the module structure.
 
@@ -62,6 +63,7 @@ graph TB
     MAIL["Transactional email"]
     STORE["File / object storage"]
     EXT["Future: payroll, accounting,<br/>HR, SSO, biometric"]
+    AI["Approved AI provider<br/>(optional, queued)"]
 
     EMP -->|"records time, requests WFH/leave"| SYS
     TL -->|"exception review, remarks, projects"| SYS
@@ -73,6 +75,7 @@ graph TB
     SYS -.->|"draft entries only"| CAL
     SYS -->|"notifications"| MAIL
     SYS -->|"attachments, exports"| STORE
+    SYS -.->|"validated minute content"| AI
     SYS -.->|"deferred"| EXT
 ```
 
@@ -97,7 +100,7 @@ graph TB
         REPO["Repositories"]
     end
 
-    WORKER["Job runner<br/>exports, notifications,<br/>scheduled detection, retries"]
+    WORKER["Job runner<br/>exports, notifications,<br/>scheduled detection, AI retries"]
     DB[("MySQL")]
     FILES[("File / object storage")]
 
@@ -108,6 +111,7 @@ graph TB
     APP --> AUTHZ
     APP --> REPO
     WORKER --> APP
+    WORKER --> AI
     REPO --> DB
     APP --> FILES
 ```
@@ -136,6 +140,8 @@ notifications   triggers, delivery, deduplication
 integrations    REST API, webhooks, calendar connectors
 files           upload, scanning, authorized delivery
 audit           append-only event recording
+meeting_minutes clients, minutes, processing attempts, decisions, task links
+ai_matching     provider adapter, schema validation, explainable assignment scoring
 ```
 
 Shared layers cut across all of them: **domain rules**, **application services**, **authorization policies**, **repositories**, **job handlers**, and the **contracts** the UI consumes.
@@ -220,6 +226,7 @@ Date-effectiveness deserves emphasis. A Team Lead's authority is not "these empl
 | HR | LeaveRequest, WFHRequest, AttendanceDay, EvaluationPeriod, Evaluation, EvaluationResponse, GeneralRemark |
 | Finance | CostRate, Budget, PayrollPeriod, ReportDefinition, ReportExport |
 | Collaboration | Document, DocumentVersion, Message, Comment, Announcement, Notification, Attachment |
+| Meetings and AI | Client, MeetingMinute, MeetingMinuteProcessingAttempt, MeetingDecision, GeneratedTaskLink, TeamMatchResult |
 | Control | AuditLog, IntegrationConnection, WebhookDelivery, PolicyVersion |
 
 ### 8.2 Time and timezone strategy
@@ -247,6 +254,12 @@ Deactivation and versioning, never cascade deletion (`REQ-DATA-007`, `REQ-ORG-00
 ### 8.6 Audit
 
 Append-only for application users (`REQ-NFR-SEC-005`). Each event carries actor, action, resource, scope, timestamp, reason where applicable, correlation ID, and protected before/after values. Secrets, tokens, and credentials are redacted from payloads — an audit log that captures a password is a liability, not a control.
+
+### 8.7 Meeting Minutes and Client relationship
+
+Meeting minutes use a first-class `Client` record and an explicit project-to-client relationship so the create form can safely filter projects after a client is selected. Existing projects may carry a legacy free-text client label during migration; that label remains readable until an owner reviews the mapping. New meeting minutes cannot be saved with a client/project mismatch.
+
+All active roles can enter the module and read minutes that are within their authorized scope. The authorization service is still consulted before list aggregation, search, queue dispatch, task links, notifications, and diagnostics. A view-only principal receives a read model, never a hidden mutation path.
 
 ---
 
@@ -298,12 +311,21 @@ Handled by the durable job runner rather than a request:
 | Notification generation and delivery | Fan-out to many recipients and external providers |
 | Scheduled missing-time and exception detection | Daily/monthly sweeps across all employees (`REQ-NOT-003`) |
 | Integration synchronization and retries | External provider latency and failure |
+| Meeting-minute AI processing | Provider latency, validation, matching, retries, and task creation must not block saving the source minute |
 
 Every job is **idempotent and retryable with backoff**, records its state, and dead-letters on repeated failure. Scheduled detection must be safe to run twice — a second run on the same day produces no duplicate exceptions and no duplicate notifications (`REQ-NOT-005`).
 
 **Export lifecycle:** `queued → processing → ready → expired`, with `failed` and `cancelled` as terminal alternatives. Artifacts are stored with protected, expiring access, and **authorization is re-checked at download time**, not only at request time — permissions may have changed in between. Request, completion, failure, download, expiry and deletion are all audited (`REQ-RPT-008`).
 
 Generation is bounded in memory (streamed, not fully materialised) and applies formula-injection protection for spreadsheet formats.
+
+### 11.1 Meeting-minute AI pipeline
+
+Meeting-minute creation is a short transaction that saves the human-authored source, client/project relationship, creator, and AI choice. When AI is off, it ends in `not_processed` and no job exists. When AI is on, it creates an idempotent processing attempt, sets `pending`, and returns; the worker owns `processing`, provider invocation, schema validation, matching, linked task creation, and the terminal `processed` or `failed` state.
+
+The provider receives only the authorized minute content and the minimum context needed for extraction. Its response is untrusted: it can suggest names, roles, departments, priorities, dates, and dependencies, but it cannot provide trusted IDs or permissions. Application services resolve a mentioned person against current authorized records, then score project membership, department, role, availability, workload, and active status. No safe match produces an unassigned task.
+
+Raw prompts/responses and match evidence are protected artifacts, not ordinary view-model fields. Every generated task carries an immutable source-minute and processing-attempt link. A normalized proposal fingerprint plus idempotency key prevents duplicate tasks after retries or worker restarts. Failure updates only processing state and diagnostics; the original minute remains readable and retryable.
 
 ---
 
@@ -411,6 +433,10 @@ Also open, and required from the business rather than engineering: authoritative
 | Permission cached past a revocation | Data leak | Cache only what is principal-scoped or permission-independent |
 | Hard deletion of referenced records | Missing payroll and audit evidence | Deactivation and versioning; audited hard deletion limited to unreferenced data |
 | Frontend contracts drift during backend work | Rework and inconsistent errors | Versioned service contracts, contract tests, feature-by-feature integration |
+| AI output is treated as trusted | Incorrect tasks, assignments, or data exposure | Provider-neutral port, strict schema validation, application-side matching, thresholded unassigned fallback, provenance, and audit |
+| Meeting content crosses an unauthorized boundary | Confidentiality or contractual breach | Authorize before queueing, minimize provider payloads, protect raw artifacts, use approved provider/data region, and re-check access at read time |
+| Retried AI jobs create duplicate tasks | Confusing work queues and duplicate commitments | Durable attempt records, idempotency keys, normalized proposal fingerprints, transactional task creation, and dead-letter monitoring |
+| Legacy client labels conflict with the Client model | Incorrect project filtering or links | Reviewed migration, retained legacy labels, unresolved mapping queue, and strict client-project foreign-key checks for new minutes |
 
 ---
 
@@ -430,3 +456,4 @@ Also open, and required from the business rather than engineering: authoritative
 | Observability | `REQ-NFR-OPS-002`, `REQ-NFR-SEC-007` |
 | Backup and recovery | `REQ-NFR-BACKUP-001`–`003`, `AC-QUAL-003` |
 | Frontend contracts | `frontend_milestone.md` §2.1, `FE-0014`–`FE-0019` |
+| Meeting Minutes and AI pipeline | `REQ-MTG-001`–`024`, `REQ-DATA-009`–`012`, `AC-MTG-001`–`012`, Frontend Phase 11, Backend Phase 13 |

@@ -96,6 +96,7 @@ The final route names may be refined without changing the feature ownership belo
 | Requisition | `/requisitions`, `/requisitions/new`, `/requisitions/[id]` |
 | Conveyance | `/conveyance`, `/conveyance/new`, `/conveyance/[id]` |
 | Collaboration | `/documents`, `/messages` |
+| Meeting Minutes | `/meeting-minutes`, `/meeting-minutes/new`, `/meeting-minutes/[id]`, `/meeting-minutes/[id]/edit` |
 
 ## 4. Milestone Overview
 
@@ -112,6 +113,7 @@ The final route names may be refined without changing the feature ownership belo
 | 8 | Responsive, accessibility, and quality hardening | All agreed flows pass responsive, accessibility, visual, and interaction QA. |
 | 9 | Demo packaging and backend handoff | Stakeholders can review the product, and backend implementation can begin without UI restructuring. |
 | 10 | Role consolidation: Finance into HR | The product presents five roles, HR performs every Finance task, and no user gained cost access by the merge alone. |
+| 11 | Meeting Minutes and AI task generation | Every role can access authorized meeting minutes; permitted users can capture minutes and follow optional AI processing into traceable assigned tasks. |
 
 ## 5. Detailed Phase Tasks
 
@@ -753,6 +755,58 @@ Evidence is recorded in `docs/frontend/phase-10/verification.md`: 34/34 role-con
 4. **Does the Finance dashboard survive as a screen?** Assumed yes, reachable by HR, because the hours and payroll views are used regardless of which role owns them.
 5. **Do the `/finance/*` routes keep their paths?** Assumed yes — renaming them breaks every deep link and audit reference for no functional gain.
 
+## Phase 11 - Meeting Minutes and AI Task Generation
+
+Every active authenticated role can reach Meeting Minutes. Access to an individual minute still follows client, project, division, and sensitive-project scope. Management/View-Only is read-only; other roles may create minutes, while editing, archival, retry, and AI processing are limited to the creator or an explicitly authorized administrator.
+
+**Depends on** the shared shell and access states (Phases 1-2), projects/tasks and employee matching inputs (Phases 3-5), notifications/search (Phase 7), and requirements `REQ-MTG-001`-`024`. This phase defines frontend contracts and a mock-backed experience; the AI provider and durable processing belong to Backend Phase 13.
+
+### Information Architecture and Contracts
+
+- [ ] `FE-1101` Add Meeting Minutes to every active role's navigation, preserving Management/View-Only as read-only and enforcing feature-flag and route access consistently.
+- [ ] `FE-1102` Add `/meeting-minutes`, `/meeting-minutes/new`, `/meeting-minutes/[id]`, and `/meeting-minutes/[id]/edit` to route, breadcrumb, mobile-navigation, deep-link, and planned-screen documentation.
+- [ ] `FE-1103` Define typed models for Client, meeting-minute summary/detail, AI processing status, processing attempt, extracted decision, generated-task link, team-match outcome, and safe processing error.
+- [ ] `FE-1104` Define service operations for authorized list/search/filter, create, read, update, archive, request processing, retry processing, and opening linked tasks, all returning `Result<T>` values.
+- [ ] `FE-1105` Ensure raw prompts, raw AI JSON, provider diagnostics, match internals, and unauthorized record counts never enter ordinary UI models.
+
+### List and Capture Experience
+
+- [ ] `FE-1110` Build the responsive list showing title, client, project, creator, created date, AI requested Yes/No, text-labelled status, and permitted actions.
+- [ ] `FE-1111` Add authorized search and filters for client, dependent project, processing status, and created-date range, including clear-all and preserved URL state.
+- [ ] `FE-1112` Provide loading, empty, no-results, denied, recoverable-error, and populated states without revealing unauthorized counts or suggestions.
+- [ ] `FE-1113` Build the Add Meeting Minute form with required title, client, dependent active-project selection, accessible long-form/rich-text content, and Process with AI choice.
+- [ ] `FE-1114` Clear an incompatible project when the client changes and provide field-level message plus corrective guidance for every validation error.
+- [ ] `FE-1115` Make Save communicate that the minute is stored first; when AI is selected, show saved success and Pending status without blocking on AI completion.
+- [ ] `FE-1116` Build Edit and Archive flows with ownership/permission states, confirmation, focus restoration, optimistic-version conflict handling, and historical-preservation wording.
+
+### Detail, Processing, and Generated Tasks
+
+- [ ] `FE-1120` Build the detail page with title, client, project, sanitized content, creator/date, AI choice, processing status, processed time, and authorized actions.
+- [ ] `FE-1121` Present Not Processed, Pending, Processing, Processed, and Failed with text, shape, and color; announce meaningful changes accessibly.
+- [ ] `FE-1122` Show the authorized meeting summary and extracted decisions separately from generated tasks so AI interpretation is distinct from the human minute.
+- [ ] `FE-1123` Show linked tasks with title, assigned employee or Unassigned, priority, due date, status, match outcome, and Open Task action.
+- [ ] `FE-1124` Make AI origin and source-minute traceability visible on both minute and task detail without implying AI made an authorization decision.
+- [ ] `FE-1125` Build Failed state with safe error, preserved-minute reassurance, retry eligibility, retry-in-progress feedback, and duplicate-click protection.
+- [ ] `FE-1126` Notify the user when background processing succeeds or fails and refresh detail/list state without losing filters or scroll context.
+
+### All-Role, Responsive, and Quality Coverage
+
+- [ ] `FE-1130` Add fixtures for no-AI, pending, processing, processed, failed/retry, no-valid-tasks, unassigned-task, mentioned assignee, duplicate suggestion, and inaccessible sensitive-project cases.
+- [ ] `FE-1131` Verify every active role can access the module and authorized records, while Management/View-Only cannot create, edit, archive, request AI, or retry through controls or direct service calls.
+- [ ] `FE-1132` Verify creator versus non-creator actions, client/project scope, government-project denial, and safe not-found behavior for direct links.
+- [ ] `FE-1133` Add responsive checks at 375, 768, 1024, and 1440 px for list, filters, form, long content, status panel, and generated-task table/cards.
+- [ ] `FE-1134` Add accessibility checks for labels, rich-text semantics, keyboard operation, focus, errors, status announcements, target size, contrast, reduced motion, and 200% zoom.
+- [ ] `FE-1135` Add a role-journey gate covering create without AI, create with AI, status changes, linked tasks, unassigned fallback, failure/retry, archive, and read-only access.
+- [ ] `FE-1136` Update Phase 0 traceability, information architecture, terminology, demo accounts, feature flags, and backend handoff documentation for this module and Client model.
+
+### Phase 11 Exit Criteria
+
+- [ ] Every active authenticated role can reach Meeting Minutes and view only authorized records.
+- [ ] A permitted user can save a minute without AI or follow non-blocking AI processing to linked tasks.
+- [ ] Failed processing never makes the original minute unavailable and an authorized retry is understandable and duplicate-safe.
+- [ ] Client-to-project dependency, creator permissions, view-only restrictions, sensitive-project boundaries, and safe redaction are covered by tests.
+- [ ] New screens pass responsive, accessibility, lint, type-check, test, and production-build gates.
+
 ## 6. Frontend Definition of Done
 
 A frontend task may be marked `[x]` only when all applicable conditions are true:
@@ -785,6 +839,11 @@ A frontend task may be marked `[x]` only when all applicable conditions are true
 - [x] `DEMO-14` A conveyance claim submitted without a receipt is accepted, because the upload is optional.
 - [x] `DEMO-12` A Team Lead submits a new-item requisition and it reaches HR, Finance, and the Super Administrator without a Team Lead review step.
 
+- [ ] `DEMO-17` An authorized user creates a meeting minute without AI and sees it retained as Not Processed.
+- [ ] `DEMO-18` An authorized user creates a meeting minute with AI, sees Pending/Processing, and opens linked generated tasks after completion.
+- [ ] `DEMO-19` A failed AI run preserves the original minute and offers an authorized retry without duplicate tasks.
+- [ ] `DEMO-20` Every active role can access authorized meeting minutes, while Management/View-Only remains read-only and protected records remain undiscoverable.
+
 ## 8. Current Progress Summary
 
 | Phase | Status | Completed/Total |
@@ -800,5 +859,7 @@ A frontend task may be marked `[x]` only when all applicable conditions are true
 | Phase 8 - Responsive, Accessibility, and Quality Hardening | Done | 17/18 · 1 awaiting review |
 | Phase 9 - Demo Packaging and Backend Handoff | In progress | 13/14 · stakeholder sign-off pending |
 | Phase 10 - Role Consolidation: Finance into HR | Done | 14/14 · `project_requirement.md` amendment still owed |
+
+| Phase 11 - Meeting Minutes and AI Task Generation | Pending | 0/26 |
 
 Update this table whenever tasks change status. Exit-criteria checkboxes are gates and are not included in the task totals above.

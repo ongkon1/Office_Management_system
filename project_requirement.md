@@ -4,9 +4,9 @@
 
 | Document field | Value |
 |---|---|
-| Version | 1.0 |
-| Status | Baseline requirements |
-| Source baseline | Multi-Division Timesheet & Work Management System Feature Requirements, Version 1.0, June 2026 |
+| Version | 1.1 |
+| Status | Baseline requirements plus Meeting Minutes and AI task-generation amendment |
+| Source baseline | Multi-Division Timesheet & Work Management System Feature Requirements, Version 1.0, June 2026; Meeting Minutes to AI Task Generation and Assignment feature brief, September 2026 |
 | Product owner | PowerInAI |
 | Initial divisions | PowerInAI, PowerInAI Training, Government Projects, Computer Jagat, WesternCF |
 | Intended audience | Product owners, designers, developers, QA engineers, operations, HR, Finance, and management |
@@ -22,6 +22,7 @@ The system must:
 - Relate time to measurable work through projects, tasks, descriptions, and completed-work details.
 - Support Work From Home (WFH), leave, attendance, evaluations, reports, and controlled financial analysis.
 - Preserve historical and audit information while enforcing role-, division-, and project-based access.
+- Let every active user role access authorized meeting minutes and optionally turn meeting decisions into traceable tasks with AI assistance.
 - Deliver a focused operational product before adding broad collaboration and AI capabilities.
 
 ### 1.1 Success Measures
@@ -56,6 +57,7 @@ The MVP must include:
 - Phase 2 must add full leave management, WFH requests, evaluations, workload planning, project costing, Finance reports, notifications, and improved mobile workflows.
 - Phase 3 must add messages, document and knowledge areas, announcements, task comments, and advanced search.
 - Phase 4 must add AI-generated summaries, forecasting, anomaly detection, natural-language reporting, payroll integration, and accounting integration.
+- The Meeting Minutes module and its optional AI task-generation workflow are a planned Phase 4 capability. The original minute must remain useful when AI is disabled, unavailable, or fails.
 - A full Slack- or Notion-style collaboration suite, audio/video huddles, and advanced communication channels are outside the current product baseline.
 
 ## 3. Terminology and Policies
@@ -75,6 +77,9 @@ The MVP must include:
 | Actual contribution | Valid active work recorded in timesheets for a division or project. |
 | General remark | The single remark type used for clarification, correction, work quality, performance, or other review feedback. |
 | WFH | Work From Home. |
+| Meeting minute | A saved human-authored meeting record associated with a client and project and preserved independently of AI processing. |
+| AI-generated task | A task proposal extracted from a meeting minute by AI, validated and assigned by application logic, and linked permanently to its source minute. |
+| AI processing status | Not Processed, Pending, Processing, Processed, or Failed; it describes task generation, not the validity of the saved minute. |
 
 ## 4. Stakeholders, Roles, and Access
 
@@ -135,6 +140,9 @@ Legend: **M** = manage, **O** = own records, **A** = assigned scope, **V** = vie
 | Period verification | M | - | - | M | V | V |
 | Reports/exports | M | A | O | M | F | V |
 | Audit logs | M | A/V | O/V | V | F/V | - |
+| Meeting minutes | M | A/M | O/M | M | V | V |
+
+Meeting Minutes must be present for every active authenticated role. Record visibility must still follow client, project, division, government-project, and explicit permission scope. Management/View-Only users may search and view authorized minutes but may not create, edit, archive, retry processing, or generate tasks. Other roles may create minutes; edit, archive, retry, and AI actions are limited to the creator or an explicitly authorized administrator.
 
 ## 5. Functional Requirements
 
@@ -310,6 +318,33 @@ Legend: **M** = manage, **O** = own records, **A** = assigned scope, **V** = vie
 - `REQ-INT-007`: Single sign-on must be supported as an optional authentication integration.
 - `REQ-INT-008`: External data must not bypass the same authorization, validation, verification, and audit rules applied to interactive entry.
 
+### 5.16 Meeting Minutes and AI Task Generation
+
+- `REQ-MTG-001`: The system must provide a Meeting Minutes module for every active authenticated role, subject to record-level client, project, division, government-project, and explicit permission scope.
+- `REQ-MTG-002`: The Meeting Minutes list must show title, client, project, creator, created date, whether AI processing was requested, processing status, and only the actions allowed for the current user.
+- `REQ-MTG-003`: The list must support search and filters for client, project, processing status, and created-date range without revealing unauthorized records through results, counts, suggestions, or empty groups.
+- `REQ-MTG-004`: An authorized creator must provide a title, client, project, and meeting-minute content and may choose whether to generate tasks with AI.
+- `REQ-MTG-005`: Project choices must be restricted to active, authorized projects belonging to the selected client. The system must introduce a first-class Client record and a project-to-client relationship while retaining legacy project client labels during migration and historical reads.
+- `REQ-MTG-006`: The minute editor must support accessible long-form or rich-text content and must sanitize stored and rendered content against executable or unsafe markup.
+- `REQ-MTG-007`: The system must commit the original meeting minute before checking or dispatching AI processing. Failure to enqueue or process AI must never roll back, delete, or corrupt the original minute.
+- `REQ-MTG-008`: When AI processing is not requested, the system must set status to Not Processed, store no AI response or processed timestamp, dispatch no AI job, and keep the minute available normally.
+- `REQ-MTG-009`: When AI processing is requested, the system must set status to Pending and dispatch an idempotent background job without blocking the successful form response.
+- `REQ-MTG-010`: The worker must change the status to Processing and ask the configured AI provider to extract a meeting summary, decisions, and proposed tasks containing title, description, normalized priority, optional due date, optional explicitly mentioned assignee name, optional department, optional role, and dependencies.
+- `REQ-MTG-011`: The server must validate AI output against a versioned structured schema, require a task array, normalize allowed priorities, validate dates, remove empty or invalid items, and prevent duplicate tasks before persistence.
+- `REQ-MTG-012`: AI output must be treated as untrusted input and must not supply trusted employee IDs, permissions, project scope, task status, or final authorization decisions.
+- `REQ-MTG-013`: The application must match each valid task using authorized current data in this order: a valid explicitly mentioned employee, then project membership, department, role, availability, current workload, and active status. The matching method and inputs must be explainable and versioned.
+- `REQ-MTG-014`: If no eligible person meets the approved match threshold, the task must be created unassigned rather than assigned to an unsuitable person.
+- `REQ-MTG-015`: Every generated task must inherit the minute's client and project context, link to the source meeting minute, start with Todo status, record source as Meeting Minute AI, and identify the system as generator while retaining the human minute creator for accountability.
+- `REQ-MTG-016`: The detail view must show the minute, creator, date, AI choice, processing status, processed time, authorized AI summary and decisions, and linked generated tasks with assignee, priority, due date, status, and an Open Task action.
+- `REQ-MTG-017`: On provider, schema, matching, or persistence failure, the system must set status to Failed, preserve the original minute, store a safe user-facing error, retain protected diagnostics, and allow an authorized idempotent retry.
+- `REQ-MTG-018`: A meeting minute referenced by a generated task, AI run, audit event, or other operational record must not be physically deleted. Delete must archive or deactivate it; audited hard deletion is limited to unreferenced records under retention policy.
+- `REQ-MTG-019`: Raw AI responses, prompts, processing errors, match scores, and diagnostic metadata must be protected as sensitive operational data, excluded from ordinary list/search responses, retention-controlled, and available only to explicitly authorized support or audit users.
+- `REQ-MTG-020`: Creation, editing, archival, AI request, queue dispatch, processing start, success, failure, retry, task creation, automatic assignment, reassignment, and protected diagnostic access must be audited with actor or system identity, correlation ID, timestamps, source record, and relevant before/after state.
+- `REQ-MTG-021`: AI-created tasks must obey every existing task, project, assignment, workload, notification, authorization, and time-entry rule; AI origin must never bypass employee-raised-task review rules where those rules apply.
+- `REQ-MTG-022`: The system must notify the minute creator when processing succeeds or fails and notify an assigned employee of each new task without exposing minute content outside the recipient's authorized scope.
+- `REQ-MTG-023`: Concurrent saves, duplicate queue delivery, retry, and worker restart must not create duplicate AI runs or duplicate generated tasks. Each processing attempt must be independently identifiable and safely resumable.
+- `REQ-MTG-024`: The list, form, details, AI statuses, retry feedback, and task links must be fully responsive, keyboard accessible, understandable without color alone, and cover loading, empty, validation, processing, success, failure, and denied states.
+
 ## 6. Core Workflows
 
 ### 6.1 Employee Time Workflow
@@ -362,6 +397,17 @@ Legend: **M** = manage, **O** = own records, **A** = assigned scope, **V** = vie
 5. HR must review and publish the evaluation.
 6. The employee must be able to view the published result while the system retains the inputs, weighting version, reviewer, and publication history.
 
+### 6.7 Meeting Minute and AI Task Workflow
+
+1. An authorized user must select a client and one of that client's active authorized projects, enter the title and minute, and choose whether AI task generation is wanted.
+2. The system must save and audit the original minute first.
+3. If AI is not selected, the minute must remain available with Not Processed status and the workflow must end.
+4. If AI is selected, the system must return success with Pending status and enqueue an idempotent background job.
+5. The worker must mark the run Processing, request versioned structured output, validate and deduplicate it, and use the application matching engine to choose only eligible team members.
+6. The system must create linked Todo tasks, leaving any task unassigned when no safe match exists, then mark the minute Processed and notify authorized users.
+7. A failure must mark the minute Failed without changing its original content and must offer an authorized retry.
+8. Every active role must be able to return to the module and view authorized minutes; mutation and diagnostics must remain permission-controlled.
+
 ## 7. Data Requirements
 
 ### 7.1 Core Entities
@@ -375,6 +421,7 @@ Legend: **M** = manage, **O** = own records, **A** = assigned scope, **V** = vie
 | HR | LeaveRequest, WFHRequest, AttendanceDay, EvaluationPeriod, Evaluation, EvaluationResponse, GeneralRemark |
 | Finance/reporting | CostRate, Budget, PayrollPeriod, ReportDefinition, ReportExport |
 | Collaboration | Document, DocumentVersion, Message, Comment, Announcement, Notification, Attachment |
+| Meetings and AI | Client, MeetingMinute, MeetingMinuteProcessingAttempt, MeetingDecision, GeneratedTaskLink, TeamMatchResult |
 | Control | AuditLog, IntegrationConnection, WebhookDelivery, PolicyVersion |
 
 ### 7.2 Relationship and Integrity Rules
@@ -387,6 +434,10 @@ Legend: **M** = manage, **O** = own records, **A** = assigned scope, **V** = vie
 - `REQ-DATA-006`: Attachments must identify their owning record, uploader, access scope, upload timestamp, media type, size, and integrity reference.
 - `REQ-DATA-007`: Deactivation must preserve historical relationships, while hard deletion must be limited to legally permitted, unreferenced data through an audited administrative process.
 - `REQ-DATA-008`: All business records must store created/updated timestamps and actor identity; sensitive state changes must additionally store reason and before/after values.
+- `REQ-DATA-009`: Each meeting minute must belong to one client and one project, and the project must belong to the same client.
+- `REQ-DATA-010`: Each AI processing attempt must belong to one meeting minute and store status, schema/provider/model identifiers, idempotency key, correlation ID, timestamps, protected raw response reference, safe error, and attempt number.
+- `REQ-DATA-011`: Each generated task must retain an immutable origin link to its meeting minute and processing attempt after archival, reassignment, or later task edits.
+- `REQ-DATA-012`: Match results must distinguish suggested, automatically assigned, unassigned, and later manually reassigned outcomes without rewriting the original matching evidence.
 
 ## 8. Navigation Requirements
 
@@ -395,6 +446,7 @@ Legend: **M** = manage, **O** = own records, **A** = assigned scope, **V** = vie
 - `REQ-NAV-003`: HR navigation must include HR Dashboard, Employees, Attendance, Timesheets, WFH, Leave, Evaluations, Reports, Documents, and Settings when enabled.
 - `REQ-NAV-004`: Finance navigation must include Finance Dashboard, Employee Hours, Overtime, Project Costs, Division Costs, Payroll Reports, and Financial Reports when enabled and authorized.
 - `REQ-NAV-005`: Navigation must hide unauthorized modules and must also enforce authorization at the server/API layer.
+- `REQ-NAV-006`: Every active authenticated role must have a Meeting Minutes navigation entry when the module is enabled; list and detail access must be record-scoped, and mutation controls must be role- and ownership-scoped.
 
 ## 9. Non-Functional Requirements
 
@@ -444,6 +496,7 @@ Legend: **M** = manage, **O** = own records, **A** = assigned scope, **V** = vie
 | Phase 2 - HR and Evaluation | Leave, WFH request decisions, evaluations, workload planning, notifications, Finance reports, project costing, and improved mobile workflows. |
 | Phase 3 - Collaboration | Division/project/direct messages, task comments, documents, knowledge base, announcements, and advanced search. |
 | Phase 4 - Advanced Features | AI summaries, workload forecasting, anomaly detection, automated monthly summaries, natural-language reporting, and payroll/accounting integrations. |
+| Phase 4A - Meeting Intelligence | Meeting-minute capture for all roles, optional queued AI analysis, validated decision/task extraction, explainable team matching, linked task creation, retry, audit, and protected diagnostics. |
 
 ### 10.1 MVP Exit Checklist
 
@@ -467,6 +520,8 @@ Legend: **M** = manage, **O** = own records, **A** = assigned scope, **V** = vie
 - Security owners must approve authentication, 2FA, government-project access, audit retention, backup, and integration credential handling.
 - Email, calendar, storage, conferencing, biometric, payroll, accounting, SSO, webhook, or automation capabilities depend on approved external accounts and provider APIs.
 - Exact production volume, availability, RTO, RPO, retention, and regional privacy obligations must be confirmed before production architecture and go-live approval.
+- Product, security, and legal owners must approve the AI provider, data-processing location, prompt/response retention, model-use terms, acceptable automatic-assignment threshold, and whether meeting content may be used for provider training before AI processing is enabled.
+- The product owner must supply an authoritative client list and approve the migration from project client labels to Client records.
 
 ## 12. Assumptions and Decisions
 
@@ -481,6 +536,8 @@ Legend: **M** = manage, **O** = own records, **A** = assigned scope, **V** = vie
 - Costs and salaries are optional protected data even for Finance users and require explicit permission.
 - All stored timestamps use a consistent canonical representation and are displayed/calculated using the configured business timezone.
 - Technical framework, database engine, cloud provider, and deployment topology are intentionally not prescribed by this requirements document.
+- Meeting Minutes is available to every active role, but "all users can access" means access to the module and authorized records; it does not override project, client, government-project, or view-only restrictions.
+- AI proposes structured work; application services validate, match, authorize, and persist it. AI never makes a trusted access-control decision.
 
 ## 13. Risks and Mitigations
 
@@ -494,6 +551,10 @@ Legend: **M** = manage, **O** = own records, **A** = assigned scope, **V** = vie
 | Timer/network retries | Duplicate or lost time | Make timer/save operations idempotent and recoverable. |
 | Scope growth into collaboration suite | MVP delay | Enforce phase boundaries and treat Phase 3/4 features as deferred. |
 | Poor source data | Incorrect assignments and reports | Validate and obtain owner sign-off on migrated/seed data. |
+| AI invents tasks, dates, or assignees | Incorrect commitments and workload | Validate structured output, apply confidence/match thresholds, preserve provenance, allow unassigned tasks, and make origin visible. |
+| Sensitive meeting content reaches an unapproved provider or user | Confidentiality and contractual breach | Use an approved provider/data region, minimize payloads, encrypt protected artifacts, apply record scope before processing, and restrict diagnostics. |
+| Duplicate or partial AI jobs | Duplicate tasks or misleading status | Use durable idempotent jobs, attempt records, transactional task creation, deduplication, retry limits, and dead-letter monitoring. |
+| Legacy free-text clients do not map cleanly | Incorrect project filtering and meeting associations | Introduce Client records with a reviewed migration, retain legacy labels for history, and report unresolved mappings. |
 
 ## 14. Acceptance and Verification
 
@@ -533,6 +594,21 @@ Legend: **M** = manage, **O** = own records, **A** = assigned scope, **V** = vie
 - `AC-QUAL-002`: Keyboard-only and screen-reader testing must validate WCAG 2.2 AA behavior for authentication, time entry, timer, requests, remarks, reports, and navigation.
 - `AC-QUAL-003`: A production-like backup must be restored and reconciled before go-live.
 
+### 14.5 Meeting Minutes and AI Scenarios
+
+- `AC-MTG-001`: Every active role must see the Meeting Minutes module, while Management/View-Only must remain unable to create, edit, archive, retry, or request AI processing.
+- `AC-MTG-002`: Selecting a client must show only active authorized projects for that client, and changing the client must clear an incompatible project selection.
+- `AC-MTG-003`: Saving without AI must persist the original minute as Not Processed, dispatch no job, and create no task.
+- `AC-MTG-004`: Saving with AI must persist the original minute before returning Pending and before dispatching the background job.
+- `AC-MTG-005`: A valid AI response containing two distinct tasks must produce two Todo tasks linked to the minute, with normalized priorities and valid optional dates.
+- `AC-MTG-006`: A mentioned employee who is inactive, unauthorized, unavailable, or outside the project must not be assigned; if no eligible alternative clears the threshold, the task must remain unassigned.
+- `AC-MTG-007`: Malformed output, provider timeout, or persistence failure must leave the original minute readable, mark processing Failed, create no partial duplicate task set, and allow a safe retry.
+- `AC-MTG-008`: Replaying the same job or retry key must not create a second processing attempt outcome or duplicate generated tasks.
+- `AC-MTG-009`: An unauthorized user must not discover a meeting title, content, AI status, task count, raw response, error, client, or project through list counts, search, direct URL, notification, or task link.
+- `AC-MTG-010`: A generated task opened from the minute and the source minute opened from the task must retain reciprocal traceability after reassignment and minute archival.
+- `AC-MTG-011`: Raw prompts/responses and match evidence must be absent from ordinary user payloads and accessible only through separately authorized, audited diagnostics.
+- `AC-MTG-012`: The list, create form, details, processing status, failure/retry state, and linked tasks must pass the supported responsive and WCAG 2.2 AA checks.
+
 ## 15. Source Coverage Matrix
 
 | Source section | Covered by this document |
@@ -565,6 +641,7 @@ Legend: **M** = manage, **O** = own records, **A** = assigned scope, **V** = vie
 | 26. Core Database Entities | Section 7 |
 | 27. Development Phases | Section 10 |
 | 28. Core MVP Requirements | Sections 2.2 and 10.1 |
+| Meeting Minutes to AI Task Generation and Assignment amendment | Sections 2.3, 3, 4.2, 5.16, 6.7, 7, 8, 10, 11-14 |
 
 ## 16. Requirement Governance
 

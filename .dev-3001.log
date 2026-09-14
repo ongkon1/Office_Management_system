@@ -1,0 +1,83 @@
+▲ Next.js 16.3.4 (Turbopack)
+- Local:         http://localhost:3001
+- Network:       http://192.168.68.72:3001
+✓ Ready in 610ms
+✓ Running next.config.ts took 67ms
+Creating turbopack project { dir: 'F:\\wamp64\\www\\office_management_system', testMode: true }
+
+ GET /login 200 in 521ms (next.js: 231ms, application-code: 290ms)
+ GET /login 200 in 83ms (next.js: 14ms, application-code: 70ms)
+ GET /dashboard 200 in 116ms (next.js: 41ms, application-code: 75ms)
+ GET /dashboard 200 in 44ms (next.js: 9ms, application-code: 35ms)
+ GET /tasks/tsk-1 200 in 698ms (next.js: 662ms, application-code: 35ms)
+ GET /timesheets/2026-09-02 200 in 635ms (next.js: 596ms, application-code: 39ms)
+ GET /timesheets 200 in 57ms (next.js: 32ms, application-code: 25ms)
+ GET /tasks 200 in 56ms (next.js: 37ms, application-code: 19ms)
+
+Could not open page.tsx in the editor.
+
+To set up the editor integration, add something like REACT_EDITOR=atom to the .env.local file in your project folder and restart the development server.
+
+
+Could not open page.tsx in the editor.
+
+To set up the editor integration, add something like REACT_EDITOR=atom to the .env.local file in your project folder and restart the development server.
+
+ GET /profile 200 in 65ms (next.js: 42ms, application-code: 23ms)
+ GET /conveyance 200 in 77ms (next.js: 52ms, application-code: 25ms)
+ GET /requisitions 200 in 71ms (next.js: 51ms, application-code: 21ms)
+ GET /evaluations 200 in 70ms (next.js: 46ms, application-code: 25ms)
+ GET /leave 200 in 72ms (next.js: 52ms, application-code: 20ms)
+ GET /leave 200 in 27ms (next.js: 10ms, application-code: 17ms)
+ GET /leave 200 in 59ms (next.js: 8ms, application-code: 51ms)
+ GET /login?returnTo=%2Fleave 200 in 76ms (next.js: 7ms, application-code: 69ms)
+ GET /dashboard 200 in 58ms (next.js: 5ms, application-code: 53ms)
+ GET /dashboard 200 in 32ms (next.js: 4ms, application-code: 27ms)
+ GET /timesheets 200 in 24ms (next.js: 5ms, application-code: 19ms)
+ GET /dashboard 200 in 23ms (next.js: 4ms, application-code: 19ms)
+ GET /timesheets/2026-09-02 200 in 47ms (next.js: 14ms, application-code: 33ms)
+ GET /tasks 200 in 32ms (next.js: 6ms, application-code: 26ms)
+ GET /divisions 200 in 102ms (next.js: 69ms, application-code: 33ms)
+ GET /remarks 200 in 83ms (next.js: 57ms, application-code: 26ms)
+ GET /wfh 200 in 70ms (next.js: 47ms, application-code: 23ms)
+ GET /leave 200 in 36ms (next.js: 9ms, application-code: 27ms)
+ GET /evaluations 200 in 22ms (next.js: 3ms, application-code: 19ms)
+ GET /requisitions 200 in 22ms (next.js: 4ms, application-code: 19ms)
+ GET /requisitions/new 200 in 79ms (next.js: 56ms, application-code: 23ms)
+ GET /conveyance 200 in 22ms (next.js: 3ms, application-code: 19ms)
+ GET /conveyance/new 200 in 67ms (next.js: 44ms, application-code: 22ms)
+ GET /profile 200 in 27ms (next.js: 4ms, application-code: 22ms)
+ GET /timesheets 200 in 24ms (next.js: 5ms, application-code: 19ms)
+ GET /timesheets/2026-09-02 200 in 51ms (next.js: 16ms, application-code: 36ms)
+ GET /tasks 200 in 34ms (next.js: 5ms, application-code: 28ms)
+ GET /tasks/tsk-1 200 in 41ms (next.js: 10ms, application-code: 31ms)
+ GET /tasks 200 in 20ms (next.js: 3ms, application-code: 17ms)
+ GET /tasks 200 in 21ms (next.js: 3ms, application-code: 19ms)
+ GET /tasks/tsk-9 200 in 51ms (next.js: 12ms, application-code: 39ms)
+ GET /tasks/tsk-9 200 in 46ms (next.js: 11ms, application-code: 36ms)
+ GET /dashboard 200 in 51ms (next.js: 6ms, application-code: 45ms)
+ GET /team 200 in 88ms (next.js: 53ms, application-code: 35ms)
+ GET /team/timesheets 200 in 81ms (next.js: 59ms, application-code: 22ms)
+ GET /team/timesheets/emp-1002/2026-09-02 200 in 837ms (next.js: 753ms, application-code: 84ms)
+ GET /team/timesheets 200 in 32ms (next.js: 8ms, application-code: 23ms)
+ GET /dashboard 200 in 26ms (next.js: 4ms, application-code: 22ms)
+ GET /workload 200 in 67ms (next.js: 47ms, application-code: 20ms)
+ GET /team 200 in 23ms (next.js: 4ms, application-code: 19ms)
+ GET /dashboard 200 in 27ms (next.js: 4ms, application-code: 23ms)
+ GET /team 200 in 21ms (next.js: 4ms, application-code: 18ms)
+ GET /dashboard 200 in 24ms (next.js: 4ms, application-code: 19ms)
+ GET /projects 200 in 69ms (next.js: 47ms, application-code: 22ms)
+ GET /projects/prj-vp2 200 in 724ms (next.js: 683ms, application-code: 41ms)
+ GET /hr 200 in 102ms (next.js: 64ms, application-code: 38ms)
+ GET /finance/payroll 200 in 84ms (next.js: 62ms, application-code: 21ms)
+ GET /admin/holidays 200 in 92ms (next.js: 68ms, application-code: 24ms)
+ GET /hr/timesheets 200 in 67ms (next.js: 45ms, application-code: 22ms)
+ GET /team/timesheets/emp-1002/2026-09-30 200 in 46ms (next.js: 12ms, application-code: 34ms)
+ GET /team/timesheets/emp-1001/2026-08-31 200 in 50ms (next.js: 15ms, application-code: 35ms)
+ GET /login?returnTo=%2Fhr%2Ftimesheets 200 in 52ms (next.js: 7ms, application-code: 46ms)
+ GET /dashboard 200 in 148ms (next.js: 54ms, application-code: 94ms)
+ GET /dashboard 200 in 33ms (next.js: 6ms, application-code: 27ms)
+ GET /requisitions 200 in 51ms (next.js: 19ms, application-code: 32ms)
+ GET /tasks 200 in 42ms (next.js: 12ms, application-code: 29ms)
+ GET /divisions 200 in 55ms (next.js: 11ms, application-code: 45ms)
+ GET /login?returnTo=%2Fdivisions 200 in 217ms (next.js: 26ms, application-code: 191ms)

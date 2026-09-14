@@ -111,6 +111,7 @@ A backend task may be marked `[x]` only when all applicable conditions are true:
 | 10 | Requisition | Employees and Team Leads raise requisitions that route through the correct review chain, visible only to the roles they have reached. |
 | 11 | Conveyance | Travel claims with optional receipts travel the same review chain, with attachment access bound to the claim's own visibility. |
 | 12 | Role consolidation: Finance into HR | The Finance Manager role is retired without rewriting history or widening anyone's access to cost data. |
+| 13 | Meeting Minutes and AI task generation | Every active role can access authorized minutes; queued AI processing produces validated, traceable tasks without losing the original minute. |
 
 ## 4. Detailed Phase Tasks
 
@@ -252,15 +253,9 @@ A backend task may be marked `[x]` only when all applicable conditions are true:
 ### Employees, Divisions, and Assignments
 
 - [x] `BE-0301` Implement division create, update, activate, and deactivate use cases with historical-reference protection.
-<<<<<<< HEAD
 - [x] `BE-0302` Implement employee create, update, activate, deactivate, profile read, and directory search use cases.
 - [x] `BE-0303` Implement profile-photo attachment metadata and authorized delivery through the selected storage adapter.
 - [x] `BE-0304` Implement employee-division assignment create, update, end, activate, deactivate, and history queries.
-=======
-- [~] `BE-0302` Implement employee create, update, activate, deactivate, profile read, and directory search use cases.
-- [x] `BE-0303` Implement profile-photo attachment metadata and authorized delivery through the selected storage adapter.
-- [~] `BE-0304` Implement employee-division assignment create, update, end, activate, deactivate, and history queries.
->>>>>>> 00d146afb1dc2296921b692b63fc9173664225e3
 - [x] `BE-0305` Enforce one primary division for an active employee when required and validate effective assignment date ranges.
 - [x] `BE-0306` Validate planned allocation and return a warning, rather than silently changing data, when concurrent allocation differs from 100 percent.
 - [x] `BE-0307` Implement temporary assignments with required start/end dates and prevent new time outside their effective period.
@@ -268,34 +263,20 @@ A backend task may be marked `[x]` only when all applicable conditions are true:
 
 ### Projects and Membership
 
-<<<<<<< HEAD
 - [x] `BE-0310` Implement project create, update, activate/close, membership, search, filtering, and scoped detail queries.
 - [x] `BE-0311` Enforce exactly one division per project and validate manager/member access against effective assignments.
 - [x] `BE-0312` Implement project estimates, deadlines, priority, budget visibility, completion percentage, client/stakeholder, notes, and attachment metadata.
-=======
-- [~] `BE-0310` Implement project create, update, activate/close, membership, search, filtering, and scoped detail queries.
-- [x] `BE-0311` Enforce exactly one division per project and validate manager/member access against effective assignments.
-- [~] `BE-0312` Implement project estimates, deadlines, priority, budget visibility, completion percentage, client/stakeholder, notes, and attachment metadata.
->>>>>>> 00d146afb1dc2296921b692b63fc9173664225e3
 - [x] `BE-0313` Calculate actual project hours from valid time entries rather than accepting a manually edited actual-hours total.
 - [x] `BE-0314` Protect project deactivation/closure and preserve historical tasks, time, files, and audit references.
 
 ### Tasks
 
-<<<<<<< HEAD
 - [x] `BE-0320` Implement task create, update, assign, support-member, checklist, attachment, and scoped query use cases.
-=======
-- [~] `BE-0320` Implement task create, update, assign, support-member, checklist, attachment, and scoped query use cases.
->>>>>>> 00d146afb1dc2296921b692b63fc9173664225e3
 - [x] `BE-0321` Enforce Pending, In Progress, and Completed as the initial task statuses and validate allowed transitions.
 - [x] `BE-0322` Enforce task-project-division consistency and effective employee authorization.
 - [x] `BE-0323` Calculate actual task time from valid linked time entries and derive overdue state from status and due date.
 - [x] `BE-0324` Implement task list filters, pagination, sorting, due-date views, and employee/team scopes expected by the frontend.
-<<<<<<< HEAD
 - [x] `BE-0325` Add transaction, conflict, authorization, deactivation, and concurrency tests for organization, project, membership, and task workflows.
-=======
-- [~] `BE-0325` Add transaction, conflict, authorization, deactivation, and concurrency tests for organization, project, membership, and task workflows.
->>>>>>> 00d146afb1dc2296921b692b63fc9173664225e3
 
 ### Employee-Raised Tasks
 
@@ -308,11 +289,7 @@ An employee raises a task for themselves and their Team Lead endorses it. Fronte
 - [x] `BE-0334` Handle the Team Lead mapping changing while a task is pending, so a raised task can never become unreviewable.
 - [x] `BE-0335` Restrict the employee's create payload to their own assigned divisions and active projects, ignoring any assignee or supporting members it carries.
 - [x] `BE-0336` Audit raise, approve and refuse with actor, role, before/after and reason, and notify the Team Lead on raise and the employee on decision.
-<<<<<<< HEAD
-- [x] `BE-0337` Test the time-entry refusal at every review state, review by the wrong Team Lead, self-endorsement, concurrent decisions, and Team Lead reassignment mid-review.
-=======
 - [~] `BE-0337` Test the time-entry refusal at every review state, review by the wrong Team Lead, self-endorsement, concurrent decisions, and Team Lead reassignment mid-review.
->>>>>>> 00d146afb1dc2296921b692b63fc9173664225e3
 
 ### Phase 3 Exit Criteria
 
@@ -709,6 +686,70 @@ A role that has been used cannot simply be deleted. `finance_manager` is recorde
 - [ ] Historical records naming the Finance Manager role still read correctly.
 - [ ] The migration is reversible and audited, and a rehearsal was signed off.
 
+## Phase 13 - Meeting Minutes and AI Task Generation
+
+This phase adds the Meeting Minutes module and optional AI-assisted task generation to the existing single Next.js application. Every active role can access authorized minutes, while record scope, view-only restrictions, sensitive-project controls, and existing task rules remain authoritative. The original minute is always saved before asynchronous processing begins.
+
+**Depends on** Phases 1-3 (Client, projects, employees, tasks and repositories), Phase 2 authorization/audit, Phase 7 notifications/files, and the frontend contracts from Frontend Phase 11. It requires an approved AI provider, data-processing policy, retention period, and automatic-assignment threshold before production enablement.
+
+### Schema, Client Model, and Contracts
+
+- [ ] `BE-1301` Add a first-class Client model with stable id, name, status, scope, audit fields, and migration mapping for legacy project client labels.
+- [ ] `BE-1302` Add the project-to-client relationship and enforce that a meeting minute's project belongs to its selected client; preserve unresolved legacy labels for review.
+- [ ] `BE-1303` Add `meeting_minutes` with title, client_id, project_id, description/content, process_with_ai, processing_status, safe processing_error, processed_at, creator, timestamps, active/archive state, and optimistic version.
+- [ ] `BE-1304` Add `meeting_minute_processing_attempt` with attempt number, idempotency key, correlation id, provider/schema/model identifiers, status, timestamps, protected raw-response reference, safe error, and retry metadata.
+- [ ] `BE-1305` Extend tasks with nullable meeting_minute_id, processing_attempt_id, source, generated-by identity, assignment outcome, and immutable origin constraints.
+- [ ] `BE-1306` Add decisions, generated-task links, and match-result records so summary, decisions, task provenance, suggestions, automatic assignment, unassigned fallback, and later reassignment remain distinguishable.
+- [ ] `BE-1307` Add migrations, indexes, foreign-key restrictions, archive semantics, seed clients, and recovery guidance without physically deleting referenced minutes or tasks.
+
+### Minute Service and Authorization
+
+- [ ] `BE-1310` Implement authorized list/search/filter by client, project, status, and date with authorization applied before rows, counts, grouping, or suggestions.
+- [ ] `BE-1311` Implement create/update/read/archive with required-field validation, client-project dependency, sanitized content, ownership rules, optimistic concurrency, and `Result<T>` outcomes.
+- [ ] `BE-1312` Make the module reachable to all active roles while preserving Management/View-Only read-only behavior and current government-project, division, project, and permission boundaries.
+- [ ] `BE-1313` Return indistinguishable not-found results for unauthorized direct ids, generated-task links, and archived records outside the caller's scope.
+- [ ] `BE-1314` Ensure ordinary responses omit raw prompts, raw AI JSON, provider diagnostics, match internals, and unauthorized task or minute counts.
+- [ ] `BE-1315` Audit minute creation, editing, archive, access, AI request, retry, task open, and protected diagnostic access with actor/system identity, correlation id, reason, and before/after state.
+
+### Queue, Provider, and Structured AI Output
+
+- [ ] `BE-1320` Save the original minute transactionally before inspecting `process_with_ai`; never dispatch a job when false and set Not Processed with null AI fields.
+- [ ] `BE-1321` When true, set Pending, create an idempotent attempt, enqueue a durable job, and return without waiting for provider completion.
+- [ ] `BE-1322` Implement worker transitions Pending -> Processing -> Processed/Failed with retry limits, backoff, timeout, cancellation, dead-letter handling, and safe restart behavior.
+- [ ] `BE-1323` Define a versioned provider-neutral AI port and structured response schema for summary, decisions, tasks, title, description, priority, due date, mentioned assignee, department, role, and dependencies.
+- [ ] `BE-1324` Validate JSON shape, require a task array, normalize priority, validate dates, remove empty/invalid tasks, deduplicate proposals, and retain protected raw output for authorized diagnostics.
+- [ ] `BE-1325` Treat provider output as untrusted input; never accept employee database ids, permissions, project scope, task status, or final access decisions from AI.
+- [ ] `BE-1326` On any provider/schema failure, preserve the minute, set Failed, store a safe error plus protected diagnostics, notify the creator, and expose an authorized idempotent retry.
+
+### Matching and Task Creation
+
+- [ ] `BE-1330` Implement explainable matching using a valid explicitly mentioned employee first, then project membership, department, role, availability, current workload, and active status.
+- [ ] `BE-1331` Apply current effective assignments, authorization, project membership, leave/WFH availability, and existing task rules before assigning any generated task.
+- [ ] `BE-1332` Create unassigned tasks when no candidate meets the approved threshold; never force an unsuitable employee.
+- [ ] `BE-1333` Create each valid task transactionally with inherited client/project context, source `meeting_minute_ai`, Todo status, creator/system identity, due date, priority, and immutable minute/attempt link.
+- [ ] `BE-1334` Prevent duplicate generated tasks across concurrent workers, retries, replayed jobs, and repeated provider output using idempotency and a normalized proposal fingerprint.
+- [ ] `BE-1335` Notify the minute creator on completion/failure and assigned employees on new tasks without including content outside each recipient's authorization scope.
+- [ ] `BE-1336` Ensure generated tasks obey task acceptance, time-entry, workload, notification, and authorization rules, including employee-raised-task review where applicable.
+
+### Tests, Operations, and Exit Criteria
+
+- [ ] `BE-1340` Add unit and repository tests for client/project dependency, validation, ownership, archive, authorization-before-aggregation, and safe not-found behavior across every role.
+- [ ] `BE-1341` Add queue/provider tests for no-AI, pending, processing, success, malformed output, timeout, retry, worker restart, dead letter, and exactly-once task outcomes.
+- [ ] `BE-1342` Add matching tests for explicit valid/invalid people, project/department/role/availability/workload scoring, unassigned fallback, and assignment evidence.
+- [ ] `BE-1343` Add security tests proving raw AI artifacts and sensitive meeting content are excluded from ordinary payloads and require audited diagnostic permission.
+- [ ] `BE-1344` Add integration/contract tests for frontend list, form, detail, status, retry, linked-task, notification, and archive flows.
+- [ ] `BE-1345` Document provider approval, prompt minimization, data region, model-training opt-out, retention/deletion, cost limits, monitoring, and incident response.
+- [ ] `BE-1346` Re-run typecheck, lint, migration validation, backend tests, security audit, and production build; record evidence in `docs/backend/phase-13/verification.md`.
+
+### Phase 13 Exit Criteria
+
+- [ ] Every active role can access authorized Meeting Minutes, with Management/View-Only restrictions enforced server-side.
+- [ ] The original minute is durable before AI work and remains available through every processing failure.
+- [ ] AI output is validated, deduplicated, provenance-linked, and matched by application logic rather than trusted blindly.
+- [ ] Generated tasks are assigned only to eligible people or left unassigned, and every task links back to its source minute and attempt.
+- [ ] Retries, worker restarts, permissions, sensitive content, notifications, and diagnostics are idempotent, auditable, and tested.
+- [ ] Provider, retention, privacy, and automatic-assignment decisions are approved before production enablement.
+
 ## 5. Backend Acceptance Scenarios
 
 ### Time and Calculation
@@ -765,6 +806,19 @@ A role that has been used cannot simply be deleted. `finance_manager` is recorde
 - [ ] A submitted timestamp supplied by the client is ignored in favour of the server's.
 - [ ] A visited date and time in the future is rejected with field-level guidance.
 
+### Meeting Minutes and AI
+
+- [ ] `BAC-MTG-01` Every active role can list and view authorized meeting minutes; Management/View-Only cannot mutate or request AI processing.
+- [ ] `BAC-MTG-02` A selected client exposes only its active authorized projects, and an incompatible project cannot be saved.
+- [ ] `BAC-MTG-03` A no-AI save stores the original minute as Not Processed and dispatches no job.
+- [ ] `BAC-MTG-04` An AI save commits the original minute before returning Pending and queueing work.
+- [ ] `BAC-MTG-05` Valid structured output creates deduplicated Todo tasks linked to the minute with normalized priority and safe assignee matching.
+- [ ] `BAC-MTG-06` Invalid, timed-out, or failed processing preserves the minute, records Failed, notifies safely, and supports an idempotent retry.
+- [ ] `BAC-MTG-07` No eligible match leaves a task unassigned; AI never supplies trusted employee ids or bypasses task/time authorization.
+- [ ] `BAC-MTG-08` Replayed jobs, retries, and worker restarts do not duplicate attempts or generated tasks.
+- [ ] `BAC-MTG-09` Raw AI content and match evidence are protected, absent from ordinary payloads, and available only through audited diagnostic permission.
+- [ ] `BAC-MTG-10` Each generated task retains reciprocal traceability to its source minute and processing attempt after reassignment or archival.
+
 ## 6. Dependencies and Required Decisions
 
 | Dependency or decision | Needed by | Owner/approver |
@@ -804,11 +858,7 @@ A role that has been used cannot simply be deleted. `finance_manager` is recorde
 | Phase 0 - Architecture and Delivery Foundation | Done | 25/25 |
 | Phase 1 - MySQL Schema and Data Foundation | Done | 26/26 |
 | Phase 2 - Authentication, Authorization, and Audit | Done | 23/23 |
-<<<<<<< HEAD
 | Phase 3 - Organization, Projects, and Tasks | Done | 27/27 |
-=======
-| Phase 3 - Organization, Projects, and Tasks | In progress | 20/27 |
->>>>>>> 00d146afb1dc2296921b692b63fc9173664225e3
 | Phase 4 - Timesheet Calculation and Correction | Pending | 0/32 |
 | Phase 5 - HR, Attendance, WFH, Leave, Workload, and Evaluation | Pending | 0/26 |
 | Phase 6 - Reporting, Finance, and Exports | Pending | 0/19 |
@@ -818,5 +868,6 @@ A role that has been used cannot simply be deleted. `finance_manager` is recorde
 | Phase 10 - Requisition | Pending | 0/20 |
 | Phase 11 - Conveyance | Pending | 0/22 |
 | Phase 12 - Role Consolidation: Finance into HR | Pending | 0/11 |
+| Phase 13 - Meeting Minutes and AI Task Generation | Pending | 0/34 |
 
 Update this table whenever numbered tasks change status. Acceptance scenarios and phase exit criteria are tracked as gates and are not included in the numbered task totals.
