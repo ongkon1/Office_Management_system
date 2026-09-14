@@ -1,0 +1,25 @@
+import { describe, expect, it } from 'vitest';
+import { clockInstant, elapsedMinutes, localParts } from '@/lib/calculation/instants';
+import { calculateDay } from '@/lib/calculation/engine';
+import { validateEntry } from '@/lib/calculation/validation';
+import type { TimeEntry, WorkPolicy } from '@/contracts/domain';
+const audit = { createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z', createdBy: { userId: 'system', displayName: 'System' }, updatedBy: { userId: 'system', displayName: 'System' } };
+const policy: WorkPolicy = { ...audit, id: 'policy', name: 'Standard', version: 1, effectiveFrom: '2026-01-01', effectiveTo: null, requiredActiveMinutes: 420, recognizedBreakMinutes: 60, requiredTotalMinutes: 480, overtimeThresholdMinutes: 480, criticalThresholdMinutes: 720, workingWeekdays: [1, 2, 3, 4, 5], businessTimezone: 'Asia/Dhaka' };
+const entry = (minutes: number, divisionId = 'pia'): TimeEntry => ({ ...audit, id: divisionId, employeeId: 'employee', workDate: '2026-09-02', divisionId, projectId: null, taskId: null, entryMethod: 'manual_duration', workLocation: 'office', startTime: null, endTime: null, activeMinutes: minutes, workDescription: 'Work', completedWork: 'Done', supportingLink: null, attachmentIds: [], state: 'saved', crossMidnightGroupId: null, policyVersion: 1 });
+describe('BE-0450..0454 canonical calculations and timezone boundaries', () => {
+    it.each([[0, 'missing'], [419, 'under_time'], [420, 'complete'], [421, 'overtime'], [660, 'overtime'], [661, 'critical']] as const)('classifies %i active minutes as %s', (minutes, status) => { expect(calculateDay({ employeeId: 'employee', workDate: '2026-09-02', policy, entries: minutes ? [entry(minutes)] : [] }).status).toBe(status); });
+    it('requires both normal thresholds', () => { expect(calculateDay({ employeeId: 'employee', workDate: '2026-09-02', policy, entries: [entry(420)], breakOverrideMinutes: 59 }).status).toBe('under_time'); });
+    it('reconciles 3+2+2 hours and exactly one break across divisions', () => { const s = calculateDay({ employeeId: 'employee', workDate: '2026-09-02', policy, entries: [entry(180, 'pia'), entry(120, 'gov'), entry(120, 'west')] }); expect(s).toMatchObject({ activeMinutes: 420, breakMinutes: 60, totalMinutes: 480, status: 'complete' }); expect(s.divisionContributions.reduce((n, c) => n + c.activeMinutes, 0)).toBe(420); });
+    it('uses half-day leave consistently in validation and calculation', () => { const draft = { employeeId: 'employee', workDate: '2026-09-02', divisionId: 'pia', projectId: null, taskId: null, entryMethod: 'manual_duration' as const, activeMinutes: 450, workLocation: 'office', startTime: null, endTime: null, workDescription: 'Work', completedWork: 'Done', overtimeReason: null, criticalExplanation: null }; const leave = { portion: 'half_day' as const, leaveType: 'annual' }; expect(validateEntry(draft, { policy, existingEntries: [], effectiveDivisionIds: ['pia'], projects: [], tasks: [], leave })).toEqual([]); expect(calculateDay({ employeeId: 'employee', workDate: '2026-09-02', policy, entries: [entry(210)], leave })).toMatchObject({ activeMinutes: 210, breakMinutes: 30, totalMinutes: 240, status: 'complete' }); });
+    it('does not manufacture time for WFH, holidays or full-day leave', () => { for (const extra of [{ approvedWfh: true }, { holidayName: 'Holiday' }, { leave: { portion: 'full_day' as const, leaveType: 'annual' } }]) {
+        const s = calculateDay({ employeeId: 'employee', workDate: '2026-09-02', policy, entries: [], ...extra });
+        expect(s.activeMinutes).toBe(0);
+        expect(s.breakMinutes).toBe(0);
+        if ('holidayName' in extra || 'leave' in extra)
+            expect(s.status).toBe('complete');
+    } });
+    it('honours part-time policy and immutable supplied version', () => { const s = calculateDay({ employeeId: 'employee', workDate: '2026-09-02', policy: { ...policy, version: 2, requiredActiveMinutes: 180, recognizedBreakMinutes: 30, requiredTotalMinutes: 210 }, entries: [entry(180)] }); expect(s).toMatchObject({ policyVersion: 2, totalMinutes: 210, status: 'complete' }); });
+    it('converts Dhaka clocks independently of process timezone', () => { expect(clockInstant('2026-09-02', '09:00', 'Asia/Dhaka')).toBe('2026-09-02T03:00:00.000Z'); expect(localParts('2026-09-01T20:00:00Z', 'Asia/Dhaka').date).toBe('2026-09-02'); });
+    it('refuses nonexistent and ambiguous DST wall times', () => { expect(clockInstant('2026-03-08', '02:30', 'America/New_York')).toBeNull(); expect(clockInstant('2026-11-01', '01:30', 'America/New_York')).toBeNull(); expect(clockInstant('2026-03-08', '03:30', 'America/New_York')).toBe('2026-03-08T07:30:00.000Z'); });
+    it('attributes cross-midnight timer duration to its local start date', () => { const start = '2026-09-02T17:30:00Z'; const end = '2026-09-02T19:15:00Z'; expect(localParts(start, 'Asia/Dhaka').date).toBe('2026-09-02'); expect(localParts(end, 'Asia/Dhaka').date).toBe('2026-09-03'); expect(elapsedMinutes(start, end)).toBe(105); });
+});

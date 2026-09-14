@@ -2,7 +2,7 @@
 
 Durable context for anyone — human or AI — picking up this codebase. It records what the plan files don't: why things are the way they are, what's decided versus assumed, and the rules that are easy to break by accident.
 
-Last updated: **8 September 2026** (frontend Phase 9 implementation at 13/14 pending stakeholder sign-off; Backend Phase 3 complete).
+Last updated: **13 September 2026** (Backend Phase 6 implementation verified; browser cutover remains Phase 9).
 
 ---
 
@@ -171,7 +171,10 @@ Environment: Windows + WAMP, PowerShell. **Not currently a git repository.**
 | Backend | 1 — MySQL schema and data foundation | Done (26/26) |
 | Backend | 2 — Authentication, authorization, and audit | Done (23/23) |
 | Backend | 3 — Organization, projects, and tasks | Done (27/27) |
-| Backend | 4–9 | Pending |
+| Backend | 4 — Timesheet calculation and correction | Done (33/33) |
+| Backend | 5 — HR workflows | Implementation done (26/26); browser cutover gate pending Phase 9 |
+| Backend | 6 — Reporting, Finance and exports | Implementation done (19/19); browser cutover gate pending Phase 9 |
+| Backend | 7–9 | Pending |
 | Backend | 10 — Requisition | Pending (0/20) — new milestone |
 | Backend | 11 — Conveyance | Pending (0/22) — new milestone, depends on 10 |
 
@@ -252,4 +255,15 @@ Later phases harden screens and fixtures around these assumptions, so the cost o
 | Backend Phase 0 | Domain/application/infrastructure/delivery/composition dependency direction | Keeps calculations, authorization and transactions framework-independent and testable |
 | Backend Phase 0 | Drizzle/mysql2, Better Auth, Zod, BullMQ/Redis, private S3, Resend, Node 24 containers and MySQL 8.4 | Satisfies the documented transaction, security, durable-work, protected-file and deployment criteria while keeping providers behind ports |
 
-Backend Phases 0–3 are complete. Phase 3 adds migration `0006`, transaction-aware organization/work repositories and services, protected profile-photo delivery, effective assignment and allocation validation, derived project/task actual time, and append-only employee-task endorsement. Evidence lives in `docs/backend/phase-3/verification.md`. Backend Phase 4 is next. Seed identities and organization data are demonstrations, not authoritative production inputs; provider credentials, production domains, capacity sizing, and RTO/RPO remain deployment/business inputs.
+Backend Phases 0–4 are complete. Phase 3 adds migration `0006`, transaction-aware organization/work repositories and services, protected profile-photo delivery, effective assignment and allocation validation, derived project/task actual time, and append-only employee-task endorsement. Evidence lives in `docs/backend/phase-3/verification.md`. Backend Phase 4 adds authoritative MySQL time entries/timers, shared calculation and UTC validation, transactional summaries/audit/outbox, general remarks, and frozen HR verification/amendment history. All 33 tasks are done; evidence and migration reconciliation notes are in `docs/backend/phase-4/verification.md`. Final checks: 168 backend tests, 409 frontend tests, typecheck/lint/build passing. The local MySQL test runtime is WAMP 9.1; the approved deployment target remains 8.4 LTS. Backend Phase 5 now implements all 26 numbered tasks: authoritative HR requests, attendance, holidays, workload and evaluations, migration 0009 and durable scheduled jobs. Evidence: `docs/backend/phase-5/verification.md`. Backend tests pass 195/195. Browser cutover remains Phase 9, including wiring `EvaluationScore.competencies` into the review form; submission requires all nine qualitative competencies beneath the six weighted groups. Production policies and live Redis worker setup remain deployment inputs. Seed identities and organization data are demonstrations, not authoritative production inputs; provider credentials, production domains, capacity sizing, and RTO/RPO remain deployment/business inputs.
+
+
+## Backend Phase 6 handoff — 13 September 2026
+
+`src/server/reporting` supplies the report catalogue/query layer, reporting and Finance contract adapters, exact effective-dated financial configuration, and durable export processing. `/api/reporting` is the session-derived HTTP boundary. Browser services remain mock-backed until Phase 9. See `docs/backend/phase-6/verification.md` for task mappings, API/worker setup, explicit engineering defaults and gate evidence.
+
+Finance defaults to verified data; open-period reads require `report.finance.unverified`. Cost access remains separately granted through `finance.cost.view`, settings changes additionally require `finance.settings.manage`, and sensitive exports require `reporting.export.protected`. Migration 0010 registers capabilities without granting them. Rates/billability may be superseded from a later unverified date with an audit trail. Payroll field configuration must be supplied by an authorized owner; engineering fixtures are not business approval.
+
+Excel/CSV/PDF/print artifacts are generated by the persistent worker, stored privately in S3, and revalidated at download. Configure a Unicode PDF font, worker startup, private storage and lifecycle cleanup before production deployment. Queries are bounded to 367 dates, 20,000 employee-days and 32 MiB of retained source context; larger requests must be split. The production performance gate remains Phase 8.
+
+Verification: full backend regression 223/223 before the last two additional cases; final Phase 6 suite 30/30; frontend/shared 409/409; type generation, TypeScript, lint, contrast 48/48, migration validation 10/10, dependency high/critical gate and 60-page production build passed. The ExcelJS UUID advisory was fixed with a scoped compatible override; four pre-existing moderate Drizzle Kit development findings remain. Checks used the Windows Node 24 runtime and isolated WAMP test databases.

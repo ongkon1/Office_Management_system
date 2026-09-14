@@ -66,11 +66,14 @@ function sumBy<T>(items: readonly T[], select: (item: T) => number): number {
 function groupContributions(entries: readonly TimeEntry[]): {
   divisions: readonly DivisionContribution[];
   projects: readonly ProjectContribution[];
+  tasks: readonly { taskId: string; activeMinutes: DurationMinutes }[];
 } {
   const byDivision = new Map<string, number>();
   const byProject = new Map<string, number>();
+  const byTask = new Map<string, number>();
 
   for (const entry of entries) {
+    if (entry.taskId) byTask.set(entry.taskId, (byTask.get(entry.taskId) ?? 0) + entry.activeMinutes);
     byDivision.set(
       entry.divisionId,
       (byDivision.get(entry.divisionId) ?? 0) + entry.activeMinutes,
@@ -84,6 +87,7 @@ function groupContributions(entries: readonly TimeEntry[]): {
   }
 
   return {
+    tasks: [...byTask.entries()].map(([taskId, activeMinutes]) => ({ taskId, activeMinutes })),
     divisions: [...byDivision.entries()]
       .map(([divisionId, activeMinutes]) => ({ divisionId, activeMinutes }))
       .sort((a, b) => b.activeMinutes - a.activeMinutes),
@@ -161,7 +165,7 @@ function deriveAttendance(input: {
   if (leave?.portion === 'full_day') return 'approved_leave';
 
   if (!hasEntries) {
-    return leave?.portion === 'half_day' ? 'half_day_leave' : 'missing_timesheet';
+    return leave?.portion === 'half_day' ? 'half_day_leave' : approvedWfh ? 'wfh' : 'missing_timesheet';
   }
 
   if (leave?.portion === 'half_day') return 'half_day_leave';
@@ -268,7 +272,7 @@ export function calculateDay(input: DayCalculationInput): DailySummary {
     hasExemption: exemption !== null,
   });
 
-  const { divisions, projects } = groupContributions(entries);
+  const { divisions, projects, tasks } = groupContributions(entries);
 
   return {
     employeeId,
@@ -286,6 +290,7 @@ export function calculateDay(input: DayCalculationInput): DailySummary {
     criticalExplanation: criticalExplanation ?? null,
     divisionContributions: divisions,
     projectContributions: projects,
+    taskContributions: tasks,
     entryIds: entries.map((entry) => entry.id),
     attendance: deriveAttendance({
       hasEntries,
@@ -362,4 +367,17 @@ export function aggregateSummaries(
     criticalDayCount: countOf('critical'),
     missingDayCount: countOf('missing'),
   };
+}
+
+/** Allocate a day's separate minutes once across its active contribution rows. */
+export function allocateMinutes(minutes: number, weights: readonly number[]): readonly number[] {
+  if (!Number.isSafeInteger(minutes) || minutes < 0 || weights.some(w => !Number.isSafeInteger(w) || w < 0)) throw new Error('Invalid minute allocation');
+  const total = weights.reduce((n, w) => n + w, 0);
+  if (!weights.length) return [];
+  if (!total) return weights.map((_, i) => i === 0 ? minutes : 0);
+  const shares = weights.map(w => Math.floor(minutes * w / total));
+  const order = weights.map((w, i) => ({ i, remainder: minutes * w % total })).sort((a, b) => b.remainder - a.remainder || a.i - b.i);
+  const remaining = minutes - shares.reduce((n, v) => n + v, 0);
+  for (let i = 0; i < remaining; i++) shares[order[i].i]++;
+  return shares;
 }

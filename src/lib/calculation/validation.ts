@@ -19,7 +19,8 @@ import type {
 import type { FieldError } from '@/contracts/results';
 import { formatTimeRange, formatDuration } from '@/lib/format';
 import type { LeaveContext } from './engine';
-import { requiresCriticalExplanation, requiresOvertimeReason } from './engine';
+import { calculateDay, requiresCriticalExplanation, requiresOvertimeReason } from './engine';
+import { clockInstant, elapsedMinutes, localParts } from './instants';
 
 export interface EntryDraft {
   readonly id?: string;
@@ -72,14 +73,16 @@ export function parseClock(value: string | null): number | null {
  * silently wrapping past midnight — cross-midnight work is a policy decision
  * (`REQ-TIME-028`), not something to infer from a typo.
  */
-export function draftMinutes(draft: EntryDraft): DurationMinutes {
+export function draftMinutes(draft: EntryDraft, timezone = 'Asia/Dhaka'): DurationMinutes {
   if (draft.entryMethod === 'manual_duration') {
     return draft.activeMinutes ?? 0;
   }
   const start = parseClock(draft.startTime);
   const end = parseClock(draft.endTime);
   if (start === null || end === null || end <= start) return 0;
-  return end - start;
+  const from = clockInstant(draft.workDate, draft.startTime!, timezone);
+  const to = clockInstant(draft.workDate, draft.endTime!, timezone);
+  return from && to ? elapsedMinutes(from, to) : 0;
 }
 
 function overlaps(
@@ -92,14 +95,14 @@ function overlaps(
   return aStart < bEnd && bStart < aEnd;
 }
 
-function entryClockRange(entry: TimeEntry): { start: number; end: number } | null {
+function entryClockRange(entry: TimeEntry, timezone: string): { start: number; end: number } | null {
   if (!entry.startTime || !entry.endTime) return null;
   const start = new Date(entry.startTime);
   const end = new Date(entry.endTime);
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
   return {
-    start: start.getHours() * 60 + start.getMinutes(),
-    end: end.getHours() * 60 + end.getMinutes(),
+    start: localParts(entry.startTime, timezone).minutes,
+    end: localParts(entry.endTime, timezone).minutes,
   };
 }
 
@@ -248,7 +251,7 @@ export function validateEntry(
   }
 
   // --- Times and duration (`REQ-TIME-021`) --------------------------------
-  const minutes = draftMinutes(draft);
+  const minutes = draftMinutes(draft, policy.businessTimezone);
 
   if (draft.entryMethod === 'manual_clock') {
     const start = parseClock(draft.startTime);
@@ -295,7 +298,7 @@ export function validateEntry(
     if (start !== null && end !== null && end > start) {
       for (const existing of existingEntries) {
         if (existing.id === draft.id) continue;
-        const range = entryClockRange(existing);
+        const range = entryClockRange(existing, policy.businessTimezone);
         if (!range) continue;
 
         if (overlaps(start, end, range.start, range.end)) {
@@ -357,14 +360,16 @@ export function validateEntry(
   }
 
   // --- Overtime and critical explanations (`REQ-TIME-018`, `-019`) -------
-  const otherMinutes = existingEntries
-    .filter((existing) => existing.id !== draft.id)
-    .reduce((total, existing) => total + existing.activeMinutes, 0);
-
-  const dayActive = otherMinutes + minutes;
-  const dayBreak =
-    breakOverrideMinutes ?? (dayActive > 0 ? policy.recognizedBreakMinutes : 0);
-  const dayTotal = dayActive + dayBreak;
+  const candidate = {
+    id: draft.id ?? 'preview', employeeId: draft.employeeId, workDate: draft.workDate,
+    divisionId: draft.divisionId, projectId: draft.projectId, taskId: draft.taskId,
+    activeMinutes: minutes, workLocation: draft.workLocation,
+  } as TimeEntry;
+  const dayTotal = calculateDay({
+    employeeId: draft.employeeId, workDate: draft.workDate, policy,
+    entries: [...existingEntries.filter((entry) => entry.id !== draft.id), candidate],
+    breakOverrideMinutes, leave, holidayName,
+  }).totalMinutes;
 
   if (requiresOvertimeReason(dayTotal, policy) && !draft.overtimeReason?.trim()) {
     errors.push({

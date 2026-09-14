@@ -254,7 +254,10 @@ React Compiler lint errors (`set-state-in-effect`, render-phase mutation) are re
 | Backend | 1 — MySQL schema and data foundation | Done (26/26) |
 | Backend | 2 — Authentication, authorization, and audit | Done (23/23) |
 | Backend | 3 — Organization, projects, and tasks | Done (27/27) |
-| Backend | 4–9 | Pending |
+| Backend | 4 — Timesheet calculation and correction | Done (33/33) |
+| Backend | 5 — HR workflows | Implementation done (26/26); browser cutover pending Phase 9 |
+| Backend | 6 — Reporting, Finance and exports | Implementation done (19/19); browser cutover pending Phase 9 |
+| Backend | 7–9 | Pending |
 | Backend | 10 — Requisition | Pending (0/20) — new milestone |
 | Backend | 11 — Conveyance | Pending (0/22) — new milestone, depends on 10 |
 | Backend | 12 — Role consolidation: Finance into HR | Pending (0/11) — new milestone |

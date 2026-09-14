@@ -40,3 +40,6 @@ Tasks: `BE-0301`–`BE-0337`
 The integration suite uses the repository's isolated-database builder when a MySQL test URL is available; unit, API, authorization, and migration checks remain deterministic without production credentials.
 
 `npm audit` reports five moderate findings in the development dependency chain through `drizzle-kit`/`esbuild`; there is currently no non-breaking automatic fix. The configured high-severity security gate passes.
+
+
+Phase 4 migration reconciliation: the duplicate `0006_organization_work_services.sql` is now archived in `docs/backend/phase-4/archived-duplicate-migration/`; the original `0006_organization_work.sql` remains in the executable chain, with additive compatibility migration 0007. See `docs/backend/phase-4/verification.md` for checksum and existing-database handling.

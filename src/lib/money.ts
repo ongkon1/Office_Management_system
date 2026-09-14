@@ -141,3 +141,18 @@ export function variancePercent(actual: Money, budget: Money): number | null {
   const ratio = ((actualMinor - budgetMinor) * 10000n) / budgetMinor;
   return Math.round(Number(ratio) / 100);
 }
+
+/** Accumulate differently rated work exactly; round the complete amount once. */
+export function costOfRatedMinutes(lines: readonly { hourlyRate: Money; minutes: number }[], currency = 'BDT'): Money {
+  let numerator = 0n;
+  for (const line of lines) {
+    if (line.hourlyRate.currency !== currency || !Number.isSafeInteger(line.minutes) || line.minutes < 0) throw new Error('Invalid rated minutes or currency');
+    numerator += toMinorUnits(line.hourlyRate.amount) * BigInt(line.minutes);
+  }
+  return { amount: fromMinorUnits(divideRoundHalfUp(numerator, MINUTES_PER_HOUR)), currency };
+}
+
+/** MySQL DECIMAL may append storage zeroes; never discard non-zero precision. */
+export function storedMoney(amount: string, currency: string): Money {
+  return money(amount.replace(/(\.\d{2})0+$/, '$1'), currency);
+}

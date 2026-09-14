@@ -76,6 +76,14 @@ export interface ReportCatalogueGroupView {
 
 /** What the builder submits. Absent keys mean "no filter applied". */
 export interface ReportRunInput {
+  readonly recordStatuses?: readonly string[];
+  readonly sort?: 'key' | 'activeMinutes' | 'date' | 'employee';
+  readonly direction?: 'asc' | 'desc';
+  readonly periodId?: string;
+  readonly verifiedOnly?: boolean;
+  readonly wfhOnly?: boolean;
+  readonly page?: number;
+  readonly pageSize?: number;
   readonly reportKey: string;
   readonly from?: IsoDate;
   readonly to?: IsoDate;
@@ -111,6 +119,8 @@ export interface ReportChartView {
 }
 
 export interface ReportPreviewView {
+  readonly policyVersions?: readonly number[];
+  readonly pageInfo?: import('./query').PageInfo;
   readonly reportKey: string;
   readonly title: string;
   readonly description: string;
@@ -133,6 +143,7 @@ export interface ReportPreviewView {
 }
 
 export interface ReportExportInput {
+  readonly idempotencyKey?: string;
   readonly reportKey: string;
   readonly format: ExportFormat;
   readonly run: ReportRunInput;
