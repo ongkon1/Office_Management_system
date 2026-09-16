@@ -22,7 +22,7 @@ export function paginate<T>(items: readonly T[], query: ListQuery): Result<Pagin
     return success({ items: items.slice((page - 1) * pageSize, page * pageSize), pageInfo: { page, pageSize, totalItems: items.length, totalPages, hasPreviousPage: page > 1, hasNextPage: page < totalPages } });
 }
 function totals(label: string, days: readonly DailySummary[]): PeriodTotalsView { const t = aggregateSummaries(days); return { label, active: toDurationView(t.activeMinutes), break: toDurationView(t.breakMinutes), total: toDurationView(t.totalMinutes), overtime: toDurationView(t.overtimeMinutes), requiredActive: toDurationView(t.requiredActiveMinutes), completeDayCount: t.completeDayCount, underTimeDayCount: t.underTimeDayCount, overtimeDayCount: t.overtimeDayCount, criticalDayCount: t.criticalDayCount, missingDayCount: t.missingDayCount }; }
-function row(s: DailySummary, c: DayContext): TimesheetDayRowView { return { date: s.workDate, dateLabel: formatDate(s.workDate), weekdayLabel: formatDateWithWeekday(s.workDate).slice(0, 3), active: toDurationView(s.activeMinutes), break: toDurationView(s.breakMinutes), total: toDurationView(s.totalMinutes), status: toDayStatusView(s.status), attendance: s.attendance, attendanceLabel: s.attendance, divisionCodes: s.divisionContributions.map((d) => c.divisions.find((v) => v.id === d.divisionId)?.code ?? 'Restricted'), clientContributions: toClientContributions(s.activeMinutes, s.projectContributions.map((p) => ({ clientId: c.projects.find((v) => v.id === p.projectId)?.client ?? null, activeMinutes: p.activeMinutes }))), isLocked: s.isLocked, href: `/timesheets/${s.workDate}` }; }
+function row(s: DailySummary, c: DayContext): TimesheetDayRowView { return { date: s.workDate, dateLabel: formatDate(s.workDate), weekdayLabel: formatDateWithWeekday(s.workDate).slice(0, 3), active: toDurationView(s.activeMinutes), break: toDurationView(s.breakMinutes), total: toDurationView(s.totalMinutes), requiredActive: toDurationView(s.requiredActiveMinutes), status: toDayStatusView(s.status), isRequiredWorkingDay: s.isRequiredWorkingDay, attendance: s.attendance, attendanceLabel: s.attendance, divisionIds: s.divisionContributions.map((d) => d.divisionId), divisionCodes: s.divisionContributions.map((d) => c.divisions.find((v) => v.id === d.divisionId)?.code ?? 'Restricted'), clientContributions: toClientContributions(s.activeMinutes, s.projectContributions.map((p) => ({ clientId: c.projects.find((v) => v.id === p.projectId)?.client ?? null, activeMinutes: p.activeMinutes }))), isLocked: s.isLocked, href: `/timesheets/${s.workDate}` }; }
 /** Legacy backend adapter retained until Modify Phase B2 implements WorkLog services. */
 export class BackendTimesheetService {
     constructor(readonly application: TimeApplication) { }
@@ -46,7 +46,35 @@ export class BackendTimesheetService {
         }
         const ref = (id: string) => people.get(id)!;
         return success({ employee: ref(input.employeeId), date: s.workDate, dateLabel: formatDateWithWeekday(s.workDate), summary: { date: s.workDate, dateLabel: formatDateWithWeekday(s.workDate), active: toDurationView(s.activeMinutes), break: toDurationView(s.breakMinutes), total: toDurationView(s.totalMinutes), requiredActive: toDurationView(s.requiredActiveMinutes), remainingActive: toDurationView(s.remainingActiveMinutes), scheduleProgressPercent: s.requiredTotalMinutes ? Math.min(100, Math.round(s.totalMinutes * 100 / s.requiredTotalMinutes)) : s.totalMinutes ? 100 : 0, status: toDayStatusView(s.status), attendance: s.attendance, isLocked: s.isLocked, overtimeReason: s.overtimeReason, criticalExplanation: s.criticalExplanation },
-            entries: c.entries.map((e) => { const d = c.divisions.find((d) => d.id === e.divisionId)!; const p = c.projects.find((p) => p.id === e.projectId); const t = c.tasks.find((t) => t.id === e.taskId); return { id: e.id, version: e.version, division: { id: d.id, name: d.name, code: d.code, isRestricted: d.isRestricted }, project: p ? { id: p.id, name: p.name, code: p.code, divisionId: p.divisionId } : null, task: t ? { id: t.id, title: t.title, projectId: t.projectId, status: t.status } : null, timeRangeLabel: e.startTime && e.endTime ? formatTimeRange(e.startTime, e.endTime) : null, duration: toDurationView(e.activeMinutes), workLocation: e.workLocation, workLocationLabel: WORK_LOCATION_LABEL[e.workLocation], workDescription: e.workDescription, completedWork: e.completedWork, attachmentCount: hasPermission(actor, 'file.protected.view') ? e.attachmentIds.length : 'restricted' as const, supportingLink: e.supportingLink, isDraft: e.state === 'draft', canEdit, canDelete: canEdit }; }),
+            entries: c.entries.map((e) => {
+                const d = c.divisions.find((division) => division.id === e.divisionId)!;
+                const p = c.projects.find((project) => project.id === e.projectId);
+                const t = c.tasks.find((task) => task.id === e.taskId);
+                const isHistoricalClockEntry = Boolean(e.startTime && e.endTime);
+                return {
+                    id: e.id,
+                    version: e.version,
+                    recordKind: isHistoricalClockEntry ? 'historical_clock_entry' as const : 'work_log' as const,
+                    division: { id: d.id, name: d.name, code: d.code, isRestricted: d.isRestricted },
+                    project: p ? { id: p.id, name: p.name, code: p.code, divisionId: p.divisionId } : null,
+                    task: t ? { id: t.id, title: t.title, projectId: t.projectId, status: t.status } : null,
+                    timeRangeLabel: isHistoricalClockEntry
+                        ? formatTimeRange(e.startTime!, e.endTime!)
+                        : null,
+                    duration: toDurationView(e.activeMinutes),
+                    workLocation: e.workLocation,
+                    workLocationLabel: WORK_LOCATION_LABEL[e.workLocation],
+                    workDescription: e.workDescription,
+                    completedWork: e.completedWork,
+                    attachmentCount: hasPermission(actor, 'file.protected.view')
+                        ? e.attachmentIds.length
+                        : 'restricted' as const,
+                    supportingLink: e.supportingLink,
+                    isDraft: e.state === 'draft',
+                    canEdit: canEdit && !isHistoricalClockEntry,
+                    canDelete: canEdit && !isHistoricalClockEntry,
+                };
+            }),
             breakEntry: { duration: toDurationView(s.breakMinutes), isOverridden: c.breakOverrideMinutes !== null, overrideReason: c.breakReason, canOverride: !s.isLocked && hasPermission(actor, 'time.break.override') && !actor.roles.includes('management') },
             divisionContributions: s.divisionContributions.map((item) => { const d = c.divisions.find((d) => d.id === item.divisionId)!; return { division: { id: d.id, name: d.name, code: d.code, isRestricted: d.isRestricted }, active: toDurationView(item.activeMinutes), sharePercent: s.activeMinutes ? Math.round(item.activeMinutes * 100 / s.activeMinutes) : 0 }; }),
             remarks: remarks.data.filter((r) => r.relatedRecord.type === 'timesheet' && r.relatedRecord.workDate === input.date).map((r) => ({ id: r.id, author: ref(r.authorEmployeeId), employee: ref(r.employeeId), message: r.message, createdAtLabel: formatDate(r.createdAt), state: r.state, stateLabel: r.state, isCorrectionRequest: r.isCorrectionRequest, relatedLabel: formatDate(input.date), relatedHref: `/timesheets/${input.date}`, responseCount: r.responses.length, href: `/remarks/${r.id}` })),

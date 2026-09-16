@@ -110,6 +110,7 @@ describe('checkRouteAccess', () => {
     const admin = userWith('super_admin', ['control.audit.view']);
     for (const route of [
       '/admin/divisions',
+      '/admin/departments',
       '/admin/users',
       '/admin/roles',
       '/admin/policies',
@@ -128,5 +129,61 @@ describe('checkRouteAccess', () => {
     // Unknown paths resolve to not-found at the route level; the guard itself
     // does not need a rule for every string.
     expect(allow('/some/unlisted/path', userWith('employee'))).toBe(true);
+  });
+});
+
+describe('Meeting Minutes access (FE-1101)', () => {
+  const ACTIVE_ROLES: readonly RoleKey[] = [
+    'employee',
+    'team_lead',
+    'hr_manager',
+    'management',
+    'super_admin',
+  ];
+  const READ_ONLY_ROLES: readonly RoleKey[] = ['employee', 'management'];
+  const CREATOR_ROLES = ACTIVE_ROLES.filter((role) => !READ_ONLY_ROLES.includes(role));
+
+  it('lets every active role reach the list and a record', () => {
+    for (const role of ACTIVE_ROLES) {
+      expect(allow('/meeting-minutes', userWith(role))).toBe(true);
+      expect(allow('/meeting-minutes/min-1', userWith(role))).toBe(true);
+    }
+  });
+
+  it('keeps Employee and Management/View-Only read-only on the create and edit screens', () => {
+    expect(CREATOR_ROLES).toEqual(['team_lead', 'hr_manager', 'super_admin']);
+    for (const role of READ_ONLY_ROLES) {
+      for (const route of ['/meeting-minutes/new', '/meeting-minutes/min-1/edit']) {
+        expect(checkRouteAccess(route, userWith(role), DEMO_FEATURE_FLAGS)).toMatchObject({
+          allowed: false,
+          reason: 'role',
+        });
+      }
+    }
+    for (const role of CREATOR_ROLES) {
+      expect(allow('/meeting-minutes/new', userWith(role))).toBe(true);
+      expect(allow('/meeting-minutes/min-1/edit', userWith(role))).toBe(true);
+    }
+  });
+
+  it('reaches the dynamic edit screen through a one-segment wildcard', () => {
+    expect(findRule('/meeting-minutes/min-1/edit')?.path).toBe('/meeting-minutes/*/edit');
+    expect(findRule('/meeting-minutes/min-1')?.path).toBe('/meeting-minutes');
+    expect(findRule('/meeting-minutes/new')?.path).toBe('/meeting-minutes/new');
+    // The wildcard needs a real segment to stand for.
+    expect(findRule('/meeting-minutes/edit')?.path).toBe('/meeting-minutes');
+    // And the module rule still respects segment boundaries.
+    expect(findRule('/meeting-minutes-archive')).toBeNull();
+  });
+
+  it('hides every Meeting Minutes route when the module is switched off', () => {
+    const admin = userWith('super_admin');
+    const flags = { ...DEMO_FEATURE_FLAGS, meetingMinutes: false };
+    for (const route of ['/meeting-minutes', '/meeting-minutes/new', '/meeting-minutes/min-1/edit']) {
+      expect(checkRouteAccess(route, admin, flags)).toMatchObject({
+        allowed: false,
+        reason: 'feature_disabled',
+      });
+    }
   });
 });

@@ -10,6 +10,7 @@ import { resetAdminState } from './admin';
 import { resetConveyanceState } from './conveyance';
 import { resetFinanceState } from './finance';
 import { resetHrState } from './hr';
+import { resetMeetingMinutesState } from './meeting-minutes';
 import { resetReportingState } from './reporting';
 import { resetRequisitionState } from './requisition';
 import { mockStore } from './store';
@@ -22,6 +23,7 @@ export function resetDemoData(): void {
   resetConveyanceState();
   resetFinanceState();
   resetHrState();
+  resetMeetingMinutesState();
   resetReportingState();
   resetRequisitionState();
   resetTaskReviewState();

@@ -146,9 +146,9 @@ Legend: **M** = manage, **O** = own records, **A** = assigned scope, **V** = vie
 | Period verification | M | - | - | M | V | V |
 | Reports/exports | M | A | O | M | F | V |
 | Audit logs | M | A/V | O/V | V | F/V | - |
-| Meeting minutes | M | A/M | O/M | M | V | V |
+| Meeting minutes | M | A/M | V | M | V | V |
 
-Meeting Minutes must be present for every active authenticated role. Record visibility must still follow client, project, division, government-project, and explicit permission scope. Management/View-Only users may search and view authorized minutes but may not create, edit, archive, retry processing, or generate tasks. Other roles may create minutes; edit, archive, retry, and AI actions are limited to the creator or an explicitly authorized administrator.
+Meeting Minutes must be present for every active authenticated role. Record visibility must still follow client, project, division, government-project, and explicit permission scope. Employee and Management/View-Only users may search and view authorized minutes but may not create, edit, archive, retry processing, or generate tasks. Team Lead, HR, and Super Administrator may create minutes; edit, archive, retry, and AI actions are limited to the creator or an explicitly authorized administrator.
 
 ## 5. Functional Requirements
 
@@ -639,7 +639,7 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 
 ### 14.5 Meeting Minutes and AI Scenarios
 
-- `AC-MTG-001`: Every active role must see the Meeting Minutes module, while Management/View-Only must remain unable to create, edit, archive, retry, or request AI processing.
+- `AC-MTG-001`: Every active role must see the Meeting Minutes module, while Employee and Management/View-Only must remain unable to create, edit, archive, retry, or request AI processing.
 - `AC-MTG-002`: Selecting a client must show only active authorized projects for that client, and changing the client must clear an incompatible project selection.
 - `AC-MTG-003`: Saving without AI must persist the original minute as Not Processed, dispatch no job, and create no task.
 - `AC-MTG-004`: Saving with AI must persist the original minute before returning Pending and before dispatching the background job.
@@ -685,6 +685,7 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 | 27. Development Phases | Section 10 |
 | 28. Core MVP Requirements | Sections 2.2 and 10.1 |
 | Meeting Minutes to AI Task Generation and Assignment amendment | Sections 2.3, 3, 4.2, 5.16, 6.7, 7, 8, 10, 11-14 |
+| Meeting Minutes Employee read-only amendment, 15 September 2026 | Section 4.2 (matrix and access note), Section 14.5 (`AC-MTG-001`) |
 
 ## 16. Requirement Governance
 

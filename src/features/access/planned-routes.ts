@@ -6,10 +6,13 @@
  * looks like a defect. Anything *not* registered still returns not-found, so
  * unknown URLs are not silently absorbed.
  *
- * **This registry is empty as of Phase 7.** Every navigation destination now
- * resolves to a real screen, a feature-flag exclusion, or a deliberate
- * prototype that says so on the page itself — which is Phase 7's third exit
- * criterion. The mechanism stays because it is the right answer whenever
+ * The registry was empty from Phase 7 until Phase 11, when Meeting Minutes
+ * joined every role's navigation (`FE-1101`) ahead of its screens. The list
+ * itself shipped in `FE-1110` and its concrete page takes precedence over the
+ * catch-all; the entry still serves `/meeting-minutes/new`, `/[id]` and
+ * `/[id]/edit` through the ancestor fallback. Remove it once those screens
+ * exist (`FE-1113`–`FE-1126`), so the registry again holds only what is
+ * genuinely still to come. The mechanism stays because it is the right answer whenever
  * navigation runs ahead of a screen again; `PlannedScreen` renders an entry,
  * and `findPlannedRoute` falls back to the closest registered ancestor.
  */
@@ -23,7 +26,15 @@ export interface PlannedRoute {
   readonly tasks: string;
 }
 
-export const PLANNED_ROUTES: Readonly<Record<string, PlannedRoute>> = {};
+export const PLANNED_ROUTES: Readonly<Record<string, PlannedRoute>> = {
+  '/meeting-minutes': {
+    title: 'Meeting Minutes',
+    phase: 11,
+    summary:
+      'Client- and project-scoped meeting records, with optional AI-generated tasks linked back to their source minute.',
+    tasks: 'FE-1110–FE-1126',
+  },
+};
 
 export function findPlannedRoute(pathname: string): PlannedRoute | null {
   if (PLANNED_ROUTES[pathname]) return PLANNED_ROUTES[pathname];

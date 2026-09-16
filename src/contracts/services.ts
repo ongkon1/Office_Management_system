@@ -48,7 +48,12 @@ import type {
   WorkPolicy,
 } from './domain';
 import type { TaskHistoryView, TaskStatusTransition, TaskTransitionInput } from './task-transition';
-import type { WorkLog, WorkLogInput } from './work-log';
+import type {
+  WorkLog,
+  WorkLogInput,
+  WorkLogRevision,
+  WorkLogUpdateInput,
+} from './work-log';
 import type { CommonFilters, DateRange, ListQuery, Paginated } from './query';
 import type { Result } from './results';
 import type {
@@ -200,10 +205,9 @@ export interface TimesheetService {
   }): Promise<Result<readonly DailySummary[]>>;
 
   createWorkLog(input: WorkLogInput): Promise<Result<WorkLog>>;
-  updateWorkLog(
-    id: string,
-    input: WorkLogInput & { readonly expectedVersion?: number },
-  ): Promise<Result<WorkLog>>;
+  getWorkLog(id: string): Promise<Result<WorkLog>>;
+  getWorkLogHistory(id: string): Promise<Result<readonly WorkLogRevision[]>>;
+  updateWorkLog(id: string, input: WorkLogUpdateInput): Promise<Result<WorkLog>>;
   deleteWorkLog(id: string, expectedVersion?: number): Promise<Result<void>>;
   /** Returns an unsaved duration-only draft on the target date (`REQ-TIME-007`). */
   copyWorkLog(input: {
@@ -215,7 +219,10 @@ export interface TimesheetService {
    * Calculates the preview without persisting anything. Uses the same
    * calculation contract as `createWorkLog`, so preview and result agree.
    */
-  previewWorkLog(input: WorkLogInput): Promise<Result<EntryCalculationPreview>>;
+  previewWorkLog(
+    input: WorkLogInput,
+    options?: { readonly excludeWorkLogId?: string },
+  ): Promise<Result<EntryCalculationPreview>>;
 
   transitionTask(input: TaskTransitionInput): Promise<Result<TaskStatusTransition>>;
   getTaskHistory(taskId: string): Promise<Result<TaskHistoryView>>;

@@ -15,6 +15,7 @@ import type {
   RequestWorkflowState,
   TaskStatus,
 } from '@/contracts/domain';
+import type { MinuteProcessingStatus } from '@/contracts/meeting-minutes';
 import type { DayStatusView, DurationView } from '@/contracts/view-models';
 import { formatDuration, formatDurationAccessible } from './format';
 
@@ -67,6 +68,58 @@ const DAY_STATUS: Readonly<Record<DayStatus, StatusDescriptor>> = {
     shape: 'triangle-alert',
   },
 };
+
+/**
+ * Meeting-minute AI processing status (`FE-1110`, `REQ-MTG-024`): text, shape
+ * and colour, like a day status. The tones are general badge tones — reusing
+ * the day-classification tones would make a Failed minute read as a Critical
+ * day.
+ */
+export interface ProcessingStatusDescriptor {
+  readonly label: string;
+  readonly accessibleLabel: string;
+  readonly tone: 'neutral' | 'accent' | 'success' | 'danger';
+  readonly shape: 'circle-dashed' | 'clock' | 'loader' | 'circle-check' | 'circle-x';
+}
+
+const MINUTE_PROCESSING_STATUS: Readonly<Record<MinuteProcessingStatus, ProcessingStatusDescriptor>> = {
+  not_processed: {
+    label: 'Not processed',
+    accessibleLabel: 'AI processing: not requested',
+    tone: 'neutral',
+    shape: 'circle-dashed',
+  },
+  pending: {
+    label: 'Pending',
+    accessibleLabel: 'AI processing: waiting to start',
+    tone: 'accent',
+    shape: 'clock',
+  },
+  processing: {
+    label: 'Processing',
+    accessibleLabel: 'AI processing: in progress',
+    tone: 'accent',
+    shape: 'loader',
+  },
+  processed: {
+    label: 'Processed',
+    accessibleLabel: 'AI processing: finished',
+    tone: 'success',
+    shape: 'circle-check',
+  },
+  failed: {
+    label: 'Failed',
+    accessibleLabel: 'AI processing: failed, the minute is saved',
+    tone: 'danger',
+    shape: 'circle-x',
+  },
+};
+
+export function describeMinuteProcessingStatus(
+  status: MinuteProcessingStatus,
+): ProcessingStatusDescriptor {
+  return MINUTE_PROCESSING_STATUS[status];
+}
 
 export function describeDayStatus(status: DayStatus): StatusDescriptor {
   return DAY_STATUS[status];

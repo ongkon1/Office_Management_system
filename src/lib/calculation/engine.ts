@@ -365,13 +365,29 @@ export interface PeriodTotals {
 }
 
 /**
+ * The exact daily facts needed to aggregate a period.
+ *
+ * `DailySummary` satisfies this shape, while period read models can carry this
+ * smaller projection without exposing or reconstructing the rest of a day's
+ * calculation context.
+ */
+export interface PeriodSummaryInput {
+  readonly activeMinutes: DurationMinutes;
+  readonly breakMinutes: DurationMinutes;
+  readonly totalMinutes: DurationMinutes;
+  readonly requiredActiveMinutes: DurationMinutes;
+  readonly status: DayStatus;
+  readonly isRequiredWorkingDay: boolean;
+}
+
+/**
  * Aggregates day summaries into the totals a week or month view shows.
  *
  * Overtime minutes are counted per day against the day's own threshold, never
  * against the period total — a short Monday must not cancel a long Tuesday.
  */
 export function aggregateSummaries(
-  summaries: readonly DailySummary[],
+  summaries: readonly PeriodSummaryInput[],
   overtimeThresholdMinutes = 480,
 ): PeriodTotals {
   const activeMinutes = sumBy(summaries, (day) => day.activeMinutes);

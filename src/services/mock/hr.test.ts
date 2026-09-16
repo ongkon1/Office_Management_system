@@ -26,6 +26,17 @@ describe('HR scope', () => {
     expect(denied.status).toBe('not_found');
     expect(missing.status).toBe('not_found');
   });
+
+  it('returns the administrator-managed department catalogue for employee forms', async () => {
+    const result = await mockHrService.listDepartmentOptions(HR);
+    expect(result.status).toBe('success');
+    if (result.status === 'success') {
+      expect(result.data).toContainEqual({ value: 'Engineering', label: 'Engineering' });
+      expect(result.data.map((item) => item.label)).toEqual(
+        [...result.data.map((item) => item.label)].sort(),
+      );
+    }
+  });
 });
 
 describe('assignments', () => {

@@ -18,7 +18,11 @@ import {
 } from '@/contracts/feature-flags';
 
 export interface RouteRule {
-  /** Matched as an exact path or as a `prefix/` segment boundary. */
+  /**
+   * Matched as an exact path or as a `prefix/` segment boundary. A `*` segment
+   * stands for exactly one non-empty path segment, so a rule can reach a
+   * dynamic child such as `/meeting-minutes/[id]/edit`.
+   */
   readonly path: string;
   /** Roles permitted. Omit to allow any authenticated role. */
   readonly roles?: readonly RoleKey[];
@@ -72,6 +76,24 @@ export const ROUTE_RULES: readonly RouteRule[] = [
   {
     path: '/conveyance',
     roles: ['employee', 'team_lead', 'hr_manager', 'super_admin'],
+  },
+
+  /*
+   * Meeting Minutes (`FE-1101`, `REQ-MTG-001`). Every active role reads the
+   * module. Employee and Management/View-Only are read-only — they never
+   * create or edit — so the two mutating screens are narrower than the module
+   * itself. Whether a *particular* minute may be read or edited — creator,
+   * client, project, government scope — is a service decision, not something a
+   * route can know.
+   */
+  { path: '/meeting-minutes', roles: ALL_ROLES },
+  {
+    path: '/meeting-minutes/new',
+    roles: ['team_lead', 'hr_manager', 'super_admin'],
+  },
+  {
+    path: '/meeting-minutes/*/edit',
+    roles: ['team_lead', 'hr_manager', 'super_admin'],
   },
 
   // Team Lead scope.
@@ -139,7 +161,18 @@ export type AccessDecision =
     };
 
 function matches(rulePath: string, pathname: string): boolean {
-  return pathname === rulePath || pathname.startsWith(`${rulePath}/`);
+  if (!rulePath.includes('*')) {
+    return pathname === rulePath || pathname.startsWith(`${rulePath}/`);
+  }
+
+  // Segment-wise: `*` matches one non-empty segment, and deeper paths still
+  // match on a segment boundary, exactly as a literal rule does.
+  const ruleSegments = rulePath.split('/').filter(Boolean);
+  const pathSegments = pathname.split('/').filter(Boolean);
+  if (pathSegments.length < ruleSegments.length) return false;
+  return ruleSegments.every(
+    (segment, index) => segment === '*' || segment === pathSegments[index],
+  );
 }
 
 /** The most specific matching rule, or `null` when no rule covers the path. */

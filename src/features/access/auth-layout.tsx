@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { cn } from '@/lib/cn';
+import { BrandLogo } from '@/components/ui/brand-logo';
 
 /**
  * The shell for every unauthenticated screen.
@@ -30,14 +31,8 @@ export function AuthLayout({
         className="flex flex-1 items-center justify-center px-4 py-10 sm:px-6"
       >
         <div className="w-full max-w-md">
-          <div className="mb-6 flex items-center gap-2.5">
-            <span
-              aria-hidden
-              className="brand-mark grid size-8 shrink-0 place-items-center rounded-md text-body-sm font-bold"
-            >
-              T
-            </span>
-            <span className="text-body font-semibold text-ink">Timesheet</span>
+          <div className="mb-6 flex items-center justify-center">
+            <BrandLogo />
           </div>
 
           <div className="rounded-xl border border-border bg-surface p-6 shadow-sm">

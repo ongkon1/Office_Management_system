@@ -26,11 +26,14 @@ import { RETIRED_ROLE_LABEL, SENSITIVE_PERMISSIONS } from '@/contracts/domain';
 import type {
   AdminService,
   AuditEventView,
+  BrandLogoAsset,
   AuditLogView,
+  DepartmentAdminView,
   DivisionAdminView,
   DivisionFormInput,
   IntegrationPlaceholderView,
   NotificationSettingView,
+  OrganizationBrandingView,
   PermissionGrantView,
   RoleAdminView,
   UserAdminView,
@@ -43,6 +46,19 @@ import { EMPLOYEES } from '@/fixtures/hr';
 import { AUDIT_EVENTS } from '@/fixtures/workspace';
 import { DEMO_ACCOUNTS, DIVISIONS, findAccountByUserId } from './accounts';
 import { mockStore } from './store';
+import {
+  departmentRecords,
+  removeDepartmentRecord,
+  resetDepartmentState,
+  saveDepartmentRecord,
+  type DepartmentRecord,
+} from './department-store';
+import {
+  DEFAULT_BRANDING,
+  commitBranding,
+  getBrandingSnapshot,
+  resetBranding,
+} from '@/lib/branding-store';
 
 const LATENCY_MS = 160;
 const delay = () => new Promise((resolve) => setTimeout(resolve, LATENCY_MS));
@@ -174,6 +190,24 @@ function divisionAdminView(record: DivisionRecord): DivisionAdminView {
     openTaskCount: openTasks.length,
     deactivationBlockers: record.isActive ? blockers : [],
   };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Departments                                                                */
+/* -------------------------------------------------------------------------- */
+
+function departmentAdminView(record: DepartmentRecord): DepartmentAdminView {
+  return {
+    ...record,
+    canDelete: record.employeeCount === 0,
+  };
+}
+
+function departmentViews(): readonly DepartmentAdminView[] {
+  return departmentRecords()
+    .slice()
+    .sort((left, right) => left.name.localeCompare(right.name))
+    .map(departmentAdminView);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -582,6 +616,53 @@ const INTEGRATIONS: readonly IntegrationPlaceholderView[] = [
 /* -------------------------------------------------------------------------- */
 
 export const mockAdminService: AdminService = {
+  async getBranding(userId) {
+    await delay();
+    if (!isAdministrator(userId)) return denied(ADMIN_DENIAL.message, ADMIN_DENIAL.guidance);
+    return success<OrganizationBrandingView>(getBrandingSnapshot());
+  },
+
+  async updateBranding(userId, logo) {
+    await delay();
+    if (!isAdministrator(userId)) return denied(ADMIN_DENIAL.message, ADMIN_DENIAL.guidance);
+
+    if (logo) {
+      const allowedTypes = new Set<BrandLogoAsset['mediaType']>([
+        'image/png',
+        'image/jpeg',
+        'image/webp',
+      ]);
+      if (!allowedTypes.has(logo.mediaType)) {
+        return invalid(
+          'logo',
+          'Choose a PNG, JPEG, or WebP logo.',
+          'Convert the logo to one of the supported image formats and try again.',
+        );
+      }
+      if (!Number.isSafeInteger(logo.sizeBytes) || logo.sizeBytes <= 0 || logo.sizeBytes > 1_048_576) {
+        return invalid(
+          'logo',
+          'The logo must be no larger than 1 MB.',
+          'Compress or resize the image, then upload it again.',
+        );
+      }
+      if (!logo.dataUrl.startsWith(`data:${logo.mediaType};base64,`)) {
+        return invalid(
+          'logo',
+          'The selected logo could not be read safely.',
+          'Choose the original image file again.',
+        );
+      }
+    }
+
+    const branding: OrganizationBrandingView = {
+      ...DEFAULT_BRANDING,
+      logo,
+    };
+    commitBranding(branding);
+    return success(branding);
+  },
+
   async listDivisions(userId) {
     await delay();
     if (!isAdministrator(userId)) return denied(ADMIN_DENIAL.message, ADMIN_DENIAL.guidance);
@@ -648,6 +729,87 @@ export const mockAdminService: AdminService = {
       division.id === id ? { ...division, isActive } : division,
     );
     return success(divisions.map(divisionAdminView));
+  },
+
+  async listDepartments(userId) {
+    await delay();
+    if (!isAdministrator(userId)) return denied(ADMIN_DENIAL.message, ADMIN_DENIAL.guidance);
+    return success(departmentViews());
+  },
+
+  async saveDepartment(userId, input, id) {
+    await delay();
+    if (!isAdministrator(userId)) return denied(ADMIN_DENIAL.message, ADMIN_DENIAL.guidance);
+
+    const name = input.name.trim();
+    const code = input.code.trim().toUpperCase();
+    const description = input.description.trim() || null;
+    if (!name) {
+      return invalid('name', 'Enter a department name.', 'Use the department name employees recognize.');
+    }
+    if (!code) {
+      return invalid('code', 'Enter a department code.', 'Use a short code such as ENG or HR.');
+    }
+    if (!/^[A-Z0-9-]{2,12}$/.test(code)) {
+      return invalid(
+        'code',
+        'Use 2 to 12 uppercase letters, numbers, or hyphens.',
+        'For example, use ENG, HR, or CLIENT-SVC.',
+      );
+    }
+
+    const current = id ? departmentRecords().find((department) => department.id === id) : undefined;
+    if (id && !current) return notFound('Department not found.');
+    if (current && current.employeeCount > 0 && current.name !== name) {
+      return {
+        status: 'conflict' as const,
+        code: 'CONFLICT' as const,
+        message: `${current.name} is already referenced by employee records.`,
+        guidance: 'Keep its name unchanged; you can still update its code and description.',
+      };
+    }
+    const duplicateName = departmentRecords().find(
+      (department) => department.id !== id && department.name.toLowerCase() === name.toLowerCase(),
+    );
+    const duplicateCode = departmentRecords().find(
+      (department) => department.id !== id && department.code.toLowerCase() === code.toLowerCase(),
+    );
+    if (duplicateName || duplicateCode) {
+      return {
+        status: 'conflict' as const,
+        code: 'CONFLICT' as const,
+        message: duplicateName
+          ? `A department named ${duplicateName.name} already exists.`
+          : `Department code ${duplicateCode?.code} is already in use.`,
+        guidance: 'Use a unique department name and code.',
+      };
+    }
+
+    saveDepartmentRecord({
+      id: current?.id ?? `dept-${Date.now()}`,
+      name,
+      code,
+      description,
+      employeeCount: current?.employeeCount ?? 0,
+    });
+    return success(departmentViews());
+  },
+
+  async deleteDepartment(userId, id) {
+    await delay();
+    if (!isAdministrator(userId)) return denied(ADMIN_DENIAL.message, ADMIN_DENIAL.guidance);
+    const department = departmentRecords().find((item) => item.id === id);
+    if (!department) return notFound('Department not found.');
+    if (department.employeeCount > 0) {
+      return {
+        status: 'conflict' as const,
+        code: 'CONFLICT' as const,
+        message: `${department.name} is assigned to ${department.employeeCount} employee(s).`,
+        guidance: 'Move those employees to another department before deleting it.',
+      };
+    }
+    removeDepartmentRecord(id);
+    return success(departmentViews());
   },
 
   async listUsers(userId) {
@@ -819,8 +981,10 @@ export const mockAdminService: AdminService = {
 /** Test seam: restores the Phase 7 administration state. */
 export function resetAdminState(): void {
   divisions = seedDivisions();
+  resetDepartmentState();
   rolePermissions = seedRolePermissions();
   notificationSettings = seedNotificationSettings();
+  resetBranding();
 }
 
 export type { Division };

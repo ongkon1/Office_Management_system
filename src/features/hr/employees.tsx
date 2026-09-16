@@ -339,6 +339,10 @@ export function EmployeeForm({ employeeId }: { employeeId?: string }) {
         : Promise.resolve({ status: 'success' as const, data: null }),
     [user?.userId, employeeId],
   );
+  const { state: departmentState } = useAsync(
+    () => mockHrService.listDepartmentOptions(user?.userId ?? ''),
+    [user?.userId],
+  );
 
   // Adjusting state during render rather than in an effect: the form is
   // seeded once per loaded employee, and an effect here would run after a
@@ -369,9 +373,14 @@ export function EmployeeForm({ employeeId }: { employeeId?: string }) {
     setSkillText(detail.skills.join(', '));
   }
 
-  if (state.status === 'loading') return <HrLoading label="employee record" />;
+  if (state.status === 'loading' || departmentState.status === 'loading') {
+    return <HrLoading label="employee record" />;
+  }
   if (state.status !== 'success') {
     return <HrResultFallback result={state.failure} subject="Employee" />;
+  }
+  if (departmentState.status !== 'success') {
+    return <HrResultFallback result={departmentState.failure} subject="Departments" />;
   }
 
   function update<K extends keyof EmployeeFormInput>(key: K, value: EmployeeFormInput[K]) {
@@ -469,9 +478,15 @@ export function EmployeeForm({ employeeId }: { employeeId?: string }) {
                 onChange={(event) => update('designation', event.target.value)}
               />
             </Field>
-            <Field label="Department">
-              <Input
+            <Field
+              label="Department"
+              error={fieldError('department')}
+              helperText="Departments are managed by the Super Administrator."
+            >
+              <Select
                 value={form.department}
+                options={departmentState.data}
+                placeholder="Select department"
                 onChange={(event) => update('department', event.target.value)}
               />
             </Field>

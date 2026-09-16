@@ -271,13 +271,13 @@ React Compiler lint errors (`set-state-in-effect`, render-phase mutation) are re
 | Backend | 10 — Requisition | Pending (0/20) — new milestone |
 | Backend | 11 — Conveyance | Pending (0/22) — new milestone, depends on 10 |
 | Backend | 12 — Role consolidation: Finance into HR | Pending (0/11) — new milestone |
-| Modify | F1 — Frontend contracts, calculation and validation | Done (9/9); Phase F2 is next |
+| Modify | F3 — Frontend Log Work and timesheet rework | In progress (4/11; through `MFE-0307`) |
 
-Gates: contrast 48/48, responsive 268/268, accessibility 217/217, content-stress 63/63, role journeys 41/41, performance 16/16, Phase 2 flows 16/16, Phase 3 flows 18/18, Phase 4 flows 20/20, Phase 5 flows 51/51, Phase 6 flows 40/40, Phase 7 flows 55/55. Modify F1 verification passes with 435 frontend/shared tests and a 60-route production build.
+Gates: contrast 48/48, responsive 268/268, accessibility 217/217, content-stress 63/63, role journeys 41/41, performance 16/16, Phase 2 flows 16/16, Phase 3 flows 18/18, Phase 4 flows 20/20, Phase 5 flows 51/51, Phase 6 flows 40/40, Phase 7 flows 55/55. Modify F3 progress through `MFE-0307` passes type-check, lint, contrast 48/48, 485 frontend/shared tests and a 60-route production build. The dedicated task-work browser gate remains scheduled for F4.
 
 Signing in: `/login`, password `Demo1234!` for every demo account, picker on the sign-in page. Auth fixtures (2FA code, reset tokens, lockout) are in `docs/frontend/phase-0/demo-setup.md` §1.1.
 
-**`PLANNED_ROUTES` is empty as of Phase 7** — every navigation destination now resolves to a real screen, a feature-flag exclusion, or a labelled prototype. The mechanism stays: register a route in `src/features/access/planned-routes.ts` and `PlannedScreen` (`src/features/access/planned-screen.tsx`) renders it, which is the right answer whenever navigation runs ahead of a screen again.
+**`PLANNED_ROUTES` holds one entry, `/meeting-minutes`** — it was empty from Phase 7 until Phase 11 put Meeting Minutes in every role's navigation (`FE-1101`) ahead of its screens; remove the entry once `FE-1110`–`FE-1126` ship. Its routes, breadcrumbs, deep links and placeholder behaviour are in `docs/frontend/phase-0/information-architecture.md` §3.6. The mechanism stays: register a route in `src/features/access/planned-routes.ts` and `PlannedScreen` (`src/features/access/planned-screen.tsx`) renders it, which is the right answer whenever navigation runs ahead of a screen again.
 
 Several routes serve more than one audience and branch on role rather than denying: `/wfh`, `/leave` and `/evaluations` are HR administration for HR and self-service for everyone else; `/dashboard` resolves to four different screens.
 

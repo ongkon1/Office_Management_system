@@ -1,7 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import { Plug, RotateCcw, Settings2, ShieldCheck } from 'lucide-react';
+import { ImageIcon, Plug, RotateCcw, Settings2, ShieldCheck, Trash2 } from 'lucide-react';
+import type { BrandLogoAsset } from '@/contracts/admin';
 import { FEATURE_FLAGS, type FeatureFlagKey } from '@/contracts/feature-flags';
 import { mockAdminService } from '@/services/mock/admin';
 import { useAsync } from '@/lib/use-async';
@@ -11,10 +12,11 @@ import { PageContainer, PageHeader } from '@/components/layout/page';
 import { Card, CardHeader } from '@/components/feedback/card';
 import { Alert, Callout } from '@/components/feedback/alert';
 import { Tabs } from '@/components/feedback/disclosure';
-import { Switch } from '@/components/forms/inputs';
+import { FileUpload, Switch } from '@/components/forms/inputs';
 import { Button, LinkButton } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Duration } from '@/components/ui/misc';
+import { BrandLogo } from '@/components/ui/brand-logo';
 import { toDurationView } from '@/lib/status';
 import {
   applyMvpOnlyFlags,
@@ -23,6 +25,7 @@ import {
   useFeatureFlags,
 } from '@/features/settings/flag-store';
 import { ReportsFallback, ReportsLoading } from '@/features/reports/report-catalogue';
+import { useBranding } from '@/features/settings/use-branding';
 
 const WEEKDAY_LABEL = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -32,6 +35,33 @@ const PHASE_LABEL = {
   phase_3: 'Product Phase 3',
   phase_4: 'Product Phase 4',
 } as const;
+
+const LOGO_TYPES = new Set<BrandLogoAsset['mediaType']>([
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+]);
+const MAX_LOGO_BYTES = 1_048_576;
+
+function readLogo(file: File): Promise<BrandLogoAsset> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('The selected logo could not be read.'));
+    reader.onload = () => {
+      if (typeof reader.result !== 'string') {
+        reject(new Error('The selected logo could not be read.'));
+        return;
+      }
+      resolve({
+        dataUrl: reader.result,
+        fileName: file.name,
+        mediaType: file.type as BrandLogoAsset['mediaType'],
+        sizeBytes: file.size,
+      });
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 /**
  * FE-0732 — settings.
@@ -46,12 +76,20 @@ const PHASE_LABEL = {
  * new version, which is a backend capability. Showing editable fields that
  * silently discard the change would be worse than showing the truth.
  */
-export function SettingsScreens() {
+export function SettingsScreens({
+  initialTab = 'branding',
+}: {
+  initialTab?: 'branding' | 'policy' | 'notifications' | 'flags';
+}) {
   const { user } = useSession();
   const toast = useToast();
-  const [tab, setTab] = React.useState('policy');
+  const [tab, setTab] = React.useState(initialTab);
   const [failure, setFailure] = React.useState<string | null>(null);
+  const [brandingFailure, setBrandingFailure] = React.useState<string | null>(null);
+  const [draftLogo, setDraftLogo] = React.useState<BrandLogoAsset | null>(null);
+  const [savingBranding, setSavingBranding] = React.useState(false);
   const flags = useFeatureFlags();
+  const branding = useBranding();
 
   const { state: policyState } = useAsync(
     () => mockAdminService.getWorkPolicySettings(user?.userId ?? ''),
@@ -100,11 +138,69 @@ export function SettingsScreens() {
     });
   }
 
+  async function chooseLogo(files: FileList) {
+    const file = files.item(0);
+    if (!file) return;
+    setBrandingFailure(null);
+    if (!LOGO_TYPES.has(file.type as BrandLogoAsset['mediaType'])) {
+      setBrandingFailure('Choose a PNG, JPEG, or WebP logo.');
+      return;
+    }
+    if (file.size > MAX_LOGO_BYTES) {
+      setBrandingFailure('The logo must be no larger than 1 MB. Compress or resize it and try again.');
+      return;
+    }
+    try {
+      setDraftLogo(await readLogo(file));
+    } catch (error) {
+      setBrandingFailure(error instanceof Error ? error.message : 'The selected logo could not be read.');
+    }
+  }
+
+  async function saveLogo() {
+    if (!draftLogo) return;
+    setSavingBranding(true);
+    setBrandingFailure(null);
+    const result = await mockAdminService.updateBranding(user?.userId ?? '', draftLogo);
+    setSavingBranding(false);
+    if (result.status === 'success') {
+      setDraftLogo(null);
+      toast.show({
+        tone: 'success',
+        title: 'Logo updated',
+        description: 'The new logo is now visible throughout the application.',
+      });
+      return;
+    }
+    setBrandingFailure(
+      'guidance' in result ? `${result.message} ${result.guidance ?? ''}`.trim() : result.message,
+    );
+  }
+
+  async function removeLogo() {
+    setSavingBranding(true);
+    setBrandingFailure(null);
+    const result = await mockAdminService.updateBranding(user?.userId ?? '', null);
+    setSavingBranding(false);
+    if (result.status === 'success') {
+      setDraftLogo(null);
+      toast.show({
+        tone: 'info',
+        title: 'Custom logo removed',
+        description: 'The default Timesheet mark is visible again.',
+      });
+      return;
+    }
+    setBrandingFailure(
+      'guidance' in result ? `${result.message} ${result.guidance ?? ''}`.trim() : result.message,
+    );
+  }
+
   return (
     <PageContainer width="full">
       <PageHeader
         title="Settings"
-        description="Work policy, notification delivery and the feature flags that gate each module."
+        description="Organization branding, work policy, notification delivery and module feature flags."
         meta={<Badge tone="neutral">Version {policy.version} policy</Badge>}
         actions={
           <LinkButton variant="secondary" href="/admin/integrations">
@@ -122,14 +218,91 @@ export function SettingsScreens() {
       <Tabs
         className="mt-5"
         items={[
+          { key: 'branding', label: 'Branding' },
           { key: 'policy', label: 'Work policy' },
           { key: 'notifications', label: 'Notifications' },
           { key: 'flags', label: 'Feature flags' },
         ]}
         activeKey={tab}
-        onChange={setTab}
+        onChange={(key) => setTab(key as typeof tab)}
         label="Settings sections"
       />
+
+      {tab === 'branding' && (
+        <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.7fr)]">
+          <Card>
+            <CardHeader
+              title="Organization logo"
+              description="Upload one logo for the sign-in experience, desktop sidebar and mobile header."
+              actions={
+                <Badge tone={branding.logo ? 'accent' : 'neutral'}>
+                  {branding.logo ? 'Custom logo' : 'Default mark'}
+                </Badge>
+              }
+            />
+
+            {brandingFailure && (
+              <Alert className="mt-4" tone="danger" title="Logo not changed" live>
+                {brandingFailure}
+              </Alert>
+            )}
+
+            <FileUpload
+              className="mt-4"
+              label={draftLogo ? 'Choose a different logo' : 'Choose logo'}
+              accept="image/png,image/jpeg,image/webp"
+              files={
+                draftLogo
+                  ? [{
+                      id: 'draft-logo',
+                      name: draftLogo.fileName,
+                      size: `${Math.ceil(draftLogo.sizeBytes / 1024)} KB`,
+                    }]
+                  : []
+              }
+              onFilesSelected={(files) => void chooseLogo(files)}
+              onRemove={() => setDraftLogo(null)}
+              helperText="PNG, JPEG or WebP, up to 1 MB. A transparent, wide logo works best."
+              disabled={savingBranding}
+            />
+
+            <div className="mt-5 flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="primary"
+                disabled={!draftLogo || savingBranding}
+                loading={savingBranding && Boolean(draftLogo)}
+                iconLeading={<ImageIcon aria-hidden className="size-4" />}
+                onClick={() => void saveLogo()}
+              >
+                Save logo
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={!branding.logo || savingBranding}
+                iconLeading={<Trash2 aria-hidden className="size-4" />}
+                onClick={() => void removeLogo()}
+              >
+                Remove custom logo
+              </Button>
+            </div>
+          </Card>
+
+          <Card>
+            <CardHeader
+              title="Preview"
+              description={draftLogo ? 'Selected logo before saving.' : 'Logo currently shown to users.'}
+            />
+            <div className="mt-4 flex min-h-32 items-center justify-center rounded-lg border border-border bg-surface-sunken p-6">
+              <BrandLogo size="preview" asset={draftLogo ?? branding.logo} />
+            </div>
+            <p className="mt-3 text-caption text-ink-muted">
+              The logo scales proportionally and keeps its original colors on the light application canvas.
+            </p>
+          </Card>
+        </div>
+      )}
 
       {tab === 'policy' && (
         <div className="mt-5 space-y-5">

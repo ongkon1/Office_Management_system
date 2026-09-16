@@ -2,7 +2,7 @@
 
 Durable context for anyone — human or AI — picking up this codebase. It records what the plan files don't: why things are the way they are, what's decided versus assumed, and the rules that are easy to break by accident.
 
-Last updated: **14 September 2026** (Modify Phase F1 complete; task-board delivery begins with Phase F2).
+Last updated: **15 September 2026** (Modify Phase F3 in progress; complete through `MFE-0307`).
 
 ---
 
@@ -35,7 +35,7 @@ Four files at the repo root are the plan of record:
 | `project_requirement.md` | `REQ-*` business requirements, `AC-*` acceptance scenarios. The requirements source of truth. |
 | `frontend_milestone.md` | `FE-*` tasks, Phases 0–9. |
 | `backend_milestone.md` | `BE-*` tasks, Phases 0–9. Backend Phase 0 is blocked until frontend contracts are stable. |
-| `modify_milestone.md` | Approved clock-to-task work-logging replacement: `MOD-*`, frontend `MFE-*`, and backend `MBE-*` tasks. Phase 0 is complete. |
+| `modify_milestone.md` | Approved clock-to-task work-logging replacement: `MOD-*`, frontend `MFE-*`, and backend `MBE-*` tasks. Frontend Phases F1 and F2 are complete. |
 
 Work proceeds **one phase at a time** — a phase is started by name, and every task in it is completed before moving on. Task status uses exactly one marker: `[ ]` pending, `[~]` in progress, `[x]` done. When status changes, update both the task line and the "Current Progress Summary" table at the bottom of the file.
 
@@ -182,9 +182,9 @@ Environment: Windows + WAMP, PowerShell. **Not currently a git repository.**
 | Backend | 7–9 | Pending |
 | Backend | 10 — Requisition | Pending (0/20) — new milestone |
 | Backend | 11 — Conveyance | Pending (0/22) — new milestone, depends on 10 |
-| Modify | F1 — Frontend contracts, calculation and validation | Done (9/9); Phase F2 is next |
+| Modify | F3 — Frontend Log Work and timesheet rework | In progress (4/11; through `MFE-0307`) |
 
-Gate results: contrast 48/48, accessibility 279/279, content-stress 73/73, role journeys 41/41, performance 16/16, Phase 2–7 flows 16/18/20/51/40/55, requisition 45/45, conveyance 45/45. Modify Phase F1 passes route type generation, TypeScript, ESLint, 435 frontend/shared tests and a 60-route production build; the dashboard passes 12/12 targeted responsive role/width combinations with 1,310 rendered elements contrast-checked.
+Gate results: contrast 48/48, accessibility 279/279, content-stress 73/73, role journeys 41/41, performance 16/16, Phase 2–7 flows 16/18/20/51/40/55, requisition 45/45, conveyance 45/45. Modify Phase F3 progress through `MFE-0307` passes route type generation, TypeScript, ESLint, contrast 48/48, 485 frontend/shared tests and a 60-route production build. Its task routes remain in the responsive, accessibility and stress inventories; the dedicated task-work browser gate is delivered in F4.
 
 Sign in at `/login`; every demo account uses `Demo1234!` and the sign-in page carries a picker. Auth fixtures — 2FA code, reset tokens, lockout threshold — are in `docs/frontend/phase-0/demo-setup.md` §1.1.
 
@@ -208,6 +208,7 @@ Later phases harden screens and fixtures around these assumptions, so the cost o
 
 | Date | Decision | Rationale |
 |---|---|---|
+| 16 Sep 2026 | One administrator-managed organization logo feeds a shared `BrandLogo` component | Removes hardcoded marks from authentication, desktop and mobile chrome. The current mock frontend persists a validated PNG/JPEG/WebP asset (maximum 1 MB) in browser storage and updates every mounted logo immediately; production-wide persistence and private object storage remain part of backend/browser cutover. |
 | Phase 0 | Durations as integer minutes, money as decimal string + currency code | Floating-point hours and JS numbers produce payroll errors |
 | Phase 0 | Restricted fields typed `Redactable<T>` | Makes "you may not see this" representable, so it can't be mistaken for zero or absent |
 | Modify Phase 0 | Replaced new clock/timer capture with duration-based task work logs | The user reports how much work was done against an eligible task; exact attendance intervals are outside this milestone |
@@ -217,6 +218,7 @@ Later phases harden screens and fixtures around these assumptions, so the cost o
 | Modify Phase 0 | Reuse `time_entries` for duration work logs and preserve historical clock rows | Avoids permanent two-source reconciliation while keeping verified history reproducible |
 | Modify Phase 0 | Reject daily active time above 24:00 | Duration-only logs cannot detect overlap; 24 hours is the physically certain hard ceiling while >12:00 remains Critical |
 | Modify Phase 0 | Cutover is the audited B4 production deployment UTC instant | Record creation time determines the capture model; backdated work dates do not rewrite historical/new classification |
+| Modify Phase F2 | Employees and Team Leads share one task workflow board and transition panel | One presentation and one transition policy keep drag, buttons, keyboard actions, scoped counts, notes, and locked/stale states from drifting; transitions still create no minutes |
 | Phase 1 | Tailwind v4 + tokens over CSS Modules or shadcn/ui | Fastest to the premium spec; reshaping a vendored library's conventions costs more than building to tokens |
 | Phase 1 | Hand-built charts (inline SVG) instead of a charting library | Full control of the colour-safe series and the always-present data-table equivalent |
 | Phase 1 | Added two custom audit gates | Both found real defects on first run — a 1.70:1 control border, two chart series 1.02 apart in luminance, 8 undersized touch targets, and a component stealing focus on mount |

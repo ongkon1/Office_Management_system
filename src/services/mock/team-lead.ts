@@ -19,6 +19,7 @@ import type { TeamTimesheetRowView } from '@/contracts/view-models';
 import {
   formatDate,
   formatDateWithWeekday,
+  formatDurationDelta,
   formatMoney,
 } from '@/lib/format';
 import {
@@ -36,6 +37,7 @@ import {
 import { actualProjectMinutes, actualTaskMinutes } from './organization';
 import { buildDayView, summaryFor } from './timesheet';
 import { mockStore } from './store';
+import { toReviewStateView } from './task-review';
 
 const WAIT_MS = 120;
 const delay = () => new Promise((resolve) => setTimeout(resolve, WAIT_MS));
@@ -166,6 +168,7 @@ function projectView(project: Project, userId: string): TeamProjectView {
 function taskView(task: Task): TeamTaskView {
   const project = projects.find((item) => item.id === task.projectId);
   const history = mockStore.entriesForTask(task.id).filter((entry) => entry.state !== 'draft');
+  const actualMinutes = actualTaskMinutes(task.id);
   return {
     id: task.id,
     title: task.title,
@@ -177,10 +180,16 @@ function taskView(task: Task): TeamTaskView {
     status: task.status,
     priority: task.priority,
     startDateLabel: task.startDate ? formatDate(task.startDate) : null,
+    dueDate: task.dueDate,
     dueDateLabel: task.dueDate ? formatDate(task.dueDate) : null,
     estimated: toDurationView(task.estimatedMinutes),
-    actual: toDurationView(actualTaskMinutes(task.id)),
+    actual: toDurationView(actualMinutes),
+    variance: {
+      minutes: actualMinutes - task.estimatedMinutes,
+      label: formatDurationDelta(actualMinutes - task.estimatedMinutes),
+    },
     isOverdue: Boolean(task.status !== 'completed' && task.dueDate && task.dueDate < DEMO_TODAY),
+    review: toReviewStateView(task),
     description: task.description,
     checklist: mockStore.checklistFor(task.id),
     workHistory: history.map((entry) => ({
@@ -410,14 +419,49 @@ export const mockTeamLeadService: TeamLeadService = {
     });
   },
 
-  async addRemark({ userId, employeeId, date, message, requestedChanges }) {
+  async addRemark({ userId, employeeId, date, message, requestedChanges, workLogId }) {
     await delay();
     if (!inEmployeeScope(userId, employeeId)) return denied();
+    if (requestedChanges) {
+      if (!workLogId) {
+        return {
+          status: 'validation_failure' as const,
+          code: 'VALIDATION_FAILED' as const,
+          message: 'Choose the work log that needs correction.',
+          fieldErrors: [{
+            field: 'workLogId',
+            code: 'WORK_LOG_REQUIRED',
+            message: 'Select a work log.',
+            guidance: 'Correction requests must point to one duration-based work log.',
+          }],
+          focusField: 'workLogId',
+        };
+      }
+      const target = mockStore.findEntry(workLogId);
+      if (
+        !target ||
+        target.employeeId !== employeeId ||
+        target.workDate !== date ||
+        target.state === 'draft' ||
+        target.startTime !== null ||
+        target.endTime !== null
+      ) {
+        return {
+          status: 'not_found' as const,
+          code: 'NOT_FOUND' as const,
+          message: 'That work log is not available in this timesheet.',
+        };
+      }
+    }
     const now = new Date().toISOString();
     const id = `rmk-${Date.now()}`;
     const remark: GeneralRemark = {
       id, employeeId, authorEmployeeId: account(userId)?.employeeId ?? userId, message,
-      relatedRecord: { type: 'timesheet', workDate: date },
+      relatedRecord: {
+        type: 'timesheet',
+        workDate: date,
+        ...(requestedChanges && workLogId ? { workLogId } : {}),
+      },
       isCorrectionRequest: Boolean(requestedChanges), requestedChanges,
       state: 'open', responses: [], createdAt: now, updatedAt: now,
       createdBy: actorFor(userId), updatedBy: actorFor(userId),

@@ -78,6 +78,12 @@ import { DIVISIONS, findAccountByUserId } from './accounts';
 import { actualProjectMinutes, isEffectiveOn } from './organization';
 import { mockStore } from './store';
 import { summaryFor } from './timesheet';
+import {
+  departmentByName,
+  departmentRecords,
+  recordEmployeeDepartmentChange,
+  resetDepartmentState,
+} from './department-store';
 
 const LATENCY_MS = 160;
 const delay = () => new Promise((resolve) => setTimeout(resolve, LATENCY_MS));
@@ -754,6 +760,22 @@ function evaluationPeriodView(period: EvaluationPeriod): HrEvaluationPeriodView 
 /* -------------------------------------------------------------------------- */
 
 export const mockHrService: HrService = {
+  async listDepartmentOptions(userId) {
+    await delay();
+    if (!canAdminister(userId)) {
+      return denied(
+        'Employee administration is limited to HR and Super Administrators.',
+        'Return to your dashboard.',
+      );
+    }
+    return success(
+      departmentRecords()
+        .slice()
+        .sort((left, right) => left.name.localeCompare(right.name))
+        .map((department) => ({ value: department.name, label: department.name })),
+    );
+  },
+
   async getDashboard(userId) {
     await delay();
     if (!canAdminister(userId)) {
@@ -1112,6 +1134,15 @@ export const mockHrService: HrService = {
     if (!input.email.trim()) {
       return invalid('email', 'Enter a work email address.', 'The employee signs in with this address.');
     }
+    const selectedDepartment = input.department.trim();
+    const department = selectedDepartment ? departmentByName(selectedDepartment) : undefined;
+    if (selectedDepartment && !department) {
+      return invalid(
+        'department',
+        'Choose an available department.',
+        'Select a department created by the Super Administrator.',
+      );
+    }
     const duplicate = employees.find(
       (employee) =>
         employee.id !== employeeId &&
@@ -1135,7 +1166,7 @@ export const mockHrService: HrService = {
       fullName: input.fullName.trim(),
       photoUrl: existing?.photoUrl ?? null,
       designation: input.designation.trim(),
-      department: input.department.trim() || null,
+      department: department?.name ?? null,
       employmentType: input.employmentType,
       joiningDate: input.joiningDate,
       status: input.status,
@@ -1157,6 +1188,7 @@ export const mockHrService: HrService = {
     employees = existing
       ? employees.map((employee) => (employee.id === record.id ? record : employee))
       : [...employees, record];
+    recordEmployeeDepartmentChange(existing?.department ?? null, record.department);
     return success(employeeRow(record));
   },
 
@@ -1757,6 +1789,7 @@ export const mockHrService: HrService = {
 /** Test seam: restores the Phase 5 demo state. */
 export function resetHrState(): void {
   employees = [...EMPLOYEES];
+  resetDepartmentState();
   evaluationPeriods = [...EVALUATION_PERIODS];
   evaluations = EVALUATIONS.map((item) => ({ ...item }));
   unlockRequests = [...UNLOCK_REQUESTS];

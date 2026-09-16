@@ -1,64 +1,58 @@
 'use client';
 
 import * as React from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Plus } from 'lucide-react';
-import type { TaskStatus } from '@/contracts/domain';
 import type { TaskSummaryView } from '@/contracts/view-models';
 import { cn } from '@/lib/cn';
 import { useAsync } from '@/lib/use-async';
+import { useSession } from '@/features/access/session-provider';
 import { RaiseTaskButton } from './raise-task';
+import {
+  TaskDetailTransitions,
+  TaskHistoryTimeline,
+  TaskWorkflowBoard,
+  type WorkflowBoardTask,
+} from './task-workflow';
 import { TASK_STATUS_LABEL } from '@/lib/status';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Duration } from '@/components/ui/misc';
-import { ProgressBar } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Checkbox } from '@/components/forms/inputs';
 import { Card, CardHeader } from '@/components/feedback/card';
-import { Alert, Callout, EmptyState } from '@/components/feedback/alert';
-import { Tabs } from '@/components/feedback/disclosure';
+import { Alert, EmptyState } from '@/components/feedback/alert';
 import { PageContainer, PageHeader } from '@/components/layout/page';
 import { mockTaskService } from '@/services/mock/work';
 import { DEMO_TODAY } from '@/lib/demo-context';
 
-type TaskFilter = 'all' | 'pending' | 'in_progress' | 'completed' | 'overdue' | 'upcoming';
-
-const FILTER_TABS = [
-  { key: 'all', label: 'All' },
-  { key: 'pending', label: 'Pending' },
-  { key: 'in_progress', label: 'In Progress' },
-  { key: 'completed', label: 'Completed' },
-  { key: 'overdue', label: 'Overdue' },
-  { key: 'upcoming', label: 'Upcoming' },
-];
-
-function matches(task: TaskSummaryView, filter: TaskFilter): boolean {
-  switch (filter) {
-    case 'pending':
-    case 'in_progress':
-    case 'completed':
-      return task.status === (filter as TaskStatus);
-    case 'overdue':
-      return task.isOverdue;
-    case 'upcoming':
-      return (
-        task.status !== 'completed' &&
-        task.dueDate !== null &&
-        task.dueDate >= DEMO_TODAY
-      );
-    default:
-      return true;
-  }
+function employeeBoardTask(task: TaskSummaryView): WorkflowBoardTask {
+  return {
+    id: task.id,
+    title: task.title,
+    href: task.href,
+    project: { name: task.project.name, code: task.project.code },
+    division: { name: task.division.name, code: task.division.code },
+    assignee: { id: task.assignee.id, fullName: task.assignee.fullName },
+    status: task.status,
+    estimated: task.estimated,
+    actual: task.actual,
+    variance: task.variance,
+    dueDate: task.dueDate,
+    dueDateLabel: task.dueDateLabel,
+    isOverdue: task.isOverdue,
+    reviewBlockedReason: task.review.blocksTimeEntry ? task.review.detail : null,
+    canLogWorkWhenInProgress: !task.review.blocksTimeEntry,
+  };
 }
 
 /** Employee task list (`FE-0340`). */
 export function TaskList({ employeeId }: { employeeId: string }) {
-  const [filter, setFilter] = React.useState<TaskFilter>('all');
+  const { user } = useSession();
   const { state, reload } = useAsync(
     () => mockTaskService.listForEmployee(employeeId),
     [employeeId],
+    { keepPrevious: true },
   );
 
   if (state.status === 'loading') {
@@ -85,127 +79,18 @@ export function TaskList({ employeeId }: { employeeId: string }) {
     );
   }
 
-  const tasks = state.data.filter((task) => matches(task, filter));
-  const blockedCount = state.data.filter((task) => task.review.blocksTimeEntry).length;
-
-  const counts = FILTER_TABS.map((tab) => ({
-    ...tab,
-    badgeCount: state.data.filter((task) => matches(task, tab.key as TaskFilter)).length,
-  }));
-
   return (
     <PageContainer>
       <PageHeader
         title="My Tasks"
-        description="Work assigned to you and work you raised, with actual time derived from your entries."
+        description="Move assigned work through its workflow and review actual time derived from work logs."
         actions={<RaiseTaskButton onCreated={reload} />}
       />
-
-      {blockedCount > 0 && (
-        <Callout tone="info" className="mt-5">
-          {blockedCount === 1 ? 'One task you raised is' : `${blockedCount} tasks you raised are`}{' '}
-          not yet approved. You cannot record time against{' '}
-          {blockedCount === 1 ? 'it' : 'them'} until your Team Lead reviews{' '}
-          {blockedCount === 1 ? 'it' : 'them'}.
-        </Callout>
-      )}
-
-      <div className="mt-5 flex flex-col gap-4">
-        <Tabs
-          label="Task filters"
-          activeKey={filter}
-          onChange={(key) => setFilter(key as TaskFilter)}
-          items={counts}
-        />
-
-        {tasks.length === 0 ? (
-          <EmptyState
-            variant={filter === 'all' ? 'empty' : 'no-results'}
-            title={filter === 'all' ? 'No tasks assigned' : 'No tasks in this view'}
-            description={
-              filter === 'all'
-                ? 'Nothing is assigned to you right now.'
-                : 'Try another filter.'
-            }
-          />
-        ) : (
-          <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-            {tasks.map((task) => (
-              <li key={task.id}>
-                <Link href={task.href} className="group block h-full">
-                  <Card className="h-full transition-colors group-hover:border-border-strong group-hover:bg-surface-sunken">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-body font-medium text-ink">{task.title}</p>
-                        <p className="mt-0.5 text-caption text-ink-muted">
-                          {task.project.name} · {task.division.code}
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 flex-col items-end gap-1.5">
-                        <Badge
-                          tone={
-                            task.status === 'completed'
-                              ? 'success'
-                              : task.status === 'in_progress'
-                                ? 'accent'
-                                : 'neutral'
-                          }
-                        >
-                          {task.statusLabel}
-                        </Badge>
-                        {task.isOverdue && <Badge tone="danger">Overdue</Badge>}
-                        {task.review.state !== 'not_required' && (
-                          <Badge
-                            tone={
-                              task.review.state === 'approved'
-                                ? 'success'
-                                : task.review.state === 'rejected'
-                                  ? 'danger'
-                                  : 'warning'
-                            }
-                          >
-                            {task.review.label}
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="mt-3">
-                      <ProgressBar
-                        value={
-                          task.estimated.minutes > 0
-                            ? (task.actual.minutes / task.estimated.minutes) * 100
-                            : 0
-                        }
-                        label="Actual against estimate"
-                        valueText={`${task.actual.display} of ${task.estimated.display}`}
-                        tone={
-                          task.variancePercent !== null && task.variancePercent > 0
-                            ? 'overtime'
-                            : 'accent'
-                        }
-                      />
-                    </div>
-
-                    {task.dueDateLabel && (
-                      <p className="mt-2 text-caption text-ink-muted">
-                        Due {task.dueDateLabel}
-                      </p>
-                    )}
-
-                    {task.review.blocksTimeEntry && (
-                      <p className="mt-2 text-caption text-ink-muted">
-                        {task.review.detail}
-                        {task.review.note ? ` ${task.review.note}` : ''}
-                      </p>
-                    )}
-                  </Card>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      <TaskWorkflowBoard
+        tasks={state.data.map(employeeBoardTask)}
+        actorRole={user?.primaryRole ?? 'employee'}
+        onMoved={reload}
+      />
     </PageContainer>
   );
 }
@@ -213,7 +98,13 @@ export function TaskList({ employeeId }: { employeeId: string }) {
 /** Task detail (`FE-0341`). */
 export function TaskDetail({ taskId }: { taskId: string }) {
   const router = useRouter();
-  const { state, reload } = useAsync(() => mockTaskService.getById(taskId), [taskId]);
+  const { user } = useSession();
+  const employeeId = user?.employeeId ?? '';
+  const { state, reload } = useAsync(
+    () => mockTaskService.getById(taskId, employeeId),
+    [taskId, employeeId],
+    { keepPrevious: true },
+  );
 
   if (state.status === 'loading') {
     return (
@@ -239,8 +130,9 @@ export function TaskDetail({ taskId }: { taskId: string }) {
     );
   }
 
-  const { summary, description, checklist, supportingMembers, entries } = state.data;
+  const { summary, description, checklist, supportingMembers } = state.data;
   const done = checklist.filter((item) => item.isDone).length;
+  const workflowTask = employeeBoardTask(summary);
 
   return (
     <PageContainer>
@@ -285,7 +177,7 @@ export function TaskDetail({ taskId }: { taskId: string }) {
            * person to a form that will refuse them, with no explanation until
            * they have filled it in. The block is stated here instead.
            */
-          summary.review.blocksTimeEntry ? undefined : (
+          summary.status === 'in_progress' && !summary.review.blocksTimeEntry ? (
             <Button
               variant="primary"
               iconLeading={<Plus aria-hidden className="size-4" />}
@@ -293,10 +185,16 @@ export function TaskDetail({ taskId }: { taskId: string }) {
                 router.push(`/timesheets/${DEMO_TODAY}`);
               }}
             >
-              Add time
+              Log work
             </Button>
-          )
+          ) : undefined
         }
+      />
+
+      <TaskDetailTransitions
+        task={workflowTask}
+        actorRole={user?.primaryRole ?? 'employee'}
+        onMoved={reload}
       />
 
       <div className="mt-5 flex flex-col gap-5">
@@ -349,9 +247,7 @@ export function TaskDetail({ taskId }: { taskId: string }) {
                     : 'text-ink',
                 )}
               >
-                {summary.variancePercent === null
-                  ? '—'
-                  : `${summary.variancePercent > 0 ? '+' : ''}${summary.variancePercent}%`}
+                {summary.variance.label}
               </p>
             </div>
             <div>
@@ -362,7 +258,7 @@ export function TaskDetail({ taskId }: { taskId: string }) {
             </div>
           </div>
           <p className="mt-3 text-caption text-ink-subtle">
-            Actual time is derived from your linked time entries, never entered directly.
+            Actual time is derived from linked work logs and preserved historical entries, never entered directly.
           </p>
         </Card>
 
@@ -411,40 +307,11 @@ export function TaskDetail({ taskId }: { taskId: string }) {
 
         <Card>
           <CardHeader
-            title="Work history"
-            description="Time entries linked to this task."
+            title="Task history"
+            description="Status transitions and work records in chronological order. Transition times never count as active work."
             as="h2"
           />
-          {entries.length === 0 ? (
-            <div className="mt-3">
-              <EmptyState
-                variant="empty"
-                title="No time recorded against this task"
-                description="Add time from your timesheet and link it to this task."
-              />
-            </div>
-          ) : (
-            <ul className="mt-3 divide-y divide-border">
-              {entries.map((entry) => (
-                <li key={entry.id} className="flex items-start justify-between gap-3 py-2.5">
-                  <div className="min-w-0">
-                    <p className="text-body-sm font-medium text-ink">
-                      {entry.workDateLabel}
-                    </p>
-                    <p className="mt-0.5 text-caption text-ink-muted">
-                      {entry.completedWork}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <Badge tone="neutral">{entry.division.code}</Badge>
-                    <span className="text-body-sm tabular font-semibold text-ink">
-                      <Duration value={entry.duration} />
-                    </span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
+          <TaskHistoryTimeline taskId={taskId} />
         </Card>
       </div>
     </PageContainer>

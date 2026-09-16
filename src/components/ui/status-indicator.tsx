@@ -3,11 +3,15 @@ import {
   Circle,
   CircleCheck,
   CircleDashed,
+  CircleX,
   ChevronUp,
+  Clock,
+  LoaderCircle,
   TriangleAlert,
 } from 'lucide-react';
 import type { DayStatus } from '@/contracts/domain';
-import { describeDayStatus } from '@/lib/status';
+import type { MinuteProcessingStatus } from '@/contracts/meeting-minutes';
+import { describeDayStatus, describeMinuteProcessingStatus } from '@/lib/status';
 import { cn } from '@/lib/cn';
 import { Badge, type BadgeTone } from './badge';
 
@@ -92,6 +96,41 @@ export function StatusIndicator({
       icon={<Icon aria-hidden className="size-3.5 shrink-0" strokeWidth={2.5} />}
     >
       {descriptor.label}
+      <span className="sr-only">{descriptor.accessibleLabel}</span>
+    </Badge>
+  );
+}
+
+const PROCESSING_SHAPE_ICONS = {
+  'circle-dashed': CircleDashed,
+  clock: Clock,
+  // Static on purpose: a spinning icon ignores reduced-motion preferences, and
+  // the label already says the work is in progress.
+  loader: LoaderCircle,
+  'circle-check': CircleCheck,
+  'circle-x': CircleX,
+} as const;
+
+/**
+ * A meeting minute's AI processing status as shape + text + colour
+ * (`FE-1110`, `REQ-MTG-024`).
+ */
+export function ProcessingStatusIndicator({
+  status,
+  className,
+}: {
+  status: MinuteProcessingStatus;
+  className?: string;
+}) {
+  const descriptor = describeMinuteProcessingStatus(status);
+  const Icon = PROCESSING_SHAPE_ICONS[descriptor.shape];
+  return (
+    <Badge
+      tone={descriptor.tone}
+      className={className}
+      icon={<Icon aria-hidden className="size-3.5 shrink-0" strokeWidth={2.5} />}
+    >
+      <span aria-hidden>{descriptor.label}</span>
       <span className="sr-only">{descriptor.accessibleLabel}</span>
     </Badge>
   );

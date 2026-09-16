@@ -192,6 +192,8 @@ const ROUTES = [
   { path: '/conveyance', email: EMPLOYEE, title: 'Conveyance' },
   { path: '/conveyance/new', email: EMPLOYEE, title: null },
   { path: '/conveyance/cnv-1', email: TEAM_LEAD, title: null },
+  { path: '/meeting-minutes', email: EMPLOYEE, title: 'Meeting Minutes' },
+  { path: '/meeting-minutes', email: TEAM_LEAD, title: 'Meeting Minutes' },
   { path: '/wfh', email: EMPLOYEE, title: null },
   { path: '/leave', email: EMPLOYEE, title: null },
   { path: '/evaluations', email: EMPLOYEE, title: null },

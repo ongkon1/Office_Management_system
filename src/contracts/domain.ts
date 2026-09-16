@@ -568,7 +568,12 @@ export interface GeneralRemark extends AuditableRecord {
   readonly authorEmployeeId: string;
   readonly message: string;
   readonly relatedRecord:
-    | { readonly type: 'timesheet'; readonly workDate: IsoDate }
+    | {
+        readonly type: 'timesheet';
+        readonly workDate: IsoDate;
+        /** Present when a correction request targets one duration-based log. */
+        readonly workLogId?: string;
+      }
     | { readonly type: 'task'; readonly taskId: string }
     | { readonly type: 'none' };
   readonly isCorrectionRequest: boolean;

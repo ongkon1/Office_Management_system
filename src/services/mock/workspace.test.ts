@@ -546,6 +546,50 @@ describe('division administration (FE-0730)', () => {
   });
 });
 
+describe('department administration', () => {
+  it('allows only a Super Administrator to manage the catalogue', async () => {
+    const denied = await mockAdminService.listDepartments(HR);
+    const allowed = await mockAdminService.listDepartments(ADMIN);
+    expect(denied.status).toBe('permission_denied');
+    expect(allowed.status).toBe('success');
+  });
+
+  it('creates, updates, and deletes an unused department', async () => {
+    const created = await mockAdminService.saveDepartment(ADMIN, {
+      name: 'Customer Success',
+      code: 'CS',
+      description: 'Customer adoption and retention.',
+    });
+    if (created.status !== 'success') return;
+    const department = created.data.find((item) => item.code === 'CS');
+    expect(department?.employeeCount).toBe(0);
+
+    const updated = await mockAdminService.saveDepartment(
+      ADMIN,
+      { name: 'Customer Experience', code: 'CX', description: '' },
+      department?.id,
+    );
+    if (updated.status !== 'success') return;
+    const renamed = updated.data.find((item) => item.code === 'CX');
+    expect(renamed?.name).toBe('Customer Experience');
+
+    const removed = await mockAdminService.deleteDepartment(ADMIN, renamed?.id ?? '');
+    expect(removed.status).toBe('success');
+    if (removed.status === 'success') {
+      expect(removed.data.some((item) => item.code === 'CX')).toBe(false);
+    }
+  });
+
+  it('protects a department referenced by employee records', async () => {
+    const listed = await mockAdminService.listDepartments(ADMIN);
+    if (listed.status !== 'success') return;
+    const engineering = listed.data.find((item) => item.name === 'Engineering');
+    expect(engineering?.canDelete).toBe(false);
+    const result = await mockAdminService.deleteDepartment(ADMIN, engineering?.id ?? '');
+    expect(result.status).toBe('conflict');
+  });
+});
+
 describe('roles and permissions (FE-0731)', () => {
   it('states the consequence of every sensitive grant', async () => {
     const result = await mockAdminService.listRoles(ADMIN);
@@ -604,6 +648,49 @@ describe('roles and permissions (FE-0731)', () => {
 });
 
 describe('settings (FE-0732)', () => {
+  it('limits organization branding changes to administrators', async () => {
+    const result = await mockAdminService.updateBranding(EMPLOYEE, null);
+    expect(result.status).toBe('permission_denied');
+  });
+
+  it('updates and removes the one logo used throughout the application', async () => {
+    const logo = {
+      dataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+      fileName: 'powerinai.png',
+      mediaType: 'image/png' as const,
+      sizeBytes: 11,
+    };
+    const updated = await mockAdminService.updateBranding(ADMIN, logo);
+    if (updated.status !== 'success') return;
+    expect(updated.data.logo).toEqual(logo);
+
+    const current = await mockAdminService.getBranding(ADMIN);
+    expect(current.status).toBe('success');
+    if (current.status === 'success') expect(current.data.logo).toEqual(logo);
+
+    const removed = await mockAdminService.updateBranding(ADMIN, null);
+    expect(removed.status).toBe('success');
+    if (removed.status === 'success') expect(removed.data.logo).toBeNull();
+  });
+
+  it('rejects unsafe logo formats and files larger than 1 MB', async () => {
+    const unsafe = await mockAdminService.updateBranding(ADMIN, {
+      dataUrl: 'data:image/svg+xml;base64,PHN2Zz4=',
+      fileName: 'logo.svg',
+      mediaType: 'image/svg+xml' as 'image/png',
+      sizeBytes: 10,
+    });
+    expect(unsafe.status).toBe('validation_failure');
+
+    const oversized = await mockAdminService.updateBranding(ADMIN, {
+      dataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+      fileName: 'large.png',
+      mediaType: 'image/png',
+      sizeBytes: 1_048_577,
+    });
+    expect(oversized.status).toBe('validation_failure');
+  });
+
   it('presents the work policy as read-only and says why', async () => {
     const result = await mockAdminService.getWorkPolicySettings(ADMIN);
     if (result.status !== 'success') return;

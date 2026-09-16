@@ -28,6 +28,22 @@ import type { Result } from './results';
 import type { DivisionRef, EmployeeRef } from './view-models';
 
 /* ------------------------------------------------------------------------- */
+/* Organization branding                                                     */
+/* ------------------------------------------------------------------------- */
+
+export interface BrandLogoAsset {
+  readonly dataUrl: string;
+  readonly fileName: string;
+  readonly mediaType: 'image/png' | 'image/jpeg' | 'image/webp';
+  readonly sizeBytes: number;
+}
+
+export interface OrganizationBrandingView {
+  readonly productName: string;
+  readonly logo: BrandLogoAsset | null;
+}
+
+/* ------------------------------------------------------------------------- */
 /* Divisions (`FE-0730`)                                                     */
 /* ------------------------------------------------------------------------- */
 
@@ -55,6 +71,26 @@ export interface DivisionFormInput {
   readonly description: string;
   readonly teamLeadEmployeeId: string;
   readonly isRestricted: boolean;
+}
+
+/* ------------------------------------------------------------------------- */
+/* Departments                                                               */
+/* ------------------------------------------------------------------------- */
+
+export interface DepartmentAdminView {
+  readonly id: string;
+  readonly name: string;
+  readonly code: string;
+  readonly description: string | null;
+  readonly employeeCount: number;
+  /** Referenced departments are retained so historical employee records stay readable. */
+  readonly canDelete: boolean;
+}
+
+export interface DepartmentFormInput {
+  readonly name: string;
+  readonly code: string;
+  readonly description: string;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -212,6 +248,12 @@ export interface IntegrationPlaceholderView {
 /* ------------------------------------------------------------------------- */
 
 export interface AdminService {
+  getBranding(userId: string): Promise<Result<OrganizationBrandingView>>;
+  updateBranding(
+    userId: string,
+    logo: BrandLogoAsset | null,
+  ): Promise<Result<OrganizationBrandingView>>;
+
   listDivisions(userId: string): Promise<Result<readonly DivisionAdminView[]>>;
   saveDivision(
     userId: string,
@@ -223,6 +265,17 @@ export interface AdminService {
     id: string,
     isActive: boolean,
   ): Promise<Result<readonly DivisionAdminView[]>>;
+
+  listDepartments(userId: string): Promise<Result<readonly DepartmentAdminView[]>>;
+  saveDepartment(
+    userId: string,
+    input: DepartmentFormInput,
+    id?: string,
+  ): Promise<Result<readonly DepartmentAdminView[]>>;
+  deleteDepartment(
+    userId: string,
+    id: string,
+  ): Promise<Result<readonly DepartmentAdminView[]>>;
 
   listUsers(userId: string): Promise<Result<readonly UserAdminView[]>>;
   listRoles(userId: string): Promise<Result<readonly RoleAdminView[]>>;

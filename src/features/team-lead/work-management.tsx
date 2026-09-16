@@ -2,11 +2,17 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { LayoutGrid, List, Plus, Users } from 'lucide-react';
+import { Plus, Users } from 'lucide-react';
 import type { ProjectFormInput, TaskFormInput, TeamProjectView, TeamTaskView } from '@/contracts/team-lead';
-import type { Priority, TaskStatus } from '@/contracts/domain';
+import type { Priority } from '@/contracts/domain';
 import { mockTeamLeadService } from '@/services/mock/team-lead';
 import { TaskReviewQueue } from './task-review-queue';
+import {
+  TaskDetailTransitions,
+  TaskHistoryTimeline,
+  TaskWorkflowBoard,
+  type WorkflowBoardTask,
+} from '@/features/tasks/task-workflow';
 import { useAsync } from '@/lib/use-async';
 import { useSession } from '@/features/access/session-provider';
 import { useToast } from '@/components/feedback/toast';
@@ -28,7 +34,6 @@ import { cn } from '@/lib/cn';
 
 const PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const;
 const PROJECT_STATUSES = ['planned', 'active', 'on_hold', 'completed', 'closed'] as const;
-const TASK_STATUSES = ['pending', 'in_progress', 'completed'] as const;
 
 function Loading({ label }: { label: string }) {
   return <PageContainer><div role="status" aria-busy><span className="sr-only">Loading {label}</span><Skeleton height="2rem" width="18rem" /><Skeleton height="18rem" rounded="md" className="mt-5" /></div></PageContainer>;
@@ -165,17 +170,177 @@ function TaskForm({ initial, onCancel, onSaved }: { initial?: TeamTaskView; onCa
 }
 
 export function TeamTaskBoard() {
-  const { user } = useSession(); const toast = useToast(); const [view, setView] = React.useState<'board' | 'list'>('board'); const [formOpen, setFormOpen] = React.useState(false); const [version, setVersion] = React.useState(0);
-  const { state } = useAsync(() => mockTeamLeadService.listTasks(user?.userId ?? ''), [user?.userId, version]);
-  if (state.status === 'loading') return <Loading label="tasks" />; if (state.status !== 'success') return <PageContainer><EmptyState variant="error" title="Tasks unavailable" /></PageContainer>;
-  const taskCard = (task: TeamTaskView) => <a key={task.id} href={`/tasks/${task.id}`} className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"><Card className="hover:border-highlight-hover"><div className="flex items-start justify-between gap-2"><h3 className="text-body-sm font-semibold text-ink">{task.title}</h3>{task.isOverdue && <Badge tone="danger">Overdue</Badge>}</div><p className="mt-1 text-caption text-ink-muted">{task.projectLabel}</p><div className="mt-3 flex items-center justify-between gap-2"><Badge tone="neutral">{task.assignee.fullName}</Badge><span className="text-caption text-ink-muted"><Duration value={task.actual} /> / <Duration value={task.estimated} /></span></div></Card></a>;
-  return <PageContainer><PageHeader title="Tasks" description="Manage work using the three approved task states." meta={<Scope />} actions={<><Button variant="secondary" iconLeading={view === 'board' ? <List aria-hidden className="size-4" /> : <LayoutGrid aria-hidden className="size-4" />} onClick={() => setView(view === 'board' ? 'list' : 'board')}>{view === 'board' ? 'List view' : 'Board view'}</Button><Button variant="primary" iconLeading={<Plus aria-hidden className="size-4" />} onClick={() => setFormOpen(true)}>New task</Button></>} /><TaskReviewQueue onDecided={() => setVersion((value) => value + 1)} />{view === 'board' ? <div className="mt-5 grid gap-4 lg:grid-cols-3">{TASK_STATUSES.map((status) => <section key={status} aria-labelledby={`column-${status}`} className="rounded-lg bg-surface-sunken p-3"><div className="mb-3 flex items-center justify-between"><h2 id={`column-${status}`} className="text-h3 text-ink">{TASK_STATUS_LABEL[status]}</h2><Badge tone="neutral">{state.data.filter((task) => task.status === status).length}</Badge></div><div className="space-y-3">{state.data.filter((task) => task.status === status).map(taskCard)}</div></section>)}</div> : <div className="mt-5 space-y-3">{state.data.map(taskCard)}</div>}<Dialog open={formOpen} onClose={() => setFormOpen(false)} title="Create task" description="Assign work within your project scope." size="lg"><TaskForm onCancel={() => setFormOpen(false)} onSaved={(task) => { setFormOpen(false); setVersion((value) => value + 1); toast.show({ tone: 'success', title: 'Task created', description: task.title }); }} /></Dialog></PageContainer>;
+  const { user } = useSession();
+  const toast = useToast();
+  const [formOpen, setFormOpen] = React.useState(false);
+  const [version, setVersion] = React.useState(0);
+  const { state, reload } = useAsync(
+    () => mockTeamLeadService.listTasks(user?.userId ?? ''),
+    [user?.userId, version],
+    { keepPrevious: true },
+  );
+
+  if (state.status === 'loading') return <Loading label="tasks" />;
+  if (state.status !== 'success') {
+    return <PageContainer><EmptyState variant="error" title="Tasks unavailable" /></PageContainer>;
+  }
+
+  const boardTasks = state.data.map((task) => teamBoardTask(task, user?.employeeId ?? ''));
+  return (
+    <PageContainer>
+      <PageHeader
+        title="Tasks"
+        description="Manage scoped team work through Pending, In Progress, and Completed."
+        meta={<Scope />}
+        actions={
+          <Button
+            variant="primary"
+            iconLeading={<Plus aria-hidden className="size-4" />}
+            onClick={() => setFormOpen(true)}
+          >
+            New task
+          </Button>
+        }
+      />
+      <TaskReviewQueue onDecided={() => setVersion((value) => value + 1)} />
+      <TaskWorkflowBoard
+        tasks={boardTasks}
+        actorRole="team_lead"
+        onMoved={reload}
+      />
+      <Dialog
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+        title="Create task"
+        description="Assign work within your project scope."
+        size="lg"
+      >
+        <TaskForm
+          onCancel={() => setFormOpen(false)}
+          onSaved={(task) => {
+            setFormOpen(false);
+            setVersion((value) => value + 1);
+            toast.show({ tone: 'success', title: 'Task created', description: task.title });
+          }}
+        />
+      </Dialog>
+    </PageContainer>
+  );
 }
 
 export function TeamTaskDetail({ taskId }: { taskId: string }) {
-  const { user } = useSession(); const toast = useToast(); const [editing, setEditing] = React.useState(false); const [version, setVersion] = React.useState(0);
-  const { state } = useAsync(() => mockTeamLeadService.getTask(user?.userId ?? '', taskId), [user?.userId, taskId, version]);
-  if (state.status === 'loading') return <Loading label="task" />; if (state.status !== 'success') return <PageContainer><EmptyState variant="no-results" title="Task not found" /></PageContainer>; const task = state.data;
-  async function changeStatus(status: TaskStatus) { const result = await mockTeamLeadService.setTaskStatus(user?.userId ?? '', task.id, status); if (result.status === 'success') { setVersion((value) => value + 1); toast.show({ tone: 'success', title: 'Task status updated', description: `${task.title} is now ${TASK_STATUS_LABEL[status]}.` }); } }
-  return <PageContainer><PageHeader title={task.title} description={task.projectLabel} crumbs={[{ label: 'Tasks', href: '/tasks' }, { label: task.title }]} backHref="/tasks" backLabel="Tasks" meta={<><Scope />{task.isOverdue && <Badge tone="danger">Overdue</Badge>}<Badge tone="accent">{TASK_STATUS_LABEL[task.status]}</Badge></>} actions={<Button variant="secondary" onClick={() => setEditing(true)}>Edit task</Button>} /><div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]"><div className="space-y-5"><Card><CardHeader title="Task overview" /><p className="mt-3 text-body-sm text-ink-muted">{task.description ?? 'No description.'}</p><dl className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4"><div><dt className="text-caption text-ink-muted">Assignee</dt><dd className="font-medium text-ink">{task.assignee.fullName}</dd></div><div><dt className="text-caption text-ink-muted">Due</dt><dd className={cn('font-medium', task.isOverdue ? 'text-danger' : 'text-ink')}>{task.dueDateLabel ?? 'Not recorded'}</dd></div><div><dt className="text-caption text-ink-muted">Estimate</dt><dd className="font-medium text-ink"><Duration value={task.estimated} /></dd></div><div><dt className="text-caption text-ink-muted">Actual</dt><dd className="font-medium text-ink"><Duration value={task.actual} /></dd></div></dl></Card><Card><CardHeader title="Checklist" description={`${task.checklist.filter((item) => item.isDone).length} of ${task.checklist.length} complete`} />{task.checklist.length ? <ul className="mt-3 space-y-2">{task.checklist.map((item) => <li key={item.id} className="flex items-center gap-2 text-body-sm text-ink"><span aria-hidden className={cn('size-2 rounded-full', item.isDone ? 'bg-complete' : 'bg-border-strong')} />{item.label}</li>)}</ul> : <p className="mt-3 text-body-sm text-ink-muted">No checklist items.</p>}</Card><Card><CardHeader title="Actual-time work history" description="Derived from time entries linked to this task." />{task.workHistory.length ? <ul className="mt-3 divide-y divide-border">{task.workHistory.map((entry) => <li key={entry.id} className="flex items-start justify-between gap-3 py-3"><div><p className="font-medium text-ink">{entry.dateLabel}</p><p className="mt-1 text-caption text-ink-muted">{entry.completedWork}</p></div><Duration value={entry.duration} emphasis /></li>)}</ul> : <EmptyState title="No linked time" description="Actual time will appear after an employee records work against this task." />}</Card><Card><CardHeader title="Comments" description="Task comments are planned for the collaboration phase." /><div className="mt-3 rounded-md border border-dashed border-border-strong bg-surface-sunken p-4 text-body-sm text-ink-muted">Comments placeholder — use a general remark for current review needs.</div></Card></div><aside className="space-y-5"><Card><CardHeader title="Change status" description="Only Pending, In Progress, and Completed are valid." /><div className="mt-3 space-y-2">{TASK_STATUSES.map((status) => <Button key={status} variant={task.status === status ? 'primary' : 'secondary'} className="w-full" disabled={task.status === status} onClick={() => changeStatus(status)}>{TASK_STATUS_LABEL[status]}</Button>)}</div></Card><Card><CardHeader title="Supporting members" />{task.supportingMembers.length ? <div className="mt-3 flex flex-wrap gap-2">{task.supportingMembers.map((member) => <Badge key={member.id} tone="neutral">{member.fullName}</Badge>)}</div> : <p className="mt-3 text-body-sm text-ink-muted">None assigned.</p>}</Card></aside></div><Dialog open={editing} onClose={() => setEditing(false)} title="Edit task" description={task.title} size="lg"><TaskForm initial={task} onCancel={() => setEditing(false)} onSaved={(saved) => { setEditing(false); setVersion((value) => value + 1); toast.show({ tone: 'success', title: 'Task updated', description: saved.title }); }} /></Dialog></PageContainer>;
+  const { user } = useSession();
+  const toast = useToast();
+  const [editing, setEditing] = React.useState(false);
+  const [version, setVersion] = React.useState(0);
+  const { state, reload } = useAsync(
+    () => mockTeamLeadService.getTask(user?.userId ?? '', taskId),
+    [user?.userId, taskId, version],
+    { keepPrevious: true },
+  );
+  if (state.status === 'loading') return <Loading label="task" />;
+  if (state.status !== 'success') {
+    return <PageContainer><EmptyState variant="no-results" title="Task not found" /></PageContainer>;
+  }
+  const task = state.data;
+  const workflowTask = teamBoardTask(task, user?.employeeId ?? '');
+  return (
+    <PageContainer>
+      <PageHeader
+        title={task.title}
+        description={task.projectLabel}
+        crumbs={[{ label: 'Tasks', href: '/tasks' }, { label: task.title }]}
+        backHref="/tasks"
+        backLabel="Tasks"
+        meta={
+          <>
+            <Scope />
+            {task.isOverdue && <Badge tone="danger">Overdue</Badge>}
+            <Badge tone="accent">{TASK_STATUS_LABEL[task.status]}</Badge>
+          </>
+        }
+        actions={<Button variant="secondary" onClick={() => setEditing(true)}>Edit task</Button>}
+      />
+      <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="space-y-5">
+          <Card>
+            <CardHeader title="Task overview" />
+            <p className="mt-3 text-body-sm text-ink-muted">{task.description ?? 'No description.'}</p>
+            <dl className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-5">
+              <div><dt className="text-caption text-ink-muted">Assignee</dt><dd className="font-medium text-ink">{task.assignee.fullName}</dd></div>
+              <div><dt className="text-caption text-ink-muted">Due</dt><dd className={cn('font-medium', task.isOverdue ? 'text-danger' : 'text-ink')}>{task.dueDateLabel ?? 'Not recorded'}</dd></div>
+              <div><dt className="text-caption text-ink-muted">Estimate</dt><dd className="font-medium text-ink"><Duration value={task.estimated} /></dd></div>
+              <div><dt className="text-caption text-ink-muted">Actual</dt><dd className="font-medium text-ink"><Duration value={task.actual} /></dd></div>
+              <div><dt className="text-caption text-ink-muted">Variance</dt><dd className={cn('font-medium', task.variance.minutes > 0 ? 'text-warning' : 'text-ink')}>{task.variance.label}</dd></div>
+            </dl>
+          </Card>
+          <Card>
+            <CardHeader title="Checklist" description={`${task.checklist.filter((item) => item.isDone).length} of ${task.checklist.length} complete`} />
+            {task.checklist.length ? (
+              <ul className="mt-3 space-y-2">
+                {task.checklist.map((item) => <li key={item.id} className="flex items-center gap-2 text-body-sm text-ink"><span aria-hidden className={cn('size-2 rounded-full', item.isDone ? 'bg-complete' : 'bg-border-strong')} />{item.label}</li>)}
+              </ul>
+            ) : <p className="mt-3 text-body-sm text-ink-muted">No checklist items.</p>}
+          </Card>
+          <Card>
+            <CardHeader title="Task history" description="Transitions and work records are separate and shown in chronological order." />
+            <TaskHistoryTimeline taskId={task.id} />
+          </Card>
+          <Card>
+            <CardHeader title="Comments" description="Task comments are planned for the collaboration phase." />
+            <div className="mt-3 rounded-md border border-dashed border-border-strong bg-surface-sunken p-4 text-body-sm text-ink-muted">Comments placeholder — use a general remark for current review needs.</div>
+          </Card>
+        </div>
+        <aside className="space-y-5">
+          <Card>
+            <CardHeader title="Change status" description="Every move is confirmed and creates no active time." />
+            <TaskDetailTransitions task={workflowTask} actorRole="team_lead" onMoved={reload} />
+          </Card>
+          <Card>
+            <CardHeader title="Supporting members" />
+            {task.supportingMembers.length ? <div className="mt-3 flex flex-wrap gap-2">{task.supportingMembers.map((member) => <Badge key={member.id} tone="neutral">{member.fullName}</Badge>)}</div> : <p className="mt-3 text-body-sm text-ink-muted">None assigned.</p>}
+          </Card>
+        </aside>
+      </div>
+      <Dialog open={editing} onClose={() => setEditing(false)} title="Edit task" description={task.title} size="lg">
+        <TaskForm
+          initial={task}
+          onCancel={() => setEditing(false)}
+          onSaved={(saved) => {
+            setEditing(false);
+            setVersion((value) => value + 1);
+            toast.show({ tone: 'success', title: 'Task updated', description: saved.title });
+          }}
+        />
+      </Dialog>
+    </PageContainer>
+  );
+}
+
+function teamBoardTask(task: TeamTaskView, viewerEmployeeId: string): WorkflowBoardTask {
+  const [projectCode, ...projectNameParts] = task.projectLabel.split(' · ');
+  const canLogWorkWhenInProgress =
+    !task.review.blocksTimeEntry &&
+    (task.assignee.id === viewerEmployeeId ||
+      task.supportingMembers.some((member) => member.id === viewerEmployeeId));
+  return {
+    id: task.id,
+    title: task.title,
+    href: `/tasks/${task.id}`,
+    project: {
+      code: projectCode || task.projectId,
+      name: projectNameParts.join(' · ') || task.projectLabel,
+    },
+    division: { name: task.division.name, code: task.division.code },
+    assignee: { id: task.assignee.id, fullName: task.assignee.fullName },
+    status: task.status,
+    estimated: task.estimated,
+    actual: task.actual,
+    variance: task.variance,
+    dueDate: task.dueDate,
+    dueDateLabel: task.dueDateLabel,
+    isOverdue: task.isOverdue,
+    reviewBlockedReason: task.review.blocksTimeEntry ? task.review.detail : null,
+    canLogWorkWhenInProgress,
+  };
 }

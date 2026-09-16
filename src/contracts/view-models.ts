@@ -233,6 +233,7 @@ export interface TimesheetDayView {
 export interface TimeEntryView {
   readonly version?: number;
   readonly id: string;
+  readonly recordKind: 'work_log' | 'historical_clock_entry';
   readonly division: DivisionRef;
   readonly project: ProjectRef | null;
   readonly task: TaskRef | null;
@@ -278,9 +279,14 @@ export interface TimesheetDayRowView {
   readonly active: DurationView;
   readonly break: DurationView;
   readonly total: DurationView;
+  /** Engine-produced requirement retained so filtered period totals can reconcile. */
+  readonly requiredActive: DurationView;
   readonly status: DayStatusView;
+  /** Status counts include required working days only. */
+  readonly isRequiredWorkingDay: boolean;
   readonly attendance: AttendanceState;
   readonly attendanceLabel: string;
+  readonly divisionIds: readonly string[];
   readonly divisionCodes: readonly string[];
   /** Active minutes on this day split by client; sums to `active`. */
   readonly clientContributions: readonly ClientContributionView[];
@@ -295,6 +301,8 @@ export interface TimesheetDayRowView {
  */
 export interface EntryCalculationPreview {
   readonly entryDuration: DurationView;
+  /** Projected active work for the selected employee, task and local date. */
+  readonly taskDayActive: DurationView | null;
   readonly dayActive: DurationView;
   readonly dayBreak: DurationView;
   readonly dayTotal: DurationView;

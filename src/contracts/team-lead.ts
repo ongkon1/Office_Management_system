@@ -17,6 +17,8 @@ import type {
   TeamTimesheetRowView,
   TimesheetDayView,
 } from './view-models';
+import type { DurationVarianceView } from './work-log';
+import type { TaskReviewStateView } from './task-review';
 
 export interface TeamMemberView {
   readonly employee: EmployeeRef;
@@ -58,10 +60,13 @@ export interface TeamTaskView {
   readonly status: TaskStatus;
   readonly priority: Priority;
   readonly startDateLabel: string | null;
+  readonly dueDate: IsoDate | null;
   readonly dueDateLabel: string | null;
   readonly estimated: DurationView;
   readonly actual: DurationView;
+  readonly variance: DurationVarianceView;
   readonly isOverdue: boolean;
+  readonly review: TaskReviewStateView;
   readonly description: string | null;
   readonly checklist: readonly { readonly id: string; readonly label: string; readonly isDone: boolean }[];
   readonly workHistory: readonly {
@@ -154,7 +159,14 @@ export interface TeamLeadService {
   listMembers(userId: string): Promise<Result<readonly TeamMemberView[]>>;
   listTimesheets(userId: string): Promise<Result<readonly TeamTimesheetRowView[]>>;
   getTimesheet(userId: string, employeeId: string, date: IsoDate): Promise<Result<TimesheetDayView>>;
-  addRemark(input: { userId: string; employeeId: string; date: IsoDate; message: string; requestedChanges: string | null }): Promise<Result<{ id: string; state: RemarkState }>>;
+  addRemark(input: {
+    userId: string;
+    employeeId: string;
+    date: IsoDate;
+    message: string;
+    requestedChanges: string | null;
+    workLogId?: string;
+  }): Promise<Result<{ id: string; state: RemarkState }>>;
   resolveRemark(input: { userId: string; remarkId: string }): Promise<Result<{ state: RemarkState }>>;
   listProjects(userId: string): Promise<Result<readonly TeamProjectView[]>>;
   getProject(userId: string, id: string): Promise<Result<TeamProjectView>>;

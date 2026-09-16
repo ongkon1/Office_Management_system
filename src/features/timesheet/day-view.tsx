@@ -3,8 +3,9 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Coffee, Lock, Pencil, Play, Plus, Square, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock3, Coffee, Lock, MoreHorizontal, Pencil, Play, Plus, Square, Trash2 } from 'lucide-react';
 import type { TimeEntryInput } from '@/contracts/services';
+import type { WorkLog } from '@/contracts/work-log';
 import type { TimesheetDayView } from '@/contracts/view-models';
 import { cn } from '@/lib/cn';
 import { addDays, formatDate } from '@/lib/format';
@@ -14,6 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { Duration } from '@/components/ui/misc';
 import { ProgressBar } from '@/components/ui/progress';
 import { StatusIndicator } from '@/components/ui/status-indicator';
+import { toDurationView } from '@/lib/status';
 import { Card, CardHeader } from '@/components/feedback/card';
 import { Alert, EmptyState } from '@/components/feedback/alert';
 import { Dialog, DropdownMenu } from '@/components/feedback/overlay';
@@ -25,8 +27,19 @@ import { mockStore } from '@/services/mock/store';
 import { DEMO_TODAY } from '@/lib/demo-context';
 import { EntryDrawer } from './entry-drawer';
 import { TimerPanel } from './timer-panel';
+import { WorkLogDrawer, type CopiedWorkLogDraft } from './work-log-drawer';
 
-export function DayView({ employeeId, date }: { employeeId: string; date: string }) {
+export function DayView({
+  employeeId,
+  date,
+  initialLogTaskId,
+  initialEditWorkLogId,
+}: {
+  employeeId: string;
+  date: string;
+  initialLogTaskId?: string;
+  initialEditWorkLogId?: string;
+}) {
   const router = useRouter();
   const toast = useToast();
   const { state, reload } = useAsync(
@@ -35,20 +48,51 @@ export function DayView({ employeeId, date }: { employeeId: string; date: string
   );
 
   const [drawerOpen, setDrawerOpen] = React.useState(false);
+  const [workLogOpen, setWorkLogOpen] = React.useState(Boolean(initialLogTaskId));
+  const [copiedWorkLog, setCopiedWorkLog] = React.useState<CopiedWorkLogDraft>();
+  const [editingWorkLog, setEditingWorkLog] = React.useState<WorkLog>();
+  const [copyingId, setCopyingId] = React.useState<string | null>(null);
+  const [handledLogTaskId, setHandledLogTaskId] = React.useState(initialLogTaskId);
   const [editingId, setEditingId] = React.useState<string | undefined>();
   const [initial, setInitial] = React.useState<Partial<TimeEntryInput> | undefined>();
   const [draftOrigin, setDraftOrigin] = React.useState<'copy' | 'timer' | null>(null);
   const [copyOpen, setCopyOpen] = React.useState(false);
   const [deleteId, setDeleteId] = React.useState<string | null>(null);
 
-  function openNew() {
-    setEditingId(undefined);
-    setInitial(undefined);
-    setDraftOrigin(null);
-    setDrawerOpen(true);
+  React.useEffect(() => {
+    if (!initialEditWorkLogId) return;
+    let cancelled = false;
+    void mockTimesheetService.getWorkLog(initialEditWorkLogId).then((result) => {
+      if (
+        cancelled ||
+        result.status !== 'success' ||
+        result.data.employeeId !== employeeId ||
+        result.data.workDate !== date
+      ) return;
+      setCopiedWorkLog(undefined);
+      setEditingWorkLog(result.data);
+      setWorkLogOpen(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [date, employeeId, initialEditWorkLogId]);
+
+  if (initialLogTaskId !== handledLogTaskId) {
+    setHandledLogTaskId(initialLogTaskId);
+    if (initialLogTaskId) {
+      setCopiedWorkLog(undefined);
+      setWorkLogOpen(true);
+    }
   }
 
-  function openEdit(entryId: string) {
+  function openWorkLog() {
+    setCopiedWorkLog(undefined);
+    setEditingWorkLog(undefined);
+    setWorkLogOpen(true);
+  }
+
+  function openLegacyEdit(entryId: string) {
     const entry = mockStore.findEntry(entryId);
     if (!entry) return;
     setEditingId(entryId);
@@ -69,14 +113,32 @@ export function DayView({ employeeId, date }: { employeeId: string; date: string
     setDrawerOpen(true);
   }
 
-  async function copyFrom(sourceEntryId: string) {
-    const result = await mockTimesheetService.copyEntry({ sourceEntryId, targetDate: date });
+  async function openWorkLogEdit(entryId: string) {
+    const result = await mockTimesheetService.getWorkLog(entryId);
+    if (result.status !== 'success') {
+      toast.show({ tone: 'error', title: result.message });
+      return;
+    }
+    setCopiedWorkLog(undefined);
+    setEditingWorkLog(result.data);
+    setWorkLogOpen(true);
+  }
+
+  async function copyFrom(source: WorkLog) {
+    setCopyingId(source.id);
+    const result = await mockTimesheetService.copyWorkLog({
+      sourceWorkLogId: source.id,
+      targetDate: date,
+    });
+    setCopyingId(null);
+    if (result.status !== 'success') {
+      toast.show({ tone: 'error', title: result.message });
+      return;
+    }
     setCopyOpen(false);
-    if (result.status !== 'success') return;
-    setEditingId(undefined);
-    setInitial(result.data);
-    setDraftOrigin('copy');
-    setDrawerOpen(true);
+    setEditingWorkLog(undefined);
+    setCopiedWorkLog({ input: result.data, sourceWorkDate: source.workDate });
+    setWorkLogOpen(true);
   }
 
   function openTimerDraft(draft: TimeEntryInput) {
@@ -174,10 +236,10 @@ export function DayView({ employeeId, date }: { employeeId: string; date: string
                 </Button>
                 <Button
                   variant="primary"
-                  onClick={openNew}
+                  onClick={openWorkLog}
                   iconLeading={<Plus aria-hidden className="size-4" />}
                 >
-                  Add time
+                  Log work
                 </Button>
               </>
             )}
@@ -199,119 +261,172 @@ export function DayView({ employeeId, date }: { employeeId: string; date: string
         )}
 
         <Card padding="none">
-          <div className="p-4">
+          <div className="p-4 sm:p-5">
             <CardHeader
-              title="Entries"
+              title="Work by task"
               description={
                 day.entries.length === 0
-                  ? undefined
-                  : `${day.entries.length} entr${day.entries.length === 1 ? 'y' : 'ies'}, plus one recognized break`
+                  ? 'Daily work logs are organized around tasks, not clock times.'
+                  : `${day.entries.length} work log${day.entries.length === 1 ? '' : 's'} across the day`
               }
               as="h2"
             />
           </div>
 
           {day.entries.length === 0 ? (
-            <div className="p-4 pt-0">
+            <div className="p-4 pt-0 sm:p-5 sm:pt-0">
               <EmptyState
-                variant={day.exemption ? 'empty' : 'empty'}
+                variant="empty"
                 title={
                   day.exemption
                     ? `Nothing recorded — ${day.exemption.label.toLowerCase()}`
-                    : 'No time recorded yet'
+                    : 'No work logged yet'
                 }
                 description={
                   day.exemption
-                    ? 'No time is required on this day.'
+                    ? 'No work is required on this day.'
                     : day.canAddEntry
-                      ? 'Add your first entry for this date.'
+                      ? 'Log active time against an In Progress task.'
                       : 'This period is locked.'
                 }
                 action={
-                  day.canAddEntry ? { label: 'Add time', onClick: openNew } : undefined
+                  day.canAddEntry ? { label: 'Log work', onClick: openWorkLog } : undefined
                 }
               />
             </div>
           ) : (
-            <ul className="divide-y divide-border border-t border-border">
-              {day.entries.map((entry) => (
-                <li key={entry.id} className="flex gap-3 p-4">
-                  <div
-                    aria-hidden
-                    className="mt-1 h-full w-1 shrink-0 rounded-full bg-accent"
-                    style={{ minHeight: '2.5rem' }}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-body font-semibold text-ink">
-                        <Duration value={entry.duration} />
-                      </span>
-                      {entry.timeRangeLabel && (
-                        <span className="text-body-sm text-ink-muted">
-                          {entry.timeRangeLabel}
-                        </span>
+            <div className="border-t border-border">
+              <div
+                aria-hidden
+                className="hidden grid-cols-[minmax(12rem,1.05fr)_minmax(7rem,0.55fr)_6rem_minmax(7rem,0.55fr)_minmax(14rem,1.3fr)_2.75rem] gap-4 border-b border-border bg-accent-subtle/70 px-5 py-3 xl:grid"
+              >
+                {['Task', 'Division', 'Duration', 'Location', 'Description', ''].map(
+                  (label, index) => (
+                    <span
+                      key={`${label}-${index}`}
+                      className={cn(
+                        'text-label font-semibold tracking-wide text-ink-muted',
+                        label === 'Duration' && 'text-right',
                       )}
-                      <Badge tone="neutral">{entry.division.code}</Badge>
-                      {entry.project && <Badge>{entry.project.code}</Badge>}
-                      <Badge tone="info">{entry.workLocationLabel}</Badge>
-                      {entry.isDraft && <Badge tone="warning">Draft</Badge>}
-                    </div>
-                    <p className="mt-1.5 text-body-sm text-ink">{entry.workDescription}</p>
-                    <p className="mt-0.5 text-caption text-ink-muted">
-                      <span className="font-medium">Completed:</span> {entry.completedWork}
-                    </p>
-                    {entry.task && (
+                    >
+                      {label}
+                    </span>
+                  ),
+                )}
+              </div>
+              <ul className="divide-y divide-border" aria-label="Work logs by task">
+              {day.entries.map((entry) => (
+                <li
+                  key={entry.id}
+                  className="grid min-w-0 gap-4 px-4 py-4 transition-colors duration-150 hover:bg-accent-subtle/30 sm:px-5 xl:grid-cols-[minmax(12rem,1.05fr)_minmax(7rem,0.55fr)_6rem_minmax(7rem,0.55fr)_minmax(14rem,1.3fr)_2.75rem] xl:items-start"
+                >
+                  <div className="min-w-0">
+                    <p className="text-caption font-medium text-ink-muted xl:hidden">Task</p>
+                    {entry.task ? (
                       <Link
                         href={`/tasks/${entry.task.id}`}
-                        className="mt-1 inline-flex min-h-6 items-center text-caption text-accent underline underline-offset-2"
+                        className="inline-flex min-h-6 items-center font-semibold text-ink underline-offset-2 hover:text-accent hover:underline"
                       >
                         {entry.task.title}
                       </Link>
+                    ) : (
+                      <p className="font-semibold text-ink">Task not recorded</p>
+                    )}
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                      {entry.project && <Badge>{entry.project.code}</Badge>}
+                      {entry.isDraft && <Badge tone="warning">Draft</Badge>}
+                      {entry.recordKind === 'historical_clock_entry' && (
+                        <Badge
+                          tone="neutral"
+                          icon={<Clock3 aria-hidden className="size-3" />}
+                        >
+                          Recorded before task-based logging
+                        </Badge>
+                      )}
+                    </div>
+                    {entry.recordKind === 'historical_clock_entry' && entry.timeRangeLabel && (
+                      <p className="mt-1.5 text-caption text-ink-muted">
+                        Original range: {entry.timeRangeLabel} · Read-only historical record
+                      </p>
                     )}
                   </div>
-                  {(entry.canEdit || entry.canDelete) && (
-                    <DropdownMenu
-                      label={`Actions for the ${entry.duration.display} entry`}
-                      items={[
-                        {
-                          key: 'edit',
-                          label: 'Edit entry',
-                          icon: <Pencil aria-hidden className="size-4" />,
-                          onSelect: () => openEdit(entry.id),
-                        },
-                        {
-                          key: 'delete',
-                          label: 'Delete entry',
-                          icon: <Trash2 aria-hidden className="size-4" />,
-                          onSelect: () => setDeleteId(entry.id),
-                          destructive: true,
-                        },
-                      ]}
-                      trigger={
-                        <IconButton
-                          label="Entry actions"
-                          variant="ghost"
-                          size="sm"
-                          icon={<Pencil aria-hidden className="size-4" />}
-                        />
-                      }
-                    />
-                  )}
+
+                  <div className="min-w-0">
+                    <p className="text-caption font-medium text-ink-muted xl:hidden">Division</p>
+                    <p className="mt-0.5 text-body-sm text-ink xl:mt-0">{entry.division.name}</p>
+                    <p className="text-caption text-ink-subtle">{entry.division.code}</p>
+                  </div>
+
+                  <div>
+                    <p className="text-caption font-medium text-ink-muted xl:hidden">Duration</p>
+                    <p className="mt-0.5 text-body font-semibold text-ink xl:mt-0 xl:text-right">
+                      <Duration value={entry.duration} />
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-caption font-medium text-ink-muted xl:hidden">Location</p>
+                    <p className="mt-0.5 text-body-sm text-ink xl:mt-0">{entry.workLocationLabel}</p>
+                  </div>
+
+                  <div className="min-w-0">
+                    <p className="text-caption font-medium text-ink-muted xl:hidden">Description</p>
+                    <p className="mt-0.5 text-body-sm text-ink xl:mt-0">{entry.workDescription}</p>
+                    <p className="mt-1 text-caption text-ink-muted">
+                      <span className="font-medium text-ink-subtle">Completed:</span>{' '}
+                      {entry.completedWork}
+                    </p>
+                  </div>
+
+                  <div className="flex justify-end xl:block">
+                    {(entry.canEdit || entry.canDelete) && (
+                      <DropdownMenu
+                        label={`Actions for ${entry.task?.title ?? 'work log'}`}
+                        items={[
+                          {
+                            key: 'edit',
+                            label: entry.timeRangeLabel ? 'Edit historical entry' : 'Edit work log',
+                            icon: <Pencil aria-hidden className="size-4" />,
+                            onSelect: () => {
+                              if (entry.timeRangeLabel) openLegacyEdit(entry.id);
+                              else void openWorkLogEdit(entry.id);
+                            },
+                          },
+                          {
+                            key: 'delete',
+                            label: entry.timeRangeLabel ? 'Delete historical entry' : 'Delete work log',
+                            icon: <Trash2 aria-hidden className="size-4" />,
+                            onSelect: () => setDeleteId(entry.id),
+                            destructive: true,
+                          },
+                        ]}
+                        trigger={
+                          <IconButton
+                            label={`Actions for ${entry.task?.title ?? 'work log'}`}
+                            variant="ghost"
+                            size="sm"
+                            icon={<MoreHorizontal aria-hidden className="size-4" />}
+                          />
+                        }
+                      />
+                    )}
+                  </div>
                 </li>
               ))}
+              </ul>
 
               {/* The break is one daily value, shown as its own row rather
                   than folded into an entry (`REQ-TIME-012`). */}
-              <li className="flex items-center gap-3 bg-surface-sunken p-4">
+              <div className="flex flex-wrap items-center gap-3 border-t border-border bg-surface-sunken px-4 py-3 sm:px-5">
                 <Coffee aria-hidden className="size-4 shrink-0 text-ink-muted" />
-                <span className="flex-1 text-body-sm text-ink-muted">
-                  Recognized break — one per day, not per entry
+                <span className="min-w-0 flex-1 text-body-sm text-ink-muted">
+                  Recognized break — shown once for the day, never added per task
                 </span>
                 <span className="text-body font-semibold text-ink">
                   <Duration value={day.breakEntry.duration} />
                 </span>
-              </li>
-            </ul>
+              </div>
+            </div>
           )}
         </Card>
 
@@ -336,6 +451,14 @@ export function DayView({ employeeId, date }: { employeeId: string; date: string
                   >
                     Open remark
                   </Link>
+                  {remark.isCorrectionRequest && remark.relatedHref?.includes('workLog=') && (
+                    <Link
+                      href={remark.relatedHref}
+                      className="ml-4 mt-2 inline-flex min-h-6 items-center text-caption text-accent underline underline-offset-2"
+                    >
+                      Edit linked work log
+                    </Link>
+                  )}
                 </li>
               ))}
             </ul>
@@ -354,11 +477,23 @@ export function DayView({ employeeId, date }: { employeeId: string; date: string
         onSaved={reload}
       />
 
-      <CopyEntryDialog
+      <WorkLogDrawer
+        open={workLogOpen}
+        onClose={() => setWorkLogOpen(false)}
+        employeeId={employeeId}
+        defaultWorkDate={date}
+        initialTaskId={initialLogTaskId}
+        copiedDraft={copiedWorkLog}
+        editingWorkLog={editingWorkLog}
+        onSaved={reload}
+      />
+
+      <CopyWorkLogDialog
         open={copyOpen}
         onClose={() => setCopyOpen(false)}
         employeeId={employeeId}
         beforeDate={date}
+        copyingId={copyingId}
         onPick={copyFrom}
       />
 
@@ -451,62 +586,101 @@ function DaySummaryCard({ day }: { day: TimesheetDayView }) {
   );
 }
 
-/** Picks a recent entry to copy onto this date (`FE-0327`). */
-function CopyEntryDialog({
+/** Picks a recent saved work log to copy onto this date (`MFE-0307`). */
+function CopyWorkLogDialog({
   open,
   onClose,
   employeeId,
   beforeDate,
+  copyingId,
   onPick,
 }: {
   open: boolean;
   onClose: () => void;
   employeeId: string;
   beforeDate: string;
-  onPick: (entryId: string) => void;
+  copyingId: string | null;
+  onPick: (workLog: WorkLog) => void;
 }) {
-  const recent = React.useMemo(
+  const { state, reload } = useAsync(
     () =>
-      mockStore
-        .entriesBetween(employeeId, addDays(beforeDate, -14), addDays(beforeDate, -1))
-        .sort((a, b) => b.workDate.localeCompare(a.workDate))
-        .slice(0, 12),
+      mockTimesheetService.listWorkLogs({
+        pagination: { page: 1, pageSize: 100 },
+        filters: {
+          employeeIds: [employeeId],
+          dateRange: {
+            from: addDays(beforeDate, -14),
+            to: addDays(beforeDate, -1),
+          },
+        },
+      }),
     [employeeId, beforeDate],
   );
+
+  const recent =
+    state.status === 'success'
+      ? [...state.data.items]
+          .filter((workLog) => workLog.state !== 'draft')
+          .sort(
+            (a, b) =>
+              b.workDate.localeCompare(a.workDate) || b.createdAt.localeCompare(a.createdAt),
+          )
+          .slice(0, 12)
+      : [];
 
   return (
     <Dialog
       open={open}
       onClose={onClose}
-      title="Copy a previous entry"
-      description={`The copy lands on ${formatDate(beforeDate)} as an editable draft.`}
+      title="Copy a previous work log"
+      description={`Choose saved work from the last two weeks. It opens on ${formatDate(beforeDate)} as an unsaved draft for review.`}
     >
-      {recent.length === 0 ? (
+      {state.status === 'loading' ? (
+        <div role="status" aria-busy className="space-y-2">
+          <span className="sr-only">Loading recent work logs</span>
+          <Skeleton height="4.5rem" rounded="md" />
+          <Skeleton height="4.5rem" rounded="md" />
+          <Skeleton height="4.5rem" rounded="md" />
+        </div>
+      ) : state.status === 'failure' ? (
+        <Alert
+          tone="danger"
+          title="Recent work logs could not be loaded"
+          actions={
+            <Button variant="secondary" onClick={reload}>
+              Try again
+            </Button>
+          }
+        >
+          Try again. No draft has been created.
+        </Alert>
+      ) : recent.length === 0 ? (
         <EmptyState
           variant="empty"
-          title="Nothing to copy"
-          description="There are no entries in the last two weeks."
+          title="No saved work logs to copy"
+          description="There are no eligible work logs in the previous two weeks."
         />
       ) : (
         <ul className="flex flex-col gap-2">
-          {recent.map((entry) => (
-            <li key={entry.id}>
+          {recent.map((workLog) => (
+            <li key={workLog.id}>
               <button
                 type="button"
-                onClick={() => onPick(entry.id)}
-                className="w-full rounded-md border border-border p-3 text-left transition-colors hover:border-border-strong hover:bg-surface-sunken"
+                disabled={copyingId !== null}
+                aria-busy={copyingId === workLog.id}
+                onClick={() => onPick(workLog)}
+                className="min-h-11 w-full rounded-md border border-border p-3 text-left transition-colors hover:border-border-strong hover:bg-surface-sunken disabled:cursor-wait disabled:opacity-55"
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-body-sm font-medium text-ink">
-                    {formatDate(entry.workDate)}
+                    {formatDate(workLog.workDate)}
                   </span>
                   <span className="text-body-sm tabular text-ink-muted">
-                    {Math.floor(entry.activeMinutes / 60)}:
-                    {String(entry.activeMinutes % 60).padStart(2, '0')}
+                    <Duration value={toDurationView(workLog.durationMinutes)} />
                   </span>
                 </div>
                 <p className="mt-0.5 truncate text-caption text-ink-muted">
-                  {entry.workDescription}
+                  {copyingId === workLog.id ? 'Preparing draft…' : workLog.workDescription}
                 </p>
               </button>
             </li>

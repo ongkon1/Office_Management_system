@@ -76,7 +76,19 @@ export function transitionRequiresNote(
 
 export type TaskHistoryItemView =
   | { readonly kind: 'transition'; readonly transition: TaskStatusTransition }
-  | { readonly kind: 'work_log'; readonly workLog: WorkLogView };
+  | { readonly kind: 'work_log'; readonly workLog: WorkLogView }
+  | {
+      readonly kind: 'historical_clock_entry';
+      readonly historicalEntry: {
+        readonly id: string;
+        readonly workDate: string;
+        readonly workDateLabel: string;
+        readonly timeRangeLabel: string;
+        readonly duration: WorkLogView['duration'];
+        readonly completedWork: string;
+        readonly createdAt: string;
+      };
+    };
 
 export interface TaskHistoryView {
   readonly taskId: string;

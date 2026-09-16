@@ -13,9 +13,15 @@ import type {
   TimeEntry,
   TimerSession,
 } from '@/contracts/domain';
+import { taskAcceptsTime } from '@/contracts/domain';
 import { canTransition, transitionRequiresNote } from '@/contracts/task-transition';
 import type { TaskStatusTransition } from '@/contracts/task-transition';
-import type { WorkLog, WorkLogInput } from '@/contracts/work-log';
+import type {
+  WorkLog,
+  WorkLogInput,
+  WorkLogRevision,
+  WorkLogUpdateInput,
+} from '@/contracts/work-log';
 import type { DateRange, ListQuery, Paginated } from '@/contracts/query';
 import { success, type Result } from '@/contracts/results';
 import type {
@@ -46,7 +52,12 @@ import {
   formatDurationDelta,
   formatTimeRange,
 } from '@/lib/format';
-import { toDayStatusView, toDurationView, WORK_LOCATION_LABEL } from '@/lib/status';
+import {
+  TASK_STATUS_LABEL,
+  toDayStatusView,
+  toDurationView,
+  WORK_LOCATION_LABEL,
+} from '@/lib/status';
 import { toClientContributions } from '@/lib/client-time';
 import {
   PROJECTS,
@@ -124,8 +135,10 @@ function taskRef(taskId: string | null) {
 }
 
 function toEntryView(entry: TimeEntry, locked: boolean): TimeEntryView {
+  const isHistoricalClockEntry = Boolean(entry.startTime && entry.endTime);
   return {
     id: entry.id,
+    recordKind: isHistoricalClockEntry ? 'historical_clock_entry' : 'work_log',
     division: divisionRef(entry.divisionId),
     project: projectRef(entry.projectId),
     task: taskRef(entry.taskId),
@@ -141,8 +154,8 @@ function toEntryView(entry: TimeEntry, locked: boolean): TimeEntryView {
     attachmentCount: entry.attachmentIds === 'restricted' ? 'restricted' : entry.attachmentIds.length,
     supportingLink: entry.supportingLink,
     isDraft: entry.state === 'draft',
-    canEdit: !locked,
-    canDelete: !locked,
+    canEdit: !locked && !isHistoricalClockEntry,
+    canDelete: !locked && !isHistoricalClockEntry,
   };
 }
 
@@ -223,7 +236,11 @@ export function buildDayView(employeeId: string, date: IsoDate): TimesheetDayVie
     entries: entries.map((entry) => toEntryView(entry, summary.isLocked)),
     breakEntry: toBreakView(summary, false),
     divisionContributions: contributionViews(summary),
-    remarks: remarks.map((remark) => ({
+    remarks: remarks.map((remark) => {
+      const workLogId = remark.relatedRecord.type === 'timesheet'
+        ? remark.relatedRecord.workLogId
+        : undefined;
+      return {
       id: remark.id,
       author: {
         id: remark.authorEmployeeId,
@@ -244,11 +261,16 @@ export function buildDayView(employeeId: string, date: IsoDate): TimesheetDayVie
       state: remark.state,
       stateLabel: remark.state,
       isCorrectionRequest: remark.isCorrectionRequest,
-      relatedLabel: formatDate(date),
-      relatedHref: `/timesheets/${date}`,
+      relatedLabel: workLogId
+        ? `Work log · ${formatDate(date)}`
+        : `Timesheet · ${formatDate(date)}`,
+      relatedHref: workLogId
+        ? `/timesheets/${date}?workLog=${workLogId}`
+        : `/timesheets/${date}`,
       responseCount: remark.responses.length,
       href: `/remarks/${remark.id}`,
-    })),
+    };
+    }),
     exemption: exemptionLabel(summary),
     canAddEntry: !summary.isLocked,
     lockedReason: summary.isLocked
@@ -303,9 +325,14 @@ function toRowView(summary: DailySummary) {
     active: toDurationView(summary.activeMinutes),
     break: toDurationView(summary.breakMinutes),
     total: toDurationView(summary.totalMinutes),
+    requiredActive: toDurationView(summary.requiredActiveMinutes),
     status: toDayStatusView(summary.status),
+    isRequiredWorkingDay: summary.isRequiredWorkingDay,
     attendance: summary.attendance,
     attendanceLabel: summary.attendance,
+    divisionIds: summary.divisionContributions.map(
+      (contribution) => contribution.divisionId,
+    ),
     divisionCodes: summary.divisionContributions.map(
       (contribution) => divisionRef(contribution.divisionId).code,
     ),
@@ -428,8 +455,16 @@ function toStoredEntry(input: TimeEntryInput, id: string): TimeEntry {
 /** Idempotency keys already applied, so a retry cannot duplicate time. */
 const appliedKeys = new Map<string, string>();
 const workLogMetadata = new Map<string, Pick<WorkLogInput, 'source' | 'idempotencyKey'>>();
+const workLogRevisions: WorkLogRevision[] = [];
 const taskTransitions: TaskStatusTransition[] = [];
 const transitionKeys = new Map<string, string>();
+
+/** Test/demo reset for the append-only in-memory workflow adapter. */
+export function resetTaskWorkflowState(): void {
+  workLogRevisions.splice(0, workLogRevisions.length);
+  taskTransitions.splice(0, taskTransitions.length);
+  transitionKeys.clear();
+}
 
 /** Temporary concrete-method compatibility for the pre-F3 screens. */
 interface LegacyTimesheetCompatibility {
@@ -643,10 +678,29 @@ const mockTimesheetServiceImpl = {
     return success(entryAsWorkLog(entry)!);
   },
 
-  async updateWorkLog(
-    id: string,
-    input: WorkLogInput & { readonly expectedVersion?: number },
-  ) {
+  async getWorkLog(id: string) {
+    await delay();
+    const entry = mockStore.findEntry(id);
+    const workLog = entry ? entryAsWorkLog(entry) : null;
+    return workLog
+      ? success(workLog)
+      : { status: 'not_found' as const, code: 'NOT_FOUND' as const, message: 'That work log no longer exists.' };
+  },
+
+  async getWorkLogHistory(id: string) {
+    await delay();
+    const entry = mockStore.findEntry(id);
+    if (!entry || !entryAsWorkLog(entry)) {
+      return { status: 'not_found' as const, code: 'NOT_FOUND' as const, message: 'That work log no longer exists.' };
+    }
+    return success(
+      workLogRevisions
+        .filter((revision) => revision.workLogId === id)
+        .sort((a, b) => b.changedAt.localeCompare(a.changedAt)),
+    );
+  },
+
+  async updateWorkLog(id: string, input: WorkLogUpdateInput) {
     await delay();
     const existingEntry = mockStore.findEntry(id);
     const existing = existingEntry ? entryAsWorkLog(existingEntry) : null;
@@ -662,7 +716,6 @@ const mockTimesheetServiceImpl = {
       };
     }
     if (
-      input.expectedVersion !== undefined &&
       existing.version !== undefined &&
       input.expectedVersion !== existing.version
     ) {
@@ -671,6 +724,20 @@ const mockTimesheetServiceImpl = {
         code: 'CONFLICT' as const,
         message: 'This work log changed after you opened it.',
         guidance: 'Reload it and apply your changes to the latest version.',
+      };
+    }
+    if (!input.changeReason.trim()) {
+      return {
+        status: 'validation_failure' as const,
+        code: 'VALIDATION_FAILED' as const,
+        message: 'A reason is required to change this work log.',
+        fieldErrors: [{
+          field: 'changeReason',
+          code: 'CHANGE_REASON_REQUIRED',
+          message: 'Enter a reason for this change.',
+          guidance: 'Explain what was corrected so the audit history remains understandable.',
+        }],
+        focusField: 'changeReason',
       };
     }
     const errors = validateWorkLog(input, workLogValidationContext(input, id));
@@ -691,7 +758,24 @@ const mockTimesheetServiceImpl = {
     };
     mockStore.updateEntry(id, nextEntry);
     workLogMetadata.set(id, { source: input.source, idempotencyKey: input.idempotencyKey });
-    return success(entryAsWorkLog(nextEntry)!);
+    if (input.overtimeReason || input.criticalExplanation) {
+      mockStore.setDayReason(input.employeeId, input.workDate, {
+        overtimeReason: input.overtimeReason ?? undefined,
+        criticalExplanation: input.criticalExplanation ?? undefined,
+      });
+    }
+    const updated = entryAsWorkLog(nextEntry)!;
+    workLogRevisions.push({
+      id: nextId('wlr'),
+      workLogId: id,
+      version: updated.version ?? 1,
+      reason: input.changeReason.trim(),
+      changedAt: updated.updatedAt,
+      changedBy: updated.updatedBy,
+      before: existing,
+      after: updated,
+    });
+    return success(updated);
   },
 
   async deleteWorkLog(id: string) {
@@ -732,16 +816,21 @@ const mockTimesheetServiceImpl = {
       completedWork: '',
       supportingLink: null,
       attachmentIds: [],
-      overtimeReason: source.overtimeReason,
-      criticalExplanation: source.criticalExplanation,
+      // Day-specific evidence and reasons never carry to another date. The
+      // target-day preview and validation ask for them again when required.
+      overtimeReason: null,
+      criticalExplanation: null,
       source: 'manual',
     };
     return success(draft);
   },
 
-  async previewWorkLog(input: WorkLogInput) {
+  async previewWorkLog(
+    input: WorkLogInput,
+    options?: { readonly excludeWorkLogId?: string },
+  ) {
     await delay(80);
-    const context = workLogValidationContext(input);
+    const context = workLogValidationContext(input, options?.excludeWorkLogId);
     const actor = { userId: 'preview', displayName: 'Preview' };
     const stamp = `${input.workDate}T00:00:00+06:00`;
     const candidate: WorkLog = {
@@ -757,7 +846,12 @@ const mockTimesheetServiceImpl = {
     const projected = calculateDay({
       employeeId: input.employeeId,
       workDate: input.workDate,
-      workLogs: [...context.existingWorkLogs.filter((item) => item.state !== 'draft'), candidate],
+      workLogs: [
+        ...context.existingWorkLogs.filter(
+          (item) => item.state !== 'draft' && item.id !== options?.excludeWorkLogId,
+        ),
+        candidate,
+      ],
       historicalEntries: context.historicalEntries,
       policy: STANDARD_POLICY,
       breakOverrideMinutes: context.breakOverrideMinutes,
@@ -766,6 +860,19 @@ const mockTimesheetServiceImpl = {
     });
     return success({
       entryDuration: toDurationView(input.durationMinutes),
+      taskDayActive: toDurationView(
+        context.existingWorkLogs
+          .filter(
+            (item) =>
+              item.state !== 'draft' &&
+              item.id !== options?.excludeWorkLogId &&
+              item.taskId === input.taskId,
+          )
+          .reduce((sum, item) => sum + item.durationMinutes, input.durationMinutes) +
+          context.historicalEntries
+            .filter((item) => item.state !== 'draft' && item.taskId === input.taskId)
+            .reduce((sum, item) => sum + item.activeMinutes, 0),
+      ),
       dayActive: toDurationView(projected.activeMinutes),
       dayBreak: toDurationView(projected.breakMinutes),
       dayTotal: toDurationView(projected.totalMinutes),
@@ -781,18 +888,57 @@ const mockTimesheetServiceImpl = {
     const replayId = transitionKeys.get(input.idempotencyKey);
     if (replayId) {
       const replay = taskTransitions.find((item) => item.id === replayId);
-      if (replay) return success(replay);
+      if (
+        replay &&
+        replay.taskId === input.taskId &&
+        replay.fromStatus === input.fromStatus &&
+        replay.toStatus === input.toStatus
+      ) {
+        return success(replay);
+      }
+      return {
+        status: 'conflict' as const,
+        code: 'CONFLICT' as const,
+        message: 'That retry key was already used for a different task move.',
+        guidance: 'Reload the board and start the intended move again.',
+      };
     }
     const task = mockStore.findTask(input.taskId);
     if (!task) {
       return { status: 'not_found' as const, code: 'NOT_FOUND' as const, message: 'That task was not found.' };
     }
-    if (task.status !== input.fromStatus || !canTransition(input.fromStatus, input.toStatus, input.actorRole)) {
+    if (task.status !== input.fromStatus) {
       return {
         status: 'conflict' as const,
         code: 'CONFLICT' as const,
-        message: 'The task can no longer make that move.',
+        message: `This task is already ${TASK_STATUS_LABEL[task.status]}.`,
         guidance: 'Reload the task and choose an action available for its current status.',
+      };
+    }
+    if (!canTransition(input.fromStatus, input.toStatus, input.actorRole)) {
+      return {
+        status: 'permission_denied' as const,
+        code: 'FORBIDDEN' as const,
+        message: 'You cannot make that task move.',
+        guidance: 'Choose an action available for your role, or ask the assigned Team Lead.',
+      };
+    }
+    if (
+      input.fromStatus === 'pending' &&
+      input.toStatus === 'in_progress' &&
+      !taskAcceptsTime({ ...task, status: 'in_progress' })
+    ) {
+      return {
+        status: 'validation_failure' as const,
+        code: 'VALIDATION_FAILED' as const,
+        message: 'This task cannot be started yet.',
+        fieldErrors: [{
+          field: 'taskId',
+          code: task.reviewState === 'rejected' ? 'TASK_REVIEW_REJECTED' : 'TASK_AWAITING_REVIEW',
+          message: 'The employee-raised task has not been approved.',
+          guidance: 'Wait for Team Lead review before starting this task.',
+        }],
+        focusField: 'taskId',
       };
     }
     if (transitionRequiresNote(input.fromStatus, input.toStatus) && !input.note?.trim()) {
@@ -805,6 +951,23 @@ const mockTimesheetServiceImpl = {
       };
     }
     const stamp = new Date().toISOString();
+    if (
+      input.fromStatus === 'completed' &&
+      input.toStatus === 'in_progress' &&
+      !taskTransitions.some((item) => item.taskId === task.id && item.toStatus === 'completed')
+    ) {
+      taskTransitions.push({
+        id: nextId('trn'),
+        taskId: task.id,
+        fromStatus: 'in_progress',
+        toStatus: 'completed',
+        actor: task.updatedBy,
+        actorRole: 'team_lead',
+        changedAt: task.updatedAt,
+        note: 'Historical completion preserved at task-based cutover.',
+        idempotencyKey: `historical-completion:${task.id}`,
+      });
+    }
     const transition: TaskStatusTransition = {
       id: nextId('trn'),
       taskId: task.id,
@@ -834,12 +997,19 @@ const mockTimesheetServiceImpl = {
     if (!task) {
       return { status: 'not_found' as const, code: 'NOT_FOUND' as const, message: 'That task was not found.' };
     }
-    const logs = mockStore.entriesForTask(taskId).map(entryAsWorkLog).filter((item): item is WorkLog => item !== null);
-    const actualMinutes = logs.reduce((sum, item) => sum + item.durationMinutes, 0);
-    const dailyActuals = [...new Set(logs.map((item) => item.workDate))].sort().map((workDate) => {
-      const dayLogs = logs.filter((item) => item.workDate === workDate);
-      const minutes = dayLogs.reduce((sum, item) => sum + item.durationMinutes, 0);
-      return { workDate, workDateLabel: formatDate(workDate), actual: toDurationView(minutes), workLogIds: dayLogs.map((item) => item.id) };
+    const entries = mockStore.entriesForTask(taskId).filter((item) => item.state !== 'draft');
+    const logs = entries.map(entryAsWorkLog).filter((item): item is WorkLog => item !== null);
+    const historicalEntries = entries.filter((item) => item.startTime && item.endTime);
+    const actualMinutes = entries.reduce((sum, item) => sum + item.activeMinutes, 0);
+    const dailyActuals = [...new Set(entries.map((item) => item.workDate))].sort().map((workDate) => {
+      const dayEntries = entries.filter((item) => item.workDate === workDate);
+      const minutes = dayEntries.reduce((sum, item) => sum + item.activeMinutes, 0);
+      return {
+        workDate,
+        workDateLabel: formatDate(workDate),
+        actual: toDurationView(minutes),
+        workLogIds: dayEntries.map((item) => item.id),
+      };
     });
     const workLogViews = logs.map((item) => {
       const division = Object.values(DIVISIONS).find((candidate) => candidate.id === item.divisionId)!;
@@ -871,10 +1041,29 @@ const mockTimesheetServiceImpl = {
     const items = [
       ...taskTransitions.filter((item) => item.taskId === taskId).map((transition) => ({ kind: 'transition' as const, transition, at: transition.changedAt })),
       ...workLogViews.map((workLog) => ({ kind: 'work_log' as const, workLog, at: workLog.createdAt })),
+      ...historicalEntries.map((entry) => ({
+        kind: 'historical_clock_entry' as const,
+        historicalEntry: {
+          id: entry.id,
+          workDate: entry.workDate,
+          workDateLabel: formatDate(entry.workDate),
+          timeRangeLabel: formatTimeRange(
+            entry.startTime!,
+            entry.endTime!,
+            STANDARD_POLICY.businessTimezone,
+          ),
+          duration: toDurationView(entry.activeMinutes),
+          completedWork: entry.completedWork,
+          createdAt: entry.createdAt,
+        },
+        at: entry.createdAt,
+      })),
     ].sort((a, b) => a.at.localeCompare(b.at)).map((item) => (
       item.kind === 'transition'
         ? { kind: 'transition' as const, transition: item.transition }
-        : { kind: 'work_log' as const, workLog: item.workLog }
+        : item.kind === 'work_log'
+          ? { kind: 'work_log' as const, workLog: item.workLog }
+          : { kind: 'historical_clock_entry' as const, historicalEntry: item.historicalEntry }
     ));
     const varianceMinutes = actualMinutes - task.estimatedMinutes;
     return success({ taskId, items, estimatedMinutes: task.estimatedMinutes, actualMinutes, variance: { minutes: varianceMinutes, label: formatDurationDelta(varianceMinutes) }, dailyActuals });
@@ -1040,6 +1229,13 @@ const mockTimesheetServiceImpl = {
 
     const preview: EntryCalculationPreview = {
       entryDuration: toDurationView(minutes),
+      taskDayActive: input.taskId
+        ? toDurationView(
+            others
+              .filter((entry) => entry.taskId === input.taskId)
+              .reduce((sum, entry) => sum + entry.activeMinutes, minutes),
+          )
+        : null,
       dayActive: toDurationView(projected.activeMinutes),
       dayBreak: toDurationView(projected.breakMinutes),
       dayTotal: toDurationView(projected.totalMinutes),

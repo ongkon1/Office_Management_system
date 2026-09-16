@@ -200,41 +200,41 @@ This phase is shared. Neither milestone may start building until it is complete.
 
 ### Board
 
-- [ ] `MFE-0201` Build the three-column board — Pending, In Progress, Completed — with cards showing title, project and division, estimate, actual, due date, assignee, overdue state and latest transition note.
-- [ ] `MFE-0202` Support drag-and-drop with a button and keyboard alternative on every card (Start, Complete, Reopen), so dragging is never the only way to move a task (WCAG 2.2 2.5.7).
-- [ ] `MFE-0210` Collapse the board to a status-grouped list below 768 px, with the same actions available, no horizontal page scroll, and 24 px minimum targets.
-- [ ] `MFE-0209` Scope the board: an employee sees tasks assigned or available to them; a Team Lead sees their team's; nothing reveals a task outside the viewer's scope through counts or empty columns.
+- [x] `MFE-0201` Build the three-column board — Pending, In Progress, Completed — with cards showing title, project and division, estimate, actual, due date, assignee, overdue state and latest transition note. **Evidence: shared `TaskWorkflowBoard` and task-card read model in `src/features/tasks/task-workflow.tsx`.**
+- [x] `MFE-0202` Support drag-and-drop with a button and keyboard alternative on every card (Start, Complete, Reopen), so dragging is never the only way to move a task (WCAG 2.2 2.5.7). **Evidence: native drag/drop plus shared visible action buttons; drag and Enter-key tests in `task-workflow.test.tsx`.**
+- [x] `MFE-0210` Collapse the board to a status-grouped list below 768 px, with the same actions available, no horizontal page scroll, and 24 px minimum targets. **Evidence: paired `md:grid` desktop and `md:hidden` grouped-list layouts reuse the same card actions and shared button targets.**
+- [x] `MFE-0209` Scope the board: an employee sees tasks assigned or available to them; a Team Lead sees their team's; nothing reveals a task outside the viewer's scope through counts or empty columns. **Evidence: scoped employee/team services feed the board; employee detail now applies the same not-found scope rule; counts are derived only from returned tasks.**
 
 ### Transitions
 
-- [ ] `MFE-0203` Build the Start confirmation panel — task, new status, optional note — which records the transition and then offers "Log today's work" as a separate action, never logging time itself.
-- [ ] `MFE-0204` Build the Complete panel: estimate, actual and variance, the option to log the final day's work before completing, and an optional completion note describing the outcome.
-- [ ] `MFE-0205` Build Reopen: a required reason, the original completion event preserved, and the task returned to In Progress.
-- [ ] `MFE-0206` Build the task history timeline, interleaving every transition (actor, time, note) with work logs by date.
-- [ ] `MFE-0207` Flag variance when actual exceeds estimate, never capping actual time, and request a reason only as decided in D6.
-- [ ] `MFE-0208` Handle concurrent transitions, a stale board, an idempotent retry of the same transition, and the effect of a locked period, each with an explicit state.
+- [x] `MFE-0203` Build the Start confirmation panel — task, new status, optional note — which records the transition and then offers "Log today's work" as a separate action, never logging time itself. **Evidence: `TransitionPanel` start/success states and no-total regression test.**
+- [x] `MFE-0204` Build the Complete panel: estimate, actual and variance, the option to log the final day's work before completing, and an optional completion note describing the outcome. **Evidence: completion summary and separate final-work link in `TransitionPanel`.**
+- [x] `MFE-0205` Build Reopen: a required reason, the original completion event preserved, and the task returned to In Progress. **Evidence: field-level reopen validation, append-only preservation in the mock transition adapter, and history test.**
+- [x] `MFE-0206` Build the task history timeline, interleaving every transition (actor, time, note) with work logs by date. **Evidence: `TaskHistoryTimeline`, expanded history contract, and chronological mock read model.**
+- [x] `MFE-0207` Flag variance when actual exceeds estimate, never capping actual time, and request a reason only as decided in D6. **Evidence: over-estimate card badge and Complete callout retain the optional note.**
+- [x] `MFE-0208` Handle concurrent transitions, a stale board, an idempotent retry of the same transition, and the effect of a locked period, each with an explicit state. **Evidence: disabled/loading submission, stable attempt key, conflict reload state, verified-period explanation, and focused service/component tests.**
 
 ### Phase F2 Exit Criteria
 
-- [ ] Every transition is reachable by keyboard alone.
-- [ ] Moving a task changes no active, break or daily total anywhere in the product.
-- [ ] Reopen preserves the original completion event in history.
+- [x] Every transition is reachable by keyboard alone.
+- [x] Moving a task changes no active, break or daily total anywhere in the product.
+- [x] Reopen preserves the original completion event in history.
 
 ## Phase F3 - Frontend Log Work and Timesheet Rework
 
 ### Log Work
 
-- [ ] `MFE-0301` Build the Log Work form: work date defaulting to today, duration as `H:MM`, division, project, work location, description, completed-work details, and optional link or attachment.
-- [ ] `MFE-0302` Show the live calculation preview from the same engine: active, break, total, remaining, resulting status, and the overtime-reason and critical-explanation prompts.
-- [ ] `MFE-0303` Allow multiple logs per task and date as decided in D2, with a visible daily total for that task on that date.
-- [ ] `MFE-0307` Retarget copy-previous as decided in D8, so a copied work log is a clearly identified draft revalidated for its new date.
-- [ ] `MFE-0308` Edit and correct a work log with history preserved, and point Team Lead correction requests at logs rather than clock entries.
+- [x] `MFE-0301` Build the Log Work form: work date defaulting to today, duration as `H:MM`, division, project, work location, description, completed-work details, and optional link or attachment. **Evidence: `src/features/timesheet/work-log-drawer.tsx` saves through `createWorkLog`, opens from the day view and F2 task links, and is covered by `work-log-drawer.test.tsx`.**
+- [x] `MFE-0302` Show the live calculation preview from the same engine: active, break, total, remaining, resulting status, and the overtime-reason and critical-explanation prompts. **Evidence: `src/features/timesheet/work-log-drawer.tsx` debounces `previewWorkLog`, displays only its engine-produced daily values and status, and progressively reveals both policy prompts; `work-log-drawer.test.tsx` covers the complete, overtime and critical projections.**
+- [x] `MFE-0303` Allow multiple logs per task and date as decided in D2, with a visible daily total for that task on that date. **Evidence: `createWorkLog` retains separate records for distinct idempotency keys; `EntryCalculationPreview.taskDayActive` exposes the service-derived projected task/date total in `WorkLogDrawer`; `work-log.test.ts` verifies two append-only logs and their dated aggregate.**
+- [x] `MFE-0307` Retarget copy-previous as decided in D8, so a copied work log is a clearly identified draft revalidated for its new date. **Evidence: `DayView` lists prior saved work logs through `listWorkLogs` and calls `copyWorkLog`; `WorkLogDrawer` labels the result as unsaved, generates a fresh idempotency key and routes saving through normal validation; copied outcome, evidence, day reasons and verification state are cleared. Covered by `day-view.test.tsx`, `work-log-drawer.test.tsx` and `work-log.test.ts`.**
+- [x] `MFE-0308` Edit and correct a work log with history preserved, and point Team Lead correction requests at logs rather than clock entries. **Evidence: `WorkLogDrawer` now has an audited edit mode with a required reason, immutable revision history, retained attachments and an edit-safe calculation preview; `DayView` routes duration records and `?workLog=` deep links to that mode while preserving the legacy clock-entry path. Team Lead correction requests require and persist one eligible duration work-log id, exclude clock records, and generate a safe employee deep link. Covered by `work-log.test.ts`, `work-log-drawer.test.tsx`, and `team-lead.test.ts`; the complete verification passes with 489 tests and a 60-route production build.**
 
 ### Timesheet
 
-- [ ] `MFE-0304` Rework the day view into task rows — task, division, duration, location, description — with active total, recognized break, daily total, remaining and classification, and no time-of-day column.
-- [ ] `MFE-0309` Render historical clock entries read-only with their original ranges, labelled as recorded before the change.
-- [ ] `MFE-0310` Keep week, month, calendar and list views and the client and division filters producing identical totals for a fixed dataset before and after the change.
+- [x] `MFE-0304` Rework the day view into task rows — task, division, duration, location, description — with active total, recognized break, daily total, remaining and classification, and no time-of-day column. **Evidence: `DayView` now presents each work log as a task-first row with dedicated task, division, duration, location and description fields; desktop uses a six-column work layout while widths below `xl` use labeled stacked rows without page overflow. The engine-produced summary remains the only source for active, break, total, remaining and classification, and the recognized break stays one separate daily value. Historical ranges remain metadata inside their task row rather than becoming a time-of-day column. Covered by `day-view.test.tsx`; the changed route passes all four responsive widths, and complete verification passes with 490 tests and a 60-route production build.**
+- [x] `MFE-0309` Render historical clock entries read-only with their original ranges, labelled as recorded before the change. **Evidence: `TimeEntryView.recordKind` explicitly distinguishes duration work logs from historical clock entries; both mock and backend frontend adapters force historical rows to `canEdit: false` and `canDelete: false`. `DayView` renders a text-and-icon “Recorded before task-based logging” label plus the preserved original range and a read-only explanation, with no mutation menu. `work-log.test.ts` and `day-view.test.tsx` prove the boundary and UI behaviour; the historical route passes all four responsive widths, and complete verification passes with 491 tests and a 60-route production build.**
+- [x] `MFE-0310` Keep week, month, calendar and list views and the client and division filters producing identical totals for a fixed dataset before and after the change. **Evidence: Week and List now explicitly share the same seven-day source while Month and Calendar share the same month source. `src/lib/timesheet-period.ts` builds filtered rows, headline totals and client attribution as one read model, delegates all period arithmetic and status counts to the shared calculation engine, and filters divisions by authorized IDs rather than reverse-mapping display codes. Both mock and backend row adapters carry the exact engine facts required for reconciliation. `reconciliation.test.ts` proves unfiltered week/month totals reproduce their service totals and combined client/division filters keep visible rows, headline totals and client totals on the same fixed subset. Complete verification passes with 494 tests and a 60-route production build; `/timesheets` passes responsive checks at 375, 768, 1024 and 1440 px.**
 - [ ] `MFE-0311` Keep locked and verified period behaviour for work logs identical to today's, including the amendment path.
 
 ### Removal
@@ -245,8 +245,8 @@ This phase is shared. Neither milestone may start building until it is complete.
 ### Phase F3 Exit Criteria
 
 - [ ] No screen, button or route offers a timer or a start or end time for a new record.
-- [ ] Historical clock entries still render as recorded.
-- [ ] Daily totals and classifications match the engine for every view.
+- [x] Historical clock entries still render as recorded.
+- [x] Daily totals and classifications match the engine for every view.
 
 ## Phase F4 - Frontend Downstream Surfaces, Demo Data and Gates
 
@@ -436,8 +436,8 @@ Other dependencies: the Phase 7 notification service (`MBE-0307`), the existing 
 |---:|---|---:|
 | Phase 0 - Decision and Requirements Gate | Done | 8/8 |
 | Phase F1 - Frontend Contracts, Calculation and Validation | Done | 9/9 |
-| Phase F2 - Frontend Task Board and Status Transitions | Pending | 0/10 |
-| Phase F3 - Frontend Log Work and Timesheet Rework | Pending | 0/11 |
+| Phase F2 - Frontend Task Board and Status Transitions | Done | 10/10 |
+| Phase F3 - Frontend Log Work and Timesheet Rework | In progress | 8/11 |
 | Phase F4 - Frontend Downstream Surfaces, Demo Data and Gates | Pending | 0/11 |
 | Phase B1 - Backend Schema and Data Migration | Pending | 0/10 |
 | Phase B2 - Backend Work-Log Use Cases, Validation and Calculation | Pending | 0/11 |

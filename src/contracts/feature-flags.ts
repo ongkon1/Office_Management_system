@@ -36,6 +36,7 @@ export type FeatureFlagKey =
   | 'integrations'
   | 'requisitions'
   | 'conveyance'
+  | 'meetingMinutes'
   | 'aiInsights';
 
 export const FEATURE_FLAGS: Readonly<Record<FeatureFlagKey, FeatureFlagDefinition>> = {
@@ -122,6 +123,22 @@ export const FEATURE_FLAGS: Readonly<Record<FeatureFlagKey, FeatureFlagDefinitio
       'Travel-expense claims with an optional receipt, reviewed by the Team Lead and then by HR and the Super Administrator.',
     defaultEnabled: true,
     routes: ['/conveyance'],
+  },
+  /*
+   * Meeting Minutes (`FE-1101`, `REQ-MTG-001`). On by default because every
+   * active role is meant to reach it; until its screens ship (`FE-1110` onward)
+   * the route renders its planned screen rather than a 404. Management's
+   * read-only access is a route and service rule, not a flag — the flag only
+   * decides whether the module exists at all.
+   */
+  meetingMinutes: {
+    key: 'meetingMinutes',
+    label: 'Meeting Minutes',
+    phase: 'phase_4',
+    description:
+      'Client- and project-scoped meeting minutes for every active role, with optional AI task generation. Employee and Management/View-Only read but never create, edit, archive or request processing.',
+    defaultEnabled: true,
+    routes: ['/meeting-minutes'],
   },
   documents: {
     key: 'documents',

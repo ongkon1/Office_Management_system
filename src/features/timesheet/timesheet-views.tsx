@@ -11,6 +11,11 @@ import { addDays, formatDate, formatMonth, parseIsoDate } from '@/lib/format';
 import { useAsync } from '@/lib/use-async';
 import { sumClientContributions } from '@/lib/client-time';
 import { ATTENDANCE_LABEL } from '@/lib/status';
+import {
+  buildTimesheetPeriodPresentation,
+  periodKindForView,
+  type TimesheetViewMode,
+} from '@/lib/timesheet-period';
 import { Button, IconButton } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Duration } from '@/components/ui/misc';
@@ -26,8 +31,6 @@ import { PageContainer, PageHeader } from '@/components/layout/page';
 import { mockTimesheetService, weekStart } from '@/services/mock/timesheet';
 import { ALL_DIVISIONS } from '@/services/mock/organization';
 import { DEMO_TODAY } from '@/lib/demo-context';
-
-type ViewMode = 'week' | 'month' | 'calendar' | 'list';
 
 const VIEW_TABS = [
   { key: 'week', label: 'Week' },
@@ -56,7 +59,7 @@ const STATUS_OPTIONS: { value: DayStatus; label: string }[] = [
 
 export function TimesheetViews({ employeeId }: { employeeId: string }) {
   const router = useRouter();
-  const [mode, setMode] = React.useState<ViewMode>('week');
+  const [mode, setMode] = React.useState<TimesheetViewMode>('week');
   const [anchor, setAnchor] = React.useState(DEMO_TODAY);
   const [statuses, setStatuses] = React.useState<readonly string[]>([]);
   const [divisions, setDivisions] = React.useState<readonly string[]>([]);
@@ -75,7 +78,7 @@ export function TimesheetViews({ employeeId }: { employeeId: string }) {
     [employeeId, monthKey],
   );
 
-  const source = mode === 'week' ? week : month;
+  const source = periodKindForView(mode) === 'week' ? week : month;
 
   /**
    * Client options come from the period's own rows rather than from a project
@@ -92,43 +95,28 @@ export function TimesheetViews({ employeeId }: { employeeId: string }) {
     }));
   }, [source.state]);
 
-  const days = React.useMemo(() => {
-    if (source.state.status !== 'success') return [];
-    const rows = source.state.data.days;
-    return rows.filter((row) => {
-      if (statuses.length > 0 && !statuses.includes(row.status.status)) return false;
-      if (
-        clients.length > 0 &&
-        !row.clientContributions.some((contribution) =>
-          clients.includes(contribution.clientId ?? NO_CLIENT),
-        )
-      ) {
-        return false;
-      }
-      if (
-        divisions.length > 0 &&
-        !row.divisionCodes.some((code) =>
-          divisions.includes(
-            ALL_DIVISIONS.find((division) => division.code === code)?.id ?? '',
-          ),
-        )
-      ) {
-        return false;
-      }
-      if (term.trim() && !row.dateLabel.toLowerCase().includes(term.trim().toLowerCase())) {
-        return false;
-      }
-      return true;
-    });
+  /**
+   * Rows, headline totals and client attribution are derived together from the
+   * same authorized dataset. A client or division filter keeps whole matching
+   * days, because one day may legitimately contain several attributions.
+   */
+  const presentation = React.useMemo(() => {
+    if (source.state.status !== 'success') return null;
+    return buildTimesheetPeriodPresentation(
+      source.state.data.totals.label,
+      source.state.data.days,
+      {
+        statuses,
+        divisionIds: divisions,
+        clientIds: clients,
+        searchTerm: term,
+        noClientValue: NO_CLIENT,
+      },
+    );
   }, [source.state, statuses, divisions, clients, term]);
 
-  /**
-   * The client split of the days actually on screen, so the panel and the table
-   * can never state different things. Filtering by client keeps whole days - a
-   * day usually carries work for more than one client - so the other clients'
-   * share of those days stays visible rather than silently vanishing.
-   */
-  const clientTotals = React.useMemo(() => sumClientContributions(days), [days]);
+  const days = presentation?.days ?? [];
+  const clientTotals = presentation?.clientTotals ?? [];
 
   const hasFilters =
     statuses.length > 0 ||
@@ -163,7 +151,7 @@ export function TimesheetViews({ employeeId }: { employeeId: string }) {
           <Tabs
             label="Timesheet views"
             activeKey={mode}
-            onChange={(key) => setMode(key as ViewMode)}
+            onChange={(key) => setMode(key as TimesheetViewMode)}
             items={VIEW_TABS}
             className="border-b-0"
           />
@@ -258,7 +246,7 @@ export function TimesheetViews({ employeeId }: { employeeId: string }) {
 
         {source.state.status === 'success' && (
           <>
-            <TotalsCard totals={source.state.data.totals} />
+            <TotalsCard totals={presentation?.totals ?? source.state.data.totals} />
 
             {clientTotals.length > 0 && (
               <ClientTotalsCard

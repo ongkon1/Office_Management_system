@@ -22,7 +22,7 @@ import { ProgressBar } from '@/components/ui/progress';
 import { DataTable, type DataTableColumn } from '@/components/data/data-table';
 import { FilterBar, MultiSelectFilter } from '@/components/data/filters';
 import { Field } from '@/components/forms/field';
-import { Checkbox, Textarea } from '@/components/forms/inputs';
+import { Checkbox, Select, Textarea } from '@/components/forms/inputs';
 import { Dialog } from '@/components/feedback/overlay';
 import { StepIndicator } from '@/components/feedback/disclosure';
 import { useToast } from '@/components/feedback/toast';
@@ -318,17 +318,46 @@ export function TeamTimesheetDetail({ employeeId, date }: { employeeId: string; 
   const [message, setMessage] = React.useState('');
   const [correction, setCorrection] = React.useState(false);
   const [requestedChanges, setRequestedChanges] = React.useState('');
+  const [workLogId, setWorkLogId] = React.useState('');
   const [confirmOpen, setConfirmOpen] = React.useState(false);
   const [error, setError] = React.useState('');
+  const [workLogError, setWorkLogError] = React.useState('');
   const { state } = useAsync(() => mockTeamLeadService.getTimesheet(user?.userId ?? '', employeeId, date), [user?.userId, employeeId, date, version]);
   if (state.status === 'loading') return <LoadingPage label="timesheet detail" />;
   if (state.status !== 'success') return <PageContainer><EmptyState variant="no-results" title="Timesheet not found" description="The record may be outside your assigned scope." /></PageContainer>;
   const day = state.data;
   const employeeName = day.employee?.fullName ?? employeeId;
+  const correctionTargets = day.entries.filter(
+    (entry) => !entry.isDraft && entry.recordKind === 'work_log',
+  );
+  const selectedWorkLog = correctionTargets.find((entry) => entry.id === workLogId);
   async function submitRemark() {
-    if (!message.trim() || (correction && !requestedChanges.trim())) { setError('Enter the general remark and the requested changes.'); return; }
-    const result = await mockTeamLeadService.addRemark({ userId: user?.userId ?? '', employeeId, date, message, requestedChanges: correction ? requestedChanges : null });
-    if (result.status === 'success') { setConfirmOpen(false); setMessage(''); setRequestedChanges(''); setCorrection(false); setError(''); setVersion((value) => value + 1); toast.show({ tone: 'success', title: correction ? 'Correction request sent' : 'General remark added', description: 'The employee notification is queued in this demo.' }); }
+    if (!message.trim() || (correction && (!requestedChanges.trim() || !workLogId))) {
+      setError('Enter the general remark, choose a work log, and describe the requested changes.');
+      setWorkLogError(correction && !workLogId ? 'Select the duration-based work log to correct.' : '');
+      return;
+    }
+    const result = await mockTeamLeadService.addRemark({
+      userId: user?.userId ?? '',
+      employeeId,
+      date,
+      message,
+      requestedChanges: correction ? requestedChanges : null,
+      workLogId: correction ? workLogId : undefined,
+    });
+    if (result.status === 'success') {
+      setConfirmOpen(false);
+      setMessage('');
+      setRequestedChanges('');
+      setWorkLogId('');
+      setCorrection(false);
+      setError('');
+      setWorkLogError('');
+      setVersion((value) => value + 1);
+      toast.show({ tone: 'success', title: correction ? 'Correction request sent' : 'General remark added', description: 'The employee notification is queued in this demo.' });
+    } else {
+      setError(result.message);
+    }
   }
   return (
     <PageContainer>
@@ -378,12 +407,12 @@ export function TeamTimesheetDetail({ employeeId, date }: { employeeId: string; 
           </Card>
         </div>
         <aside className="space-y-5">
-          <Card><CardHeader title="Add general remark" description="Use the single remark type for time, task, quality, performance, or missing information." /><div className="mt-4 space-y-4"><Field label="General remark" required error={error}><Textarea rows={5} value={message} onChange={(event) => setMessage(event.target.value)} /></Field><Checkbox label="Request a correction to this record" checked={correction} onChange={(event) => setCorrection(event.target.checked)} />{correction && <Field label="Requested changes" required helperText="Describe the exact value or entry the employee should review."><Textarea rows={4} value={requestedChanges} onChange={(event) => setRequestedChanges(event.target.value)} /></Field>}<Button variant="primary" className="w-full" iconLeading={<MessageSquareText aria-hidden className="size-4" />} onClick={() => { if (!message.trim() || (correction && !requestedChanges.trim())) setError('Enter the required details.'); else setConfirmOpen(true); }}>Preview and send</Button></div></Card>
+          <Card><CardHeader title="Add general remark" description="Use the single remark type for time, task, quality, performance, or missing information." /><div className="mt-4 space-y-4"><Field label="General remark" required error={error}><Textarea rows={5} value={message} onChange={(event) => setMessage(event.target.value)} /></Field><Checkbox label="Request a correction to a work log" checked={correction} onChange={(event) => { setCorrection(event.target.checked); if (!event.target.checked) { setWorkLogId(''); setWorkLogError(''); } }} />{correction && <><Field label="Work log to correct" required error={workLogError} helperText={correctionTargets.length ? 'Choose the exact duration-based record. Historical clock entries cannot receive new correction requests.' : 'No duration-based work log is available on this day. Add a general remark instead.'}><Select name="workLogId" value={workLogId} disabled={correctionTargets.length === 0} placeholder="Select a work log" onChange={(event) => { setWorkLogId(event.target.value); setWorkLogError(''); }} options={correctionTargets.map((entry) => ({ value: entry.id, label: `${entry.duration.display} · ${entry.task?.title ?? entry.project?.name ?? entry.division.name}` }))} /></Field><Field label="Requested changes" required helperText="Describe the exact value the employee should review."><Textarea rows={4} value={requestedChanges} onChange={(event) => setRequestedChanges(event.target.value)} /></Field></>}<Button variant="primary" className="w-full" iconLeading={<MessageSquareText aria-hidden className="size-4" />} onClick={() => { if (!message.trim() || (correction && (!requestedChanges.trim() || !workLogId))) { setError('Enter the required details and choose a work log.'); setWorkLogError(correction && !workLogId ? 'Select the duration-based work log to correct.' : ''); } else setConfirmOpen(true); }}>Preview and send</Button></div></Card>
           <Card className="min-w-0 overflow-hidden"><CardHeader title="Correction workflow" description="A durable history from review to resolution." /><StepIndicator className="[&_ol]:!flex-col [&_ol]:!items-stretch [&_ol]:!gap-3 [&_li>.h-px]:!hidden" label="Correction workflow" currentIndex={Math.max(0, ['open','responded','corrected','resolved'].indexOf(day.remarks[0]?.state ?? 'open'))} steps={(['open','responded','corrected','resolved'] as const).map((key) => ({ key, label: REMARK_STATE_LABEL[key] }))} /></Card>
           <Card><CardHeader title="Record history" /><ul className="mt-3 space-y-3 text-body-sm text-ink-muted"><li>Created from employee time entries</li><li>Calculated with policy v{day.policyVersion}</li><li>{day.summary.isLocked ? 'Locked after HR period verification' : 'Open for employee correction'}</li></ul></Card>
         </aside>
       </div>
-      <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)} title={correction ? 'Send correction request?' : 'Add general remark?'} description={`${employeeName} · ${day.dateLabel}`} dismissOnBackdrop={false} footer={<><Button variant="secondary" onClick={() => setConfirmOpen(false)}>Cancel</Button><Button variant="primary" onClick={submitRemark}>Confirm and notify</Button></>}><div className="space-y-3"><div className="rounded-md bg-surface-sunken p-3"><p className="text-label text-ink-muted">Linked record</p><p className="mt-1 text-body-sm font-medium text-ink">{employeeName} · {day.dateLabel}</p></div><div><p className="text-label text-ink-muted">General remark</p><p className="mt-1 text-body-sm text-ink">{message}</p></div>{correction && <div><p className="text-label text-ink-muted">Requested changes</p><p className="mt-1 text-body-sm text-ink">{requestedChanges}</p></div>}<div className="rounded-md border border-accent-border bg-accent-subtle p-3"><p className="text-body-sm font-semibold text-ink">Notification preview</p><p className="mt-1 text-caption text-ink-muted">The employee will be notified with the record date and a safe link to review it.</p></div></div></Dialog>
+      <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)} title={correction ? 'Send correction request?' : 'Add general remark?'} description={`${employeeName} · ${day.dateLabel}`} dismissOnBackdrop={false} footer={<><Button variant="secondary" onClick={() => setConfirmOpen(false)}>Cancel</Button><Button variant="primary" onClick={submitRemark}>Confirm and notify</Button></>}><div className="space-y-3"><div className="rounded-md bg-surface-sunken p-3"><p className="text-label text-ink-muted">Linked record</p><p className="mt-1 text-body-sm font-medium text-ink">{correction && selectedWorkLog ? `${selectedWorkLog.duration.display} · ${selectedWorkLog.task?.title ?? 'Work log'}` : `${employeeName} · ${day.dateLabel}`}</p></div><div><p className="text-label text-ink-muted">General remark</p><p className="mt-1 text-body-sm text-ink">{message}</p></div>{correction && <div><p className="text-label text-ink-muted">Requested changes</p><p className="mt-1 text-body-sm text-ink">{requestedChanges}</p></div>}<div className="rounded-md border border-accent-border bg-accent-subtle p-3"><p className="text-body-sm font-semibold text-ink">Notification preview</p><p className="mt-1 text-caption text-ink-muted">The employee will receive a safe link that opens this exact work log for correction.</p></div></div></Dialog>
     </PageContainer>
   );
 }

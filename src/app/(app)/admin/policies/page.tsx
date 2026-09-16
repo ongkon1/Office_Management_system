@@ -6,4 +6,4 @@ import { SettingsScreens } from '@/features/admin/settings';
  * administration navigation names them separately, and a nav entry must reach
  * an intentional page rather than a placeholder.
  */
-export default function AdminPoliciesPage() { return <SettingsScreens />; }
+export default function AdminPoliciesPage() { return <SettingsScreens initialTab="policy" />; }

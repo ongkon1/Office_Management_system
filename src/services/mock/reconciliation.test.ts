@@ -2,6 +2,11 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { aggregateSummaries } from '@/lib/calculation/engine';
 import { addDays, daysBetween } from '@/lib/format';
 import { sumClientContributions } from '@/lib/client-time';
+import {
+  buildTimesheetPeriodPresentation,
+  periodKindForView,
+  summarizeTimesheetDays,
+} from '@/lib/timesheet-period';
 import { PROJECTS, STANDARD_POLICY } from '@/fixtures';
 import { mockStore } from './store';
 import { summaryFor, mockTimesheetService } from './timesheet';
@@ -293,5 +298,81 @@ describe('the client split reconciles with the day it came from', () => {
       }
       expect(known.has(contribution.clientId)).toBe(true);
     }
+  });
+});
+
+describe('MFE-0310 period views remain in reconciliation', () => {
+  it('uses one weekly dataset for Week and List, and one monthly dataset for Month and Calendar', () => {
+    expect(periodKindForView('week')).toBe('week');
+    expect(periodKindForView('list')).toBe('week');
+    expect(periodKindForView('month')).toBe('month');
+    expect(periodKindForView('calendar')).toBe('month');
+  });
+
+  it('reproduces the service totals from the same fixed rows in both period sizes', async () => {
+    const week = await mockTimesheetService.getWeek({
+      employeeId: EMPLOYEE,
+      weekStartDate: '2026-08-31',
+    });
+    const month = await mockTimesheetService.getMonth({
+      employeeId: EMPLOYEE,
+      month: '2026-09',
+    });
+    if (week.status !== 'success' || month.status !== 'success') return;
+
+    const weekFromRows = summarizeTimesheetDays(week.data.totals.label, week.data.days);
+    const monthFromRows = summarizeTimesheetDays(month.data.totals.label, month.data.days);
+
+    expect(weekFromRows).toEqual(week.data.totals);
+    expect(monthFromRows).toEqual(month.data.totals);
+  });
+
+  it('keeps filtered rows, headline totals and client totals on the same fixed subset', async () => {
+    const month = await mockTimesheetService.getMonth({
+      employeeId: EMPLOYEE,
+      month: '2026-09',
+    });
+    if (month.status !== 'success') return;
+
+    const candidate = month.data.days.find(
+      (day) => day.divisionIds.length > 0 && day.clientContributions.length > 0,
+    );
+    expect(candidate).toBeDefined();
+    if (!candidate) return;
+
+    const clientId = candidate.clientContributions[0].clientId ?? '__no_client__';
+    const divisionId = candidate.divisionIds[0];
+    const presentation = buildTimesheetPeriodPresentation(
+      month.data.totals.label,
+      month.data.days,
+      {
+        statuses: [],
+        divisionIds: [divisionId],
+        clientIds: [clientId],
+        searchTerm: '',
+        noClientValue: '__no_client__',
+      },
+    );
+
+    expect(presentation.days.length).toBeGreaterThan(0);
+    expect(
+      presentation.days.every(
+        (day) =>
+          day.divisionIds.includes(divisionId) &&
+          day.clientContributions.some(
+            (contribution) =>
+              (contribution.clientId ?? '__no_client__') === clientId,
+          ),
+      ),
+    ).toBe(true);
+    expect(presentation.totals).toEqual(
+      summarizeTimesheetDays(month.data.totals.label, presentation.days),
+    );
+    expect(
+      presentation.clientTotals.reduce(
+        (total, contribution) => total + contribution.active.minutes,
+        0,
+      ),
+    ).toBe(presentation.totals.active.minutes);
   });
 });

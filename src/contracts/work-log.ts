@@ -12,7 +12,7 @@ import type {
   DurationMinutes,
   WorkLocation,
 } from './domain';
-import type { IsoDate } from './query';
+import type { IsoDate, IsoDateTime } from './query';
 
 export type WorkLogSource = 'manual' | 'migrated_clock_entry' | 'imported';
 export type WorkLogState = 'draft' | 'saved' | 'locked';
@@ -40,6 +40,23 @@ export interface WorkLog extends AuditableRecord, WorkLogInput {
   readonly version?: number;
   readonly state: WorkLogState;
   readonly policyVersion: number;
+}
+
+/** An immutable before/after snapshot for an audited work-log correction. */
+export interface WorkLogRevision {
+  readonly id: string;
+  readonly workLogId: string;
+  readonly version: number;
+  readonly reason: string;
+  readonly changedAt: IsoDateTime;
+  readonly changedBy: ActorRef;
+  readonly before: WorkLog;
+  readonly after: WorkLog;
+}
+
+export interface WorkLogUpdateInput extends WorkLogInput {
+  readonly expectedVersion: number;
+  readonly changeReason: string;
 }
 
 export interface DurationViewValue {

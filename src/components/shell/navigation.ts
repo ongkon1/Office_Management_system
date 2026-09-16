@@ -74,6 +74,7 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
       items: [
         { key: 'documents', label: 'Documents', href: '/documents', iconKey: 'folder', flag: 'documents' },
         { key: 'messages', label: 'Messages', href: '/messages', iconKey: 'message-square', flag: 'messages' },
+        { key: 'meeting-minutes', label: 'Meeting Minutes', href: '/meeting-minutes', iconKey: 'clipboard-list', flag: 'meetingMinutes' },
         { key: 'profile', label: 'Profile', href: '/profile', iconKey: 'user', inMobileBottomNav: true },
       ],
     },
@@ -89,6 +90,7 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
         { key: 'team-timesheets', label: 'Team Timesheets', href: '/team/timesheets', iconKey: 'clock', inMobileBottomNav: true },
         { key: 'projects', label: 'Projects', href: '/projects', iconKey: 'folder-kanban', inMobileBottomNav: true },
         { key: 'tasks', label: 'Tasks', href: '/tasks', iconKey: 'check-square' },
+        { key: 'meeting-minutes', label: 'Meeting Minutes', href: '/meeting-minutes', iconKey: 'clipboard-list', flag: 'meetingMinutes' },
       ],
     },
     {
@@ -135,6 +137,7 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
         { key: 'reports', label: 'Reports', href: '/reports', iconKey: 'file-chart-column' },
         { key: 'holidays', label: 'Holidays', href: '/admin/holidays', iconKey: 'calendar-days' },
         { key: 'documents', label: 'Documents', href: '/documents', iconKey: 'folder', flag: 'documents' },
+        { key: 'meeting-minutes', label: 'Meeting Minutes', href: '/meeting-minutes', iconKey: 'clipboard-list', flag: 'meetingMinutes' },
       ],
     },
     /*
@@ -218,6 +221,7 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
         { key: 'dashboard', label: 'Dashboard', href: '/dashboard', iconKey: 'layout-dashboard', inMobileBottomNav: true },
         { key: 'reports', label: 'Reports', href: '/reports', iconKey: 'file-chart-column', inMobileBottomNav: true },
         { key: 'projects', label: 'Projects', href: '/projects', iconKey: 'folder-kanban', inMobileBottomNav: true },
+        { key: 'meeting-minutes', label: 'Meeting Minutes', href: '/meeting-minutes', iconKey: 'clipboard-list', flag: 'meetingMinutes' },
         { key: 'documents', label: 'Documents', href: '/documents', iconKey: 'folder', flag: 'documents' },
       ],
     },
@@ -233,6 +237,7 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
         { key: 'reports', label: 'Reports', href: '/reports', iconKey: 'file-chart-column' },
         { key: 'requisitions', label: 'Requisition', href: '/requisitions', iconKey: 'package-open', flag: 'requisitions' },
         { key: 'conveyance', label: 'Conveyance', href: '/conveyance', iconKey: 'car-front', flag: 'conveyance' },
+        { key: 'meeting-minutes', label: 'Meeting Minutes', href: '/meeting-minutes', iconKey: 'clipboard-list', flag: 'meetingMinutes' },
       ],
     },
     {
@@ -240,6 +245,7 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
       label: 'Administration',
       items: [
         { key: 'divisions', label: 'Divisions', href: '/admin/divisions', iconKey: 'building', inMobileBottomNav: true },
+        { key: 'departments', label: 'Departments', href: '/admin/departments', iconKey: 'building' },
         { key: 'users', label: 'Users', href: '/admin/users', iconKey: 'user-cog' },
         { key: 'roles', label: 'Roles and Permissions', href: '/admin/roles', iconKey: 'shield' },
         { key: 'policies', label: 'Work Policies', href: '/admin/policies', iconKey: 'settings' },

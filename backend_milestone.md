@@ -289,11 +289,7 @@ An employee raises a task for themselves and their Team Lead endorses it. Fronte
 - [x] `BE-0334` Handle the Team Lead mapping changing while a task is pending, so a raised task can never become unreviewable.
 - [x] `BE-0335` Restrict the employee's create payload to their own assigned divisions and active projects, ignoring any assignee or supporting members it carries.
 - [x] `BE-0336` Audit raise, approve and refuse with actor, role, before/after and reason, and notify the Team Lead on raise and the employee on decision.
-<<<<<<< HEAD
 - [x] `BE-0337` Test the time-entry refusal at every review state, review by the wrong Team Lead, self-endorsement, concurrent decisions, and Team Lead reassignment mid-review.
-=======
-- [~] `BE-0337` Test the time-entry refusal at every review state, review by the wrong Team Lead, self-endorsement, concurrent decisions, and Team Lead reassignment mid-review.
->>>>>>> 00d146afb1dc2296921b692b63fc9173664225e3
 
 ### Phase 3 Exit Criteria
 
@@ -716,7 +712,7 @@ This phase adds the Meeting Minutes module and optional AI-assisted task generat
 
 - [ ] `BE-1310` Implement authorized list/search/filter by client, project, status, and date with authorization applied before rows, counts, grouping, or suggestions.
 - [ ] `BE-1311` Implement create/update/read/archive with required-field validation, client-project dependency, sanitized content, ownership rules, optimistic concurrency, and `Result<T>` outcomes.
-- [ ] `BE-1312` Make the module reachable to all active roles while preserving Management/View-Only read-only behavior and current government-project, division, project, and permission boundaries.
+- [ ] `BE-1312` Make the module reachable to all active roles while preserving Employee and Management/View-Only read-only behavior and current government-project, division, project, and permission boundaries.
 - [ ] `BE-1313` Return indistinguishable not-found results for unauthorized direct ids, generated-task links, and archived records outside the caller's scope.
 - [ ] `BE-1314` Ensure ordinary responses omit raw prompts, raw AI JSON, provider diagnostics, match internals, and unauthorized task or minute counts.
 - [ ] `BE-1315` Audit minute creation, editing, archive, access, AI request, retry, task open, and protected diagnostic access with actor/system identity, correlation id, reason, and before/after state.
@@ -753,7 +749,7 @@ This phase adds the Meeting Minutes module and optional AI-assisted task generat
 
 ### Phase 13 Exit Criteria
 
-- [ ] Every active role can access authorized Meeting Minutes, with Management/View-Only restrictions enforced server-side.
+- [ ] Every active role can access authorized Meeting Minutes, with Employee and Management/View-Only read-only restrictions enforced server-side.
 - [ ] The original minute is durable before AI work and remains available through every processing failure.
 - [ ] AI output is validated, deduplicated, provenance-linked, and matched by application logic rather than trusted blindly.
 - [ ] Generated tasks are assigned only to eligible people or left unassigned, and every task links back to its source minute and attempt.
@@ -818,7 +814,7 @@ This phase adds the Meeting Minutes module and optional AI-assisted task generat
 
 ### Meeting Minutes and AI
 
-- [ ] `BAC-MTG-01` Every active role can list and view authorized meeting minutes; Management/View-Only cannot mutate or request AI processing.
+- [ ] `BAC-MTG-01` Every active role can list and view authorized meeting minutes; Employee and Management/View-Only cannot mutate or request AI processing.
 - [ ] `BAC-MTG-02` A selected client exposes only its active authorized projects, and an incompatible project cannot be saved.
 - [ ] `BAC-MTG-03` A no-AI save stores the original minute as Not Processed and dispatches no job.
 - [ ] `BAC-MTG-04` An AI save commits the original minute before returning Pending and queueing work.

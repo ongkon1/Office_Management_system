@@ -118,8 +118,10 @@ export function toRemarkSummary(remark: GeneralRemark): RemarkSummaryView {
   const related =
     remark.relatedRecord.type === 'timesheet'
       ? {
-          label: `Timesheet · ${formatDate(remark.relatedRecord.workDate)}`,
-          href: `/timesheets/${remark.relatedRecord.workDate}`,
+          label: `${remark.relatedRecord.workLogId ? 'Work log' : 'Timesheet'} · ${formatDate(remark.relatedRecord.workDate)}`,
+          href: remark.relatedRecord.workLogId
+            ? `/timesheets/${remark.relatedRecord.workDate}?workLog=${remark.relatedRecord.workLogId}`
+            : `/timesheets/${remark.relatedRecord.workDate}`,
         }
       : remark.relatedRecord.type === 'task'
         ? {
@@ -158,10 +160,14 @@ export const mockTaskService = {
     return success(tasks);
   },
 
-  async getById(taskId: string) {
+  async getById(taskId: string, employeeId?: string) {
     await delay();
     const task = mockStore.findTask(taskId);
-    if (!task) {
+    const inScope =
+      !employeeId ||
+      task?.assigneeEmployeeId === employeeId ||
+      task?.supportingMemberIds.includes(employeeId);
+    if (!task || !inScope) {
       return { status: 'not_found' as const, code: 'NOT_FOUND' as const, message: 'Task not found.' };
     }
 

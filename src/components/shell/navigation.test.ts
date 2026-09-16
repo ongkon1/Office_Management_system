@@ -100,3 +100,32 @@ describe('selectBottomNavItems', () => {
     }
   });
 });
+
+describe('Meeting Minutes navigation (FE-1101)', () => {
+  it('appears exactly once for every active role', () => {
+    for (const role of ALL_ROLES) {
+      const hrefs = hrefsFor({ role, flags: DEMO_FEATURE_FLAGS, permissions: [] });
+      expect(hrefs.filter((href) => href === '/meeting-minutes')).toHaveLength(1);
+    }
+  });
+
+  it('disappears for every role when the module is switched off', () => {
+    for (const role of ALL_ROLES) {
+      const hrefs = hrefsFor({
+        role,
+        flags: { ...DEMO_FEATURE_FLAGS, meetingMinutes: false },
+        permissions: [],
+      });
+      expect(hrefs).not.toContain('/meeting-minutes');
+    }
+  });
+
+  it('does not take a mobile bottom-navigation slot from an existing destination', () => {
+    for (const role of ALL_ROLES) {
+      const items = selectBottomNavItems(
+        buildNavigation({ role, flags: DEMO_FEATURE_FLAGS, permissions: ['finance.cost.view'] }),
+      );
+      expect(items.map((item) => item.href)).not.toContain('/meeting-minutes');
+    }
+  });
+});

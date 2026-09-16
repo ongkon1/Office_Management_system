@@ -142,6 +142,10 @@ export const QUERY_PARAM_KEYS = {
   wfhOnly: 'wfh',
   overtimeOnly: 'ot',
   verifiedOnly: 'verified',
+  /** Meeting Minutes (`FE-1104`): client, AI processing status, archived toggle. */
+  client: 'client',
+  processingStatus: 'processing',
+  includeArchived: 'archived',
 } as const;
 
 export type QueryParamKey =

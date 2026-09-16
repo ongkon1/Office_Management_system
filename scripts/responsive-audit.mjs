@@ -66,6 +66,7 @@ const ROUTES = [
   { path: '/conveyance', auth: true },
   { path: '/conveyance/new', auth: true },
   { path: '/conveyance/cnv-1', auth: true },
+  { path: '/meeting-minutes', auth: true },
   { path: '/profile', auth: true },
   { path: '/dashboard', auth: true, email: TEAM_LEAD_USER },
   { path: '/team', auth: true, email: TEAM_LEAD_USER },
@@ -77,6 +78,7 @@ const ROUTES = [
   { path: '/tasks/tsk-1', auth: true, email: TEAM_LEAD_USER },
   { path: '/requisitions', auth: true, email: TEAM_LEAD_USER },
   { path: '/conveyance', auth: true, email: TEAM_LEAD_USER },
+  { path: '/meeting-minutes', auth: true, email: TEAM_LEAD_USER },
   { path: '/requests', auth: true, email: TEAM_LEAD_USER },
   { path: '/requests/leave/lv-4', auth: true, email: TEAM_LEAD_USER },
   { path: '/workload', auth: true, email: TEAM_LEAD_USER },
@@ -113,6 +115,7 @@ const ROUTES = [
   { path: '/leave', auth: true },
   { path: '/evaluations', auth: true },
   { path: '/admin/divisions', auth: true, email: ADMIN_USER },
+  { path: '/admin/departments', auth: true, email: ADMIN_USER },
   { path: '/admin/users', auth: true, email: ADMIN_USER },
   { path: '/admin/roles', auth: true, email: ADMIN_USER },
   { path: '/admin/audit', auth: true, email: ADMIN_USER },
@@ -181,6 +184,7 @@ for (const { path: route, auth, email, flags } of routesToAudit) {
           'wfhRequests', 'leaveManagement', 'attendance', 'evaluations',
           'workloadPlanning', 'notifications', 'financeReports', 'projectCosting',
           'documents', 'messages', 'globalSearch', 'integrations', 'aiInsights',
+          'meetingMinutes',
         ];
         window.localStorage.setItem(
           'oms.feature-flags',

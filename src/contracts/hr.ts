@@ -189,6 +189,11 @@ export interface EmployeeFormInput {
   readonly status: 'active' | 'inactive';
 }
 
+export interface DepartmentOptionView {
+  readonly value: string;
+  readonly label: string;
+}
+
 export interface AssignmentFormInput {
   readonly employeeId: string;
   readonly divisionId: string;
@@ -449,6 +454,8 @@ export interface HrEvaluationDetailView extends HrEvaluationRowView {
 
 export interface HrService {
   getDashboard(userId: string): Promise<Result<HrDashboard>>;
+
+  listDepartmentOptions(userId: string): Promise<Result<readonly DepartmentOptionView[]>>;
 
   listEmployees(
     userId: string,

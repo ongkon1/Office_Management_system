@@ -9,6 +9,7 @@ import type { AppShellView, NavGroupView, NavItemView } from '@/contracts/view-m
 import { Avatar } from '@/components/ui/avatar';
 import { Button, IconButton } from '@/components/ui/button';
 import { CountBadge } from '@/components/ui/badge';
+import { BrandLogo } from '@/components/ui/brand-logo';
 import { DropdownMenu } from '@/components/feedback/overlay';
 import { NavIcon } from './icons';
 import { selectBottomNavItems } from './navigation';
@@ -145,8 +146,8 @@ function TopBar({
         className="md:hidden"
       />
 
-      <Link href="/dashboard" className="flex items-center gap-2 rounded-xs md:hidden">
-        <span className="text-body font-semibold text-ink">Timesheet</span>
+      <Link href="/dashboard" className="flex items-center rounded-xs md:hidden">
+        <BrandLogo size="sm" />
       </Link>
 
       <div className="flex-1" />
@@ -325,21 +326,14 @@ export function AppShell({ view, children, onOpenSearch, onSignOut }: AppShellPr
             'border-r border-border bg-surface/95 shadow-sm backdrop-blur-xl md:flex',
           )}
         >
-          <div className="flex h-[var(--shell-topbar-height)] shrink-0 items-center gap-2.5 border-b border-border px-4">
-            <span
-              aria-hidden
-              className="brand-mark grid size-7 shrink-0 place-items-center rounded-md text-caption font-bold"
+          <div className="flex h-[var(--shell-topbar-height)] shrink-0 items-center justify-center border-b border-border px-4">
+            <Link
+              href="/dashboard"
+              className="flex min-h-11 items-center justify-center rounded-xs"
+              aria-label="Go to dashboard"
             >
-              T
-            </span>
-            <span className="min-w-0">
-              <span className="block truncate text-body-sm font-semibold text-ink">
-                Timesheet
-              </span>
-              <span className="block truncate text-caption text-ink-subtle">
-                {view.viewer.roleLabel}
-              </span>
-            </span>
+              <BrandLogo size="sm" />
+            </Link>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
             <NavList groups={view.navigation} pathname={pathname} />

@@ -1,10 +1,12 @@
 # Information Architecture and User Flows
 
-Covers `FE-0009` (role-to-navigation map), `FE-0010` (screen flows), `FE-0011` (navigation rules), and `FE-0012` (high-risk responsive screens).
+Covers `FE-0009` (role-to-navigation map), `FE-0010` (screen flows), `FE-0011` (navigation rules), and `FE-0012` (high-risk responsive screens). Meeting Minutes routes, breadcrumbs, mobile navigation, deep links, and planned-screen status were added by `FE-1102` (Section 3.6).
 
 ## 1. Role-to-Navigation Map (`FE-0009`)
 
 Navigation is permission-aware (`REQ-NAV-005`): unauthorized destinations are hidden from navigation **and** still return an explicit denied state on direct routing. Flagged destinations disappear entirely when their feature flag is off.
+
+Meeting Minutes (`/meeting-minutes`, flag `meetingMinutes`) is in every active role's navigation (`REQ-NAV-006`). Employee and Management/View-Only are read-only in it. No role gives it a mobile bottom-navigation slot; below 768 px it is reached from the navigation drawer. Its routes and rules are in Section 3.6.
 
 ### 1.1 Employee (`REQ-NAV-001`)
 
@@ -19,8 +21,9 @@ Navigation is permission-aware (`REQ-NAV-005`): unauthorized destinations are hi
 | 7 | My Evaluation | `/evaluations` | `evaluations` | No |
 | 8 | Documents | `/documents` | `documents` | No |
 | 9 | Messages | `/messages` | `messages` | No |
-| 10 | Notifications | `/notifications` | `notifications` | No (top bar) |
-| 11 | Profile | `/profile` | — | Yes (More) |
+| 10 | Meeting Minutes (read-only) | `/meeting-minutes` | `meetingMinutes` | No (drawer, "More" group) |
+| 11 | Notifications | `/notifications` | `notifications` | No (top bar) |
+| 12 | Profile | `/profile` | — | Yes (More) |
 
 Default route after login: `/dashboard`.
 
@@ -33,12 +36,13 @@ Default route after login: `/dashboard`.
 | 3 | Team Timesheets | `/team/timesheets` | — | Yes |
 | 4 | Projects | `/projects` | — | Yes |
 | 5 | Tasks | `/tasks` | — | No |
-| 6 | Workload | `/workload` | `workloadPlanning` | No |
-| 7 | Requests | `/requests` | `wfhRequests` or `leaveManagement` | No |
-| 8 | Evaluations | `/evaluations` | `evaluations` | No |
-| 9 | Reports | `/reports` | — | No |
-| 10 | Documents | `/documents` | `documents` | No |
-| 11 | Messages | `/messages` | `messages` | No |
+| 6 | Meeting Minutes | `/meeting-minutes` | `meetingMinutes` | No (drawer) |
+| 7 | Workload | `/workload` | `workloadPlanning` | No |
+| 8 | Requests | `/requests` | `wfhRequests` or `leaveManagement` | No |
+| 9 | Evaluations | `/evaluations` | `evaluations` | No |
+| 10 | Reports | `/reports` | — | No |
+| 11 | Documents | `/documents` | `documents` | No |
+| 12 | Messages | `/messages` | `messages` | No |
 
 A Team Lead is also an employee: their own timesheet, tasks, WFH, and leave remain reachable from the profile menu, in a distinct "My work" group, so personal and team scope never blur.
 
@@ -58,6 +62,7 @@ Default route after login: `/dashboard`.
 | 8 | Reports | `/reports` | — | No |
 | 9 | Holidays | `/admin/holidays` | — | No |
 | 10 | Documents | `/documents` | `documents` | No |
+| 11 | Meeting Minutes | `/meeting-minutes` | `meetingMinutes` | No (drawer) |
 
 Default route after login: `/hr`.
 
@@ -84,7 +89,8 @@ Default route after login: `/finance`.
 | 1 | Dashboard | `/dashboard` |
 | 2 | Reports | `/reports` |
 | 3 | Projects (read-only) | `/projects` |
-| 4 | Documents | `/documents` (flagged) |
+| 4 | Meeting Minutes (read-only) | `/meeting-minutes` (flagged) |
+| 5 | Documents | `/documents` (flagged) |
 
 No action bar, row action, form, or bulk control renders for this role on any screen (`REQ-RBAC-020`, `AC-AUTH-005`).
 
@@ -104,6 +110,9 @@ Default route after login: `/dashboard`.
 | 8 | Integrations | `/admin/integrations` (flagged, placeholder) |
 | 9 | Employees | `/employees` |
 | 10 | Reports | `/reports` |
+| 11 | Meeting Minutes | `/meeting-minutes` (flagged) |
+
+Meeting Minutes sits in the primary group, above the administration items.
 
 Default route after login: `/dashboard`.
 
@@ -209,7 +218,7 @@ Each flow lists the start point, the success state, the failure states that must
 - Shown on all detail and nested routes at ≥ 768 px; hidden below that width where a back control replaces them.
 - Maximum four levels; the middle is truncated before the first and last items are.
 - The trailing item is the current page and is not a link.
-- Examples: `Projects / Vision Platform v2 / Tasks`, `Employees / Nadia Rahman / Assignments`, `My Timesheet / 2026-09-02`.
+- Examples: `Projects / Vision Platform v2 / Tasks`, `Employees / Nadia Rahman / Assignments`, `My Timesheet / 2026-09-02`, `Meeting Minutes / {minute title} / Edit`.
 
 ### 3.3 Back behavior
 
@@ -222,6 +231,7 @@ Each flow lists the start point, the success state, the failure states that must
 - Every list state is expressible in the URL: filters, date range, page, page size, sort field, sort direction, and search term (see `contracts/query.ts`).
 - Detail routes accept a stable record identifier. A record the viewer cannot access returns the same not-found presentation as a nonexistent one, so identifiers reveal nothing (`REQ-SRCH-003`, `AC-AUTH-004`).
 - `/timesheets/[date]` accepts an ISO date; an invalid or out-of-policy date returns the not-found state.
+- `/meeting-minutes/[id]` and `/meeting-minutes/[id]/edit` follow the detail-route rule above, including links from notifications and generated tasks (Section 3.6).
 - After an expired session, the attempted URL is preserved and restored after re-authentication.
 
 ### 3.5 Mobile navigation
@@ -230,6 +240,68 @@ Each flow lists the start point, the success state, the failure states that must
 - The remaining destinations live behind a "More" sheet.
 - The drawer traps focus, closes on Escape, and restores focus to its trigger.
 - Bottom navigation respects the device safe area and never covers a sticky form action bar; when both are present, the action bar sits above the navigation.
+
+### 3.6 Meeting Minutes routes (`FE-1102`)
+
+Source: `REQ-MTG-001`–`REQ-MTG-024`, `REQ-NAV-006`, `AC-MTG-001`, `AC-MTG-009`, `AC-MTG-010`. The route map is `frontend_milestone.md` Section 3; route rules are in `src/features/access/route-access.ts`.
+
+#### Routes and access
+
+| Route | Screen | Route-level roles | Record-level rule (service) | Built by |
+|---|---|---|---|---|
+| `/meeting-minutes` | List with search and filters | All active roles | Only minutes in the viewer's client, project, division, government-project, and permission scope are listed or counted | `FE-1110`–`FE-1112` |
+| `/meeting-minutes/new` | Add Meeting Minute form | Team Lead, HR, Super Admin | The client and project lists hold only active, authorized projects for the chosen client | `FE-1113`–`FE-1115` |
+| `/meeting-minutes/[id]` | Minute detail, processing status, and linked tasks | All active roles | A minute outside the viewer's scope is not found | `FE-1120`–`FE-1126` |
+| `/meeting-minutes/[id]/edit` | Edit form, with Archive | Team Lead, HR, Super Admin | Only the creator or an explicitly authorized administrator may edit or archive | `FE-1116` |
+
+- Employee and Management/View-Only see the module and readable minutes but never Add, Edit, Archive, Process with AI, or Retry (Employee made read-only by the 2026-09-15 amendment). `/new` and `/[id]/edit` return the role-denied screen for them before any record loads, so the refusal reveals nothing about the record (`AC-MTG-001`).
+- All four routes depend on the `meetingMinutes` flag. With it off, the navigation entry disappears and each route returns the "module is not enabled" denied screen.
+- Route rules decide only who may reach a screen. Whether a *particular* minute can be read, edited, archived, or retried is always a service decision.
+
+#### Page titles and breadcrumbs
+
+| Route | `<h1>` | Document title | Breadcrumbs (≥ 768 px) | Mobile back control |
+|---|---|---|---|---|
+| `/meeting-minutes` | Meeting Minutes | `Meeting Minutes · Timesheet` | None (top-level destination) | None |
+| `/meeting-minutes/new` | Add Meeting Minute | `Add Meeting Minute · Meeting Minutes · Timesheet` | `Meeting Minutes / Add Meeting Minute` | "Meeting Minutes" → `/meeting-minutes` |
+| `/meeting-minutes/[id]` | Minute title | `{Minute title} · Meeting Minutes · Timesheet` | `Meeting Minutes / {minute title}` | "Meeting Minutes" → `/meeting-minutes` |
+| `/meeting-minutes/[id]/edit` | Edit Meeting Minute | `Edit · {Minute title} · Meeting Minutes · Timesheet` | `Meeting Minutes / {minute title} / Edit` | "{Minute title}" → `/meeting-minutes/[id]` |
+
+- A long minute title is truncated in the breadcrumb and back control, never in the `<h1>`.
+- A title is shown only after the service has authorized the record. The not-found and denied states use their generic titles, so a title never leaks through a breadcrumb, back label, or document title.
+
+#### Back behavior
+
+- The list's back control on the detail page returns to `/meeting-minutes` with the filters, page, and sort the viewer left from, taken from the URL rather than history.
+- Saving `/new` opens the new minute's detail page and replaces the form's history entry, so browser Back does not reopen a submitted form. When Process with AI was chosen, the detail page opens showing Pending (`REQ-MTG-009`).
+- Saving `/[id]/edit` returns to `/meeting-minutes/[id]`. Cancel returns to the detail page, or to the list when coming from `/new`.
+- `/new` and `/[id]/edit` protect unsaved content: back, close, sidebar navigation, and route change ask to confirm discarding changes (Section 3.3).
+- Archive is a confirmation dialog on the edit or detail page. It pushes no history entry and returns focus to its trigger when cancelled.
+
+#### Deep links
+
+- The list keeps its state in the URL through `contracts/query.ts`: search `q`, `client`, `project`, `processing` (AI processing status), created-date `from`/`to`, `archived`, `page`, `size`, `sort`, and `dir`. The `client`, `processing`, and `archived` keys were added with the service contract (`FE-1104`); the screen reads them from `QUERY_PARAM_KEYS` and never names its own. Multi-valued filters are comma-separated (`client=cli-a,cli-b`), defaults are omitted, and malformed values are dropped silently (`FE-1111`, `src/features/meeting-minutes/list-url-state.ts`). Search reaches the URL 300 ms after typing stops. Every filter change uses `replace` and returns to page 1, so filtering adds no history entries and Back leaves the list. The service returns the filters it actually applied (`MeetingMinuteListView.appliedFilters`), and the screen rewrites its URL from those.
+- A filter value the viewer can no longer use, such as a project outside their scope, is dropped silently. It never produces a message that confirms the project exists.
+- `[id]` is the minute's stable record identifier. A nonexistent id and a minute outside the viewer's scope return the **same** not-found presentation, with no title, client, project, AI status, or task count (`AC-MTG-009`, `AC-AUTH-004`).
+- `/[id]/edit` on a minute the viewer can read but may not change shows the permission-denied state. Reading that minute is already allowed, so this reveals nothing new. On a minute the viewer cannot read, it returns not-found, as the detail route does.
+- An archived minute stays readable at `/meeting-minutes/[id]` by anyone still in scope, so links from generated tasks keep working (`REQ-MTG-018`, `AC-MTG-010`). Its edit route refuses changes.
+- Notification links (`REQ-MTG-022`) and a generated task's "Source minute" link (`FE-1124`) point to `/meeting-minutes/[id]` and apply the same scope check when opened. They never carry minute content in the URL.
+- After session expiry, the attempted Meeting Minutes URL, including list filters, is restored after re-authentication (Section 3.4).
+
+#### Mobile navigation
+
+- No role gives Meeting Minutes one of the five bottom-navigation slots. Below 768 px it opens from the navigation drawer (top-bar Menu button), in the same group as on the desktop sidebar.
+- Below 768 px, a back control replaces breadcrumbs on `/new`, `/[id]`, and `/[id]/edit`.
+- `/new` and `/[id]/edit` are full pages with a sticky footer action bar above the bottom navigation and on-screen keyboard. The list becomes cards, and the detail page's linked tasks become cards (`FE-1110`, `FE-1123`, `FE-1133`).
+- The page never scrolls horizontally at any supported width (`REQ-MTG-024`).
+
+#### Planned-screen status
+
+- Navigation reached Meeting Minutes (`FE-1101`) before its screens exist. `/meeting-minutes` is therefore registered in `src/features/access/planned-routes.ts` (`PLANNED_ROUTES`).
+- The `src/app/(app)/[...slug]` catch-all renders `PlannedScreen` for that entry. It also falls back to the closest registered parent, so `/new`, `/[id]`, and `/[id]/edit` show the same "built in Phase 11" screen.
+- The layout's route and flag guard runs **first**. Employee and Management therefore see the role-denied screen at `/new` and `/[id]/edit` even while those routes are placeholders, and nobody sees the placeholder when the flag is off.
+- Next.js prefers a concrete route over the catch-all, so each real page replaces the placeholder as it ships. The planned screen performs no record lookup, so for now `/meeting-minutes/[id]` shows the same placeholder for every id.
+- Remove the `/meeting-minutes` entry from `PLANNED_ROUTES` when all four routes have real pages (by `FE-1120`). The registry should then again hold only destinations that are genuinely still to come.
 
 ## 4. High-Risk Responsive Screens (`FE-0012`)
 
