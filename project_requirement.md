@@ -40,7 +40,7 @@ The system must:
 
 ### 2.1 Full Product Scope
 
-The full product vision includes identity and access, employee and division administration, projects and tasks, timesheets, WFH, leave and attendance, dashboards, evaluations, reporting, workload planning, notifications, documents, lightweight communication, search, integrations, and advanced automation.
+The full product vision includes identity and access, employee and division administration, projects and tasks, timesheets, WFH, leave and attendance, dashboards, evaluations, reporting, client hours and labour-cost analysis, workload planning, notifications, documents, lightweight communication, search, integrations, and advanced automation.
 
 ### 2.2 MVP Scope
 
@@ -89,6 +89,10 @@ The MVP must include:
 | Meeting minute | A saved human-authored meeting record associated with a client and project and preserved independently of AI processing. |
 | AI-generated task | A task proposal extracted from a meeting minute by AI, validated and assigned by application logic, and linked permanently to its source minute. |
 | AI processing status | Not Processed, Pending, Processing, Processed, or Failed; it describes task generation, not the validity of the saved minute. |
+| Client | A first-class organization receiving work through one or more linked projects; legacy project client labels remain readable until reviewed migration is complete. |
+| Client Panel | The HR and Super Administrator view of employee active hours and internal labour cost grouped by client for a selected verified payroll period. |
+| Internal labour cost | Active work minutes multiplied by the effective employee/project cost rate using exact money arithmetic; it excludes breaks, client billing, revenue, invoices, and margin. |
+| Unassigned client work | Authorized work attributed to a project without a mapped Client record and reported as **Not assigned to a client** rather than omitted. |
 
 ## 4. Stakeholders, Roles, and Access
 
@@ -102,6 +106,7 @@ The MVP must include:
 - `REQ-RBAC-004`: The system must allow a Super Administrator to manage permissions, holidays, working-hour policies, overtime rules, integrations, and system settings.
 - `REQ-RBAC-005`: The system must give authorized Super Administrators company-wide dashboards, reports, activity logs, and integration administration.
 - `REQ-RBAC-021`: The system must allow only Super Administrators to create, view, update, and delete unreferenced departments and to assign each department's Team Lead.
+- `REQ-RBAC-023`: The system must allow active Super Administrators to open Client Panel and view authorized employee active hours and internal labour cost.
 
 #### Team Lead
 
@@ -122,11 +127,12 @@ The MVP must include:
 - `REQ-RBAC-013`: The system must allow authorized HR Managers to manage employee profiles, employment status, assignments, holidays, leave, WFH, evaluation periods, and HR reports.
 - `REQ-RBAC-014`: The system must allow authorized HR Managers to review company-wide attendance, timesheet exceptions, workload information, and Team Lead remarks.
 - `REQ-RBAC-015`: The system must allow HR Managers to verify payroll/reporting periods and make audited WFH or leave overrides.
+- `REQ-RBAC-024`: The system must allow active HR Managers to open Client Panel and view authorized employee active hours and internal labour cost.
 
 #### Finance Manager
 
 - `REQ-RBAC-016`: The system must allow authorized Finance Managers to view verified hours, overtime, project hours, division hours, billable status, and payroll-period summaries.
-- `REQ-RBAC-017`: The system must expose salaries, cost rates, budgets, and labour costs only through separately granted financial permissions.
+- `REQ-RBAC-017`: The system must grant `finance.cost.view` through the active HR Manager and Super Administrator roles, giving those roles access to authorized salary, cost-rate, budget, labour-cost, and protected financial views. Other active roles must receive no financial access unless a separate explicit permission grants it. Historical `finance_manager` values must remain readable but not assignable.
 - `REQ-RBAC-018`: The system must allow Finance Managers to export authorized financial and payroll-ready reports.
 
 #### Management or View-Only User
@@ -136,7 +142,7 @@ The MVP must include:
 
 ### 4.2 Access-Control Matrix
 
-Legend: **M** = manage, **O** = own records, **A** = assigned scope, **V** = view only when authorized, **F** = separately granted financial permission, **-** = no default access.
+Legend: **M** = manage, **O** = own records, **A** = assigned scope, **V** = view only when authorized, **F** = separately granted financial permission for roles other than HR or Super Administrator, **-** = no default access.
 
 The **Team Lead** column applies both to users with an authorized global Team Lead role and to employees holding an effective department-lead appointment; appointment-derived access is limited to the appointed departments.
 
@@ -149,7 +155,7 @@ The **Team Lead** column applies both to users with an authorized global Team Le
 | Remarks/correction requests | M | A/M | O/respond | V | V | V |
 | WFH and leave decisions | M | A/M | O/request | M/override | V | V |
 | Evaluations | M | A/M | O/self | M | - | V |
-| Cost and salary data | F | - | - | F | F | F |
+| Cost and salary data | V | - | - | V | F | F |
 | Period verification | M | - | - | M | V | V |
 | Reports/exports | M | A | O | M | F | V |
 | Audit logs | M | A/V | O/V | V | F/V | - |
@@ -381,6 +387,19 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 - `REQ-MTG-023`: Concurrent saves, duplicate queue delivery, retry, and worker restart must not create duplicate AI runs or duplicate generated tasks. Each processing attempt must be independently identifiable and safely resumable.
 - `REQ-MTG-024`: The list, form, details, AI statuses, retry feedback, and task links must be fully responsive, keyboard accessible, understandable without color alone, and cover loading, empty, validation, processing, success, failure, and denied states.
 
+### 5.17 Client Panel
+
+- `REQ-CLIENT-001`: The system must provide a **Client Panel** at `/clients` and must allow access only to active HR Managers and Super Administrators.
+- `REQ-CLIENT-002`: The Client Panel must default to the latest HR-verified payroll period and must show a clear empty state rather than silently using unverified data when no verified period exists.
+- `REQ-CLIENT-003`: The Client Panel must display one row for each authorized Client and Employee pair with Client, Employee, Active Hours, and Internal Labour Cost columns.
+- `REQ-CLIENT-004`: Client active hours must use only authoritative active work minutes attributed through projects; recognized breaks, task-transition timestamps, client billing, revenue, invoices, and margin must not contribute.
+- `REQ-CLIENT-005`: Internal labour cost must use the effective employee/project cost rate for each contributing work period, exact fixed-precision money arithmetic in BDT, and one final rounding step for each reported aggregate.
+- `REQ-CLIENT-006`: Work whose project has no mapped Client record must remain in authorized totals and must appear under **Not assigned to a client** rather than being dropped or merged with a named Client.
+- `REQ-CLIENT-007`: The panel must support payroll-period, Client, and Employee filters, removable applied-filter indicators, clear-all, authorized sorting, and pagination while preserving filter state in the URL.
+- `REQ-CLIENT-008`: Summary totals, table rows, pages, counts, empty groups, and filter options must be computed only after role, record, government-project, and other applicable authorization has been applied.
+- `REQ-CLIENT-009`: The panel and its Excel, CSV, PDF, and printable outputs must reconcile with authoritative hour and labour-cost reports for identical filters and must include period, filters, timezone, generation timestamp, currency, and policy version.
+- `REQ-CLIENT-010`: Exports must use the existing protected export workflow, record export history, enforce the same authorization as the screen, and prevent unauthorized rows, totals, filenames, or metadata from being inferred.
+
 ## 6. Core Workflows
 
 ### 6.1 Employee Time Workflow
@@ -457,6 +476,15 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 7. A referenced department must be deactivated rather than moved or deleted, and all placement and leadership changes must be audited.
 8. While a lead appointment is effective, the appointed employee must receive Team Lead capabilities only for the department's effective employees; the same person may hold several such scopes.
 
+### 6.9 Client Panel Workflow
+
+1. An HR Manager or Super Administrator opens **Client Panel** from the sidebar.
+2. The system selects the latest HR-verified payroll period or explains that no verified period is available.
+3. The user optionally filters by payroll period, Client, or Employee and receives authorized summary totals and a flat employee-by-client table.
+4. The system derives active minutes from authoritative work results, attributes them through the project-to-Client relationship, and calculates internal labour cost from effective rates.
+5. Work without a mapped Client remains visible as **Not assigned to a client**.
+6. The user may request Excel, CSV, PDF, or print output; the output uses the same filters, authorization, totals, metadata, and audit trail as the screen.
+
 ## 7. Data Requirements
 
 ### 7.1 Core Entities
@@ -501,6 +529,7 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 - `REQ-NAV-006`: Every active authenticated role must have a Meeting Minutes navigation entry when the module is enabled; list and detail access must be record-scoped, and mutation controls must be role- and ownership-scoped.
 - `REQ-NAV-007`: Super Administrator navigation must include department administration; other roles must not receive department mutation controls or endpoints.
 - `REQ-NAV-008`: An employee with at least one effective department-lead appointment must receive Team Lead navigation for only the effective department scopes, even when the employee has no global Team Lead role.
+- `REQ-NAV-009`: HR Manager and Super Administrator navigation must include **Client Panel** linking to `/clients`; the item and route must be unavailable to Team Leads, Employees, Management/View-Only users, and historical Finance-role identities that do not hold an active authorized role.
 
 ## 9. Non-Functional Requirements
 
@@ -547,7 +576,7 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 | Phase | Required outcome |
 |---|---|
 | Phase 1 - Core System / MVP | Identity and roles, five initial divisions, employees and assignments, projects/basic task workflow, duration-based work logs, calculations/validation, work locations, remarks/corrections, core dashboards, basic reports and exports. |
-| Phase 2 - HR and Evaluation | Leave, WFH request decisions, evaluations, workload planning, notifications, Finance reports, project costing, and improved mobile workflows. |
+| Phase 2 - HR and Evaluation | Leave, WFH request decisions, evaluations, workload planning, notifications, Finance reports, project costing, the HR/Super Administrator Client Panel, and improved mobile workflows. |
 | Phase 3 - Collaboration | Division/project/direct messages, task comments, documents, knowledge base, announcements, and advanced search. |
 | Phase 4 - Advanced Features | AI summaries, workload forecasting, anomaly detection, automated monthly summaries, natural-language reporting, and payroll/accounting integrations. |
 | Phase 4A - Meeting Intelligence | Meeting-minute capture for all roles, optional queued AI analysis, validated decision/task extraction, explainable team matching, linked task creation, retry, audit, and protected diagnostics. |
@@ -608,7 +637,8 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 - Exact attendance intervals are not required for the approved task-based milestone. A later legal or HR requirement must be scoped and approved as a separate attendance capability.
 - The task-based cutover boundary is the audited production deployment instant after backend Phase B4 verification. The exact UTC instant must be persisted as release metadata; record creation time, not the work date being reported, determines whether capture is historical clock-based or task-based.
 - A timer running at cutover must be stopped into an audited, uncounted draft for employee review. Existing timer drafts remain reviewable and become duration-only work logs only when saved, with source provenance retained.
-- Costs and salaries are optional protected data even for Finance users and require explicit permission.
+- HR Managers and Super Administrators inherit `finance.cost.view` from their active roles. Other active roles require an explicit financial permission; the historical Finance Manager value grants nothing by itself.
+- Client Panel cost means internal labour cost from active minutes and effective rates; it never means client billing, revenue, invoices, or margin.
 - All stored timestamps use a consistent canonical representation and are displayed/calculated using the configured business timezone.
 - Technical framework, database engine, cloud provider, and deployment topology are intentionally not prescribed by this requirements document.
 - Meeting Minutes is available to every active role, but "all users can access" means access to the module and authorized records; it does not override project, client, government-project, or view-only restrictions.
@@ -636,6 +666,8 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 | Sensitive meeting content reaches an unapproved provider or user | Confidentiality and contractual breach | Use an approved provider/data region, minimize payloads, encrypt protected artifacts, apply record scope before processing, and restrict diagnostics. |
 | Duplicate or partial AI jobs | Duplicate tasks or misleading status | Use durable idempotent jobs, attempt records, transactional task creation, deduplication, retry limits, and dead-letter monitoring. |
 | Legacy free-text clients do not map cleanly | Incorrect project filtering and meeting associations | Introduce Client records with a reviewed migration, retain legacy labels for history, and report unresolved mappings. |
+| Client reporting drops unmapped project work | Client totals do not reconcile with authoritative hours or cost | Keep authorized unmapped work in a separately labelled **Not assigned to a client** group and include it in reconciliation tests. |
+| Role-based financial access is deployed partially | HR or Super Administrators see inconsistent financial navigation or data | Change capability mapping, routes, services, exports, seeds, and tests atomically with a reversible audited migration. |
 
 ## 14. Acceptance and Verification
 
@@ -700,6 +732,15 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 - `AC-MTG-011`: Raw prompts/responses and match evidence must be absent from ordinary user payloads and accessible only through separately authorized, audited diagnostics.
 - `AC-MTG-012`: The list, create form, details, processing status, failure/retry state, and linked tasks must pass the supported responsive and WCAG 2.2 AA checks.
 
+### 14.6 Client Panel Scenarios
+
+- `AC-CLIENT-001`: Given an active HR Manager or Super Administrator, the sidebar and direct `/clients` route must open Client Panel; every other active role must receive the same safe denial behavior through navigation, direct URL, API, and export access.
+- `AC-CLIENT-002`: Given a latest verified period containing two employees working for one Client, the table must contain one row per employee with exact active hours and internal labour cost, and its totals must reconcile with the authoritative hour and labour-cost reports.
+- `AC-CLIENT-003`: Given work on a project without a mapped Client, the row must be labelled **Not assigned to a client**, remain included in authorized totals, and never be silently attributed to another Client.
+- `AC-CLIENT-004`: Given a day containing active work and a recognized break, Client Panel hours and cost must use active work only and must not charge the break or infer time from task transitions.
+- `AC-CLIENT-005`: Given identical authorized filters, the on-screen table, summary, Excel, CSV, PDF, and print output must contain the same rows and totals plus the required provenance metadata and export-history record.
+- `AC-CLIENT-006`: Government-project work, unauthorized rows, counts, filter options, totals, filenames, and timing behavior must remain undiscoverable until the viewer has every required scope in addition to the permitted HR or Super Administrator role.
+
 ## 15. Source Coverage Matrix
 
 | Source section | Covered by this document |
@@ -734,6 +775,7 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 | 28. Core MVP Requirements | Sections 2.2 and 10.1 |
 | Meeting Minutes to AI Task Generation and Assignment amendment | Sections 2.3, 3, 4.2, 5.16, 6.7, 7, 8, 10, 11-14 |
 | Meeting Minutes Employee read-only amendment, 15 September 2026 | Section 4.2 (matrix and access note), Section 14.5 (`AC-MTG-001`) |
+| Client Panel amendment, 20 September 2026 | Sections 2, 3, 4.2, 5.17, 6.9, 8, 10-14.6 |
 
 ## 16. Requirement Governance
 

@@ -17,7 +17,7 @@ A centralized web application for tracking employee time and work across multipl
 | Field | Value |
 |---|---|
 | Divisions | PowerInAI, PowerInAI Training, Government Projects, Computer Jagat, WesternCF |
-| Roles | Super Administrator, Team Lead, Employee, HR Manager, Management/View-Only. **Finance Manager was retired in frontend Phase 10** — HR absorbed it, and `finance.cost.view` stays a per-user grant, so the role merge granted nobody cost access. `finance_manager` remains a legal *stored* value for historical rows. |
+| Roles | Super Administrator, Team Lead, Employee, HR Manager, Management/View-Only. **Finance Manager was retired in frontend Phase 10** — HR absorbed it, and `finance.cost.view` **is still a per-user grant in the code today**, so the role merge granted nobody cost access. `finance_manager` remains a legal *stored* value for historical rows. **Approved target (not yet built):** the amended `REQ-RBAC-017` gives HR Manager and Super Administrator that permission by role — see §2. |
 | Stack | Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS v4 · Vitest |
 | Database | MySQL — **backend milestone only, not yet connected** |
 | Business timezone / currency | Asia/Dhaka · BDT |
@@ -68,6 +68,7 @@ Each of these has a natural-looking wrong implementation that passes casual revi
 - **Team Lead capability is additive.** A Team Lead keeps employee self-service, including My Timesheet and personal tasks. A Team Lead self-created task is forced to themselves, has `review_state = not_required`, sends no approval request, and still must move from Pending to In Progress before it accepts work.
 - **Historical clock entries are immutable operational history.** Preserve their original ranges and calculation behavior. The B4 production deployment UTC instant is the cutover boundary, based on record creation time rather than work date.
 - **Deny by default** for government-project, salary, cost, evaluation, export, attachment, and audit data. Hiding it in the UI is *not* the control. A restricted field is omitted or explicitly marked `Restricted` — never blanked, never zeroed.
+- **Cost access is per-user today; the approved target is per-role.** `finance.cost.view` is granted to individual accounts (`usr-4001` has it, `usr-4002` does not — that pair is what proves `AC-AUTH-003`). The amended `REQ-RBAC-017` grants it through the HR Manager and Super Administrator roles instead, which opens **every** cost, rate, budget, salary and protected-export surface to those roles, not just Client Panel. That change is documentation only so far: frontend Phase 12 (`FE-1204`) and backend Phase 14 (`BE-1401`, `BE-1402`) deliver it, and they must cut over **together**. Until then, write code against the per-user grant and do not assume the role implies it.
 - **Durations are integer minutes. Money is a fixed-precision decimal string plus a currency code.** No floating-point hours, no bare numbers for money. `6:59` must never render as `7:00`.
 - **Status is never colour alone** — always shape + text + colour.
 - Store work-log local date, timezone, integer duration and audit instants; store task-transition instants separately; retain UTC ranges and applied policy version for historical clock entries so verified history stays reproducible.
@@ -115,11 +116,18 @@ shows up as a record reaching a reviewer it should not have. Add a workflow by
 extending `Approvable`, never by rewriting the transitions.
 
 `src/lib/client-time.ts` regroups that output by client and is the only place
-that happens. A client is a free-text label on a project (`Project.client`),
-not an entity — so time reaches a client only through its project, work on a
+that happens. Time reaches a client only through its project; work on a
 project with no client and work on no project at all share one reported "Not
 recorded" bucket, and the split always sums back to the day's active total.
 It adds integer minutes; it never derives a duration.
+
+`Client` is now a **first-class record** (`src/contracts/meeting-minutes.ts`,
+`REQ-MTG-005`), introduced for Meeting Minutes. The free-text `Project.client`
+label is kept readable until every label is mapped, so historical reports
+reconcile — do not delete it, and do not treat the two as interchangeable.
+Client Panel (frontend Phase 12, backend Phase 14) reads these same regrouped
+minutes and reports the unmapped bucket as **Not assigned to a client**; it
+must never compute hours of its own.
 
 `src/lib/calculation/validation.ts` holds the work-log rules. Every error it
 returns carries a field, a message **and** corrective guidance, because
@@ -266,7 +274,9 @@ React Compiler lint errors (`set-state-in-effect`, render-phase mutation) are re
 | Frontend | 7 — Shared reporting and supporting modules | Done (52/52 · requisition, conveyance and employee-raised tasks included) |
 | Frontend | 8 — Responsive, accessibility and quality hardening | Done (17/18 · `FE-0825` awaiting visual review) |
 | Frontend | 9 — Demo packaging and backend handoff | **Next** (0/14) |
-| Frontend | 10 — Role consolidation: Finance into HR | Done (14/14 · requirements amendment owed) |
+| Frontend | 10 — Role consolidation: Finance into HR | Done (14/14 · requirements amendment now made; its per-user cost decision superseded by Phase 12) |
+| Frontend | 11 — Meeting Minutes and AI task generation | In progress (9/26) |
+| Frontend | 12 — Client Panel | Pending (0/25) — new milestone; cuts over with backend Phase 14 |
 | Backend | 0 — Architecture and delivery foundation | Done (25/25) |
 | Backend | 1 — MySQL schema and data foundation | Done (26/26) |
 | Backend | 2 — Authentication, authorization, and audit | Done (23/23) |
@@ -278,6 +288,8 @@ React Compiler lint errors (`set-state-in-effect`, render-phase mutation) are re
 | Backend | 10 — Requisition | Pending (0/20) — new milestone |
 | Backend | 11 — Conveyance | Pending (0/22) — new milestone, depends on 10 |
 | Backend | 12 — Role consolidation: Finance into HR | Pending (0/11) — new milestone |
+| Backend | 13 — Meeting Minutes and AI task generation | Pending (0/34) |
+| Backend | 14 — Client Panel reporting | Pending (0/23) — new milestone; cuts over with frontend Phase 12 |
 | Modify | B1 — Backend schema and data migration | Technical implementation done (9/10); HR rehearsal sign-off pending |
 | Organization hierarchy | 0 — Product rules and architecture | Done (10/10); F1 implementation is next |
 
@@ -285,7 +297,7 @@ Baseline gates before the preliminary hierarchy prototype: contrast 48/48, respo
 
 Signing in: `/login`, password `Demo1234!` for every demo account, picker on the sign-in page. Auth fixtures (2FA code, reset tokens, lockout) are in `docs/frontend/phase-0/demo-setup.md` §1.1.
 
-**`PLANNED_ROUTES` holds one entry, `/meeting-minutes`** — it was empty from Phase 7 until Phase 11 put Meeting Minutes in every role's navigation (`FE-1101`) ahead of its screens; remove the entry once `FE-1110`–`FE-1126` ship. Its routes, breadcrumbs, deep links and placeholder behaviour are in `docs/frontend/phase-0/information-architecture.md` §3.6. The mechanism stays: register a route in `src/features/access/planned-routes.ts` and `PlannedScreen` (`src/features/access/planned-screen.tsx`) renders it, which is the right answer whenever navigation runs ahead of a screen again.
+**`PLANNED_ROUTES` is empty again.** It held `/meeting-minutes` from `FE-1101`, when Meeting Minutes joined every role's navigation ahead of its screens, until `FE-1120` shipped the last of the four routes; all of `/meeting-minutes`, `/new`, `/[id]` and `/[id]/edit` are now real pages. Their routes, breadcrumbs and deep links are in `docs/frontend/phase-0/information-architecture.md` §3.6. The mechanism stays: register a route in `src/features/access/planned-routes.ts` and `PlannedScreen` (`src/features/access/planned-screen.tsx`) renders it, which is the right answer whenever navigation runs ahead of a screen again.
 
 Several routes serve more than one audience and branch on role rather than denying: `/wfh`, `/leave` and `/evaluations` are HR administration for HR and self-service for everyone else; `/dashboard` resolves to four different screens.
 

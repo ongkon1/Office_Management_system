@@ -274,9 +274,12 @@ Source: `REQ-MTG-001`–`REQ-MTG-024`, `REQ-NAV-006`, `AC-MTG-001`, `AC-MTG-009`
 
 - The list's back control on the detail page returns to `/meeting-minutes` with the filters, page, and sort the viewer left from, taken from the URL rather than history.
 - Saving `/new` opens the new minute's detail page and replaces the form's history entry, so browser Back does not reopen a submitted form. When Process with AI was chosen, the detail page opens showing Pending (`REQ-MTG-009`).
+  - **Current behaviour (`FE-1120`):** implemented as documented. `FE-1115` could not redirect while `/meeting-minutes/[id]` was a placeholder and used a saved state on `/new` instead; `FE-1120` made the page real, so the redirect is back and the saved state is gone. The outcome of the save — queued, or could not be started — is raised as a notice, and the minute's own page carries the processing status and any safe error.
 - Saving `/[id]/edit` returns to `/meeting-minutes/[id]`. Cancel returns to the detail page, or to the list when coming from `/new`.
+  - **Current behaviour (`FE-1116`):** implemented as documented — a save pushes `/meeting-minutes/[id]`, and Cancel links there. Until `FE-1120` ships, that destination is the Phase 11 planned screen. A refused save keeps the user on the form with their text intact: a stale version shows the conflict with a **Reload the minute** action, an archived minute and a minute the viewer may not change are refused before the form renders, and a minute outside their scope is not found.
 - `/new` and `/[id]/edit` protect unsaved content: back, close, sidebar navigation, and route change ask to confirm discarding changes (Section 3.3).
 - Archive is a confirmation dialog on the edit or detail page. It pushes no history entry and returns focus to its trigger when cancelled.
+  - **Current behaviour (`FE-1116`):** Archive lives on the edit page, below the fields. Both the page and the dialog state that the minute, its processing history and any generated tasks are kept and that nothing is deleted (`REQ-MTG-018`). Confirming returns to the list, where the minute is out of the default view and findable again through **Include archived**.
 
 #### Deep links
 
@@ -298,10 +301,10 @@ Source: `REQ-MTG-001`–`REQ-MTG-024`, `REQ-NAV-006`, `AC-MTG-001`, `AC-MTG-009`
 #### Planned-screen status
 
 - Navigation reached Meeting Minutes (`FE-1101`) before its screens exist. `/meeting-minutes` is therefore registered in `src/features/access/planned-routes.ts` (`PLANNED_ROUTES`).
-- The `src/app/(app)/[...slug]` catch-all renders `PlannedScreen` for that entry. It also falls back to the closest registered parent, so `/new`, `/[id]`, and `/[id]/edit` show the same "built in Phase 11" screen.
-- The layout's route and flag guard runs **first**. Employee and Management therefore see the role-denied screen at `/new` and `/[id]/edit` even while those routes are placeholders, and nobody sees the placeholder when the flag is off.
-- Next.js prefers a concrete route over the catch-all, so each real page replaces the placeholder as it ships. The planned screen performs no record lookup, so for now `/meeting-minutes/[id]` shows the same placeholder for every id.
-- Remove the `/meeting-minutes` entry from `PLANNED_ROUTES` when all four routes have real pages (by `FE-1120`). The registry should then again hold only destinations that are genuinely still to come.
+- All four routes are now real pages — `/meeting-minutes` (`FE-1110`), `/meeting-minutes/new` (`FE-1113`), `/meeting-minutes/[id]` (`FE-1120`) and `/meeting-minutes/[id]/edit` (`FE-1116`) — so the entry has been removed and `PLANNED_ROUTES` is empty again. The `src/app/(app)/[...slug]` catch-all and `PlannedScreen` stay, unused, for the next time navigation runs ahead of a screen.
+- The layout's route and flag guard runs **first**. Employee and Management therefore see the role-denied screen at `/new` and `/[id]/edit` before any form or record loads, and nobody reaches any of the four routes when the flag is off. On `/new` the service refuses those roles a second time, so the form's own denied state stands even if a route rule is ever loosened.
+- `/meeting-minutes/[id]` now performs a real, authorized record lookup: an id outside the viewer's scope and a nonexistent one produce the same not-found page, with no title, client, project or status on it (`FE-1120`).
+- The `/meeting-minutes` entry was removed from `PLANNED_ROUTES` at `FE-1120`, the last of the four routes to ship. The registry again holds only destinations that are genuinely still to come — currently none. The registry should then again hold only destinations that are genuinely still to come.
 
 ## 4. High-Risk Responsive Screens (`FE-0012`)
 
