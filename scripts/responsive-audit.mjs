@@ -56,6 +56,7 @@ const ROUTES = [
   { path: '/dashboard', auth: true },
   { path: '/timesheets', auth: true },
   { path: '/timesheets/2026-09-01', auth: true },
+  { path: '/timesheets/2026-09-02', auth: true },
   { path: '/tasks', auth: true },
   { path: '/tasks/tsk-1', auth: true },
   { path: '/divisions', auth: true },

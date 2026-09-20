@@ -87,6 +87,19 @@ describe('buildNavigation', () => {
     expect(groups.every((group) => group.items.length > 0)).toBe(true);
     expect(groups.some((group) => group.key === 'costing')).toBe(false);
   });
+
+  it('shows Team Lead personal tasks and timesheet once alongside team tools', () => {
+    const groups = buildNavigation({
+      role: 'team_lead',
+      flags: DEMO_FEATURE_FLAGS,
+      permissions: [],
+    });
+    const hrefs = groups.flatMap((group) => group.items.map((item) => item.href));
+    expect(hrefs.filter((href) => href === '/tasks')).toHaveLength(1);
+    expect(hrefs.filter((href) => href === '/timesheets')).toHaveLength(1);
+    expect(hrefs).toContain('/team/timesheets');
+    expect(selectBottomNavItems(groups).map((item) => item.href)).toContain('/timesheets');
+  });
 });
 
 describe('selectBottomNavItems', () => {

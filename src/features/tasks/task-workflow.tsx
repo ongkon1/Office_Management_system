@@ -237,7 +237,7 @@ function TaskCard({
         <div className="min-w-0">
           <Link
             href={task.href}
-            className="rounded-xs text-body font-semibold text-ink hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+            className="inline-flex min-h-6 items-center rounded-xs text-body font-semibold text-ink hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
           >
             {task.title}
           </Link>

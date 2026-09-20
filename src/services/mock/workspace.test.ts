@@ -3,6 +3,7 @@ import { mockWorkspaceService, resetWorkspaceState } from './workspace';
 import { mockReportingService, resetReportingState } from './reporting';
 import { mockAdminService, resetAdminState } from './admin';
 import { mockStore } from './store';
+import { notifyEmployee } from './notification-store';
 
 const EMPLOYEE = 'usr-1001';
 const TEAM_LEAD = 'usr-2001';
@@ -23,6 +24,22 @@ beforeEach(() => {
 /* -------------------------------------------------------------------------- */
 
 describe('notifications (FE-0710)', () => {
+  it('groups runtime task-work notifications without protected detail', async () => {
+    notifyEmployee('emp-1001', {
+      type: 'task_completed',
+      title: 'Task completed',
+      body: 'The task status changed. Open the task to see the authorized details.',
+      href: '/tasks/tsk-1',
+      relatedLabel: 'Task',
+    });
+    const result = await mockWorkspaceService.getNotifications(EMPLOYEE);
+    expect(result.status).toBe('success');
+    if (result.status !== 'success') return;
+    const item = result.data.groups.flatMap((group) => group.items).find((candidate) => candidate.type === 'task_completed');
+    expect(item?.group).toBe('work');
+    expect(item?.body).not.toMatch(/government|cost|salary|division/i);
+  });
+
   it('returns only the recipient’s own notifications', async () => {
     const employee = await mockWorkspaceService.getNotifications(EMPLOYEE);
     const lead = await mockWorkspaceService.getNotifications(TEAM_LEAD);
@@ -556,6 +573,7 @@ describe('department administration', () => {
 
   it('creates, updates, and deletes an unused department', async () => {
     const created = await mockAdminService.saveDepartment(ADMIN, {
+      divisionId: 'wcf',
       name: 'Customer Success',
       code: 'CS',
       description: 'Customer adoption and retention.',
@@ -566,7 +584,12 @@ describe('department administration', () => {
 
     const updated = await mockAdminService.saveDepartment(
       ADMIN,
-      { name: 'Customer Experience', code: 'CX', description: '' },
+      {
+        divisionId: 'wcf',
+        name: 'Customer Experience',
+        code: 'CX',
+        description: '',
+      },
       department?.id,
     );
     if (updated.status !== 'success') return;
@@ -583,10 +606,19 @@ describe('department administration', () => {
   it('protects a department referenced by employee records', async () => {
     const listed = await mockAdminService.listDepartments(ADMIN);
     if (listed.status !== 'success') return;
-    const engineering = listed.data.find((item) => item.name === 'Engineering');
-    expect(engineering?.canDelete).toBe(false);
-    const result = await mockAdminService.deleteDepartment(ADMIN, engineering?.id ?? '');
+    const technical = listed.data.find(
+      (item) => item.division.id === 'pia' && item.name === 'Technical',
+    );
+    expect(technical?.canDelete).toBe(false);
+    const result = await mockAdminService.deleteDepartment(ADMIN, technical?.id ?? '');
     expect(result.status).toBe('conflict');
+  });
+
+  it('allows the same department name in separate divisions', async () => {
+    const listed = await mockAdminService.listDepartments(ADMIN);
+    if (listed.status !== 'success') return;
+    const sales = listed.data.filter((item) => item.name === 'Sales');
+    expect(sales.map((item) => item.division.id).sort()).toEqual(['pia', 'wcf']);
   });
 });
 

@@ -33,4 +33,27 @@ for (const [index, name] of migrations.entries()) {
   }
 }
 
+const taskWorkMigration = readFileSync(join(root, '0011_task_work_log_cutover.sql'), 'utf8');
+for (const required of [
+  'time_capture_cutovers',
+  'task_status_transitions',
+  'migrated_clock_entry',
+  'idempotency_key',
+  'task_work_migration_reconciliation',
+  'cutover-timer:',
+  'task_status_transitions_no_update',
+  'task_status_transitions_no_delete',
+  'ix_work_log_employee_date',
+  'ix_work_log_task_date',
+]) {
+  if (!taskWorkMigration.includes(required)) {
+    throw new Error(`Migration 0011 is missing required invariant: ${required}`);
+  }
+}
+
+const grantHardener = readFileSync(join(process.cwd(), 'scripts', 'db-harden-task-work-grants.mjs'), 'utf8');
+if (!grantHardener.includes("table === 'task_status_transitions'") || !grantHardener.includes("table !== 'timer_sessions'")) {
+  throw new Error('Runtime grant hardener must keep transitions insert-only and timers read-only.');
+}
+
 console.log(`Migration validation passed: ${migrations.length} forward migration(s) and matching recovery scripts checked.`);

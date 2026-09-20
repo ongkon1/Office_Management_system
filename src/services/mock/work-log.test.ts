@@ -3,7 +3,7 @@ import type { WorkLogInput } from '@/contracts/work-log';
 import { formatDurationDelta } from '@/lib/format';
 import { mockStore } from './store';
 import { mockTimesheetService, resetTaskWorkflowState } from './timesheet';
-import { toTaskSummary } from './work';
+import { mockDashboardService, toTaskSummary } from './work';
 
 const workLogInput = (idempotencyKey: string): WorkLogInput => ({
   employeeId: 'emp-1001',
@@ -283,7 +283,7 @@ describe('task-based mock service boundary', () => {
   it('keeps historical clock ranges renderable while new work logs have no range', async () => {
     const historical = await mockTimesheetService.getDay({
       employeeId: 'emp-1001',
-      date: '2026-09-01',
+      date: '2026-07-27',
     });
     expect(historical.status).toBe('success');
     if (historical.status !== 'success') return;
@@ -313,6 +313,66 @@ describe('task-based mock service boundary', () => {
     expect(newRow?.timeRangeLabel).toBeNull();
     expect(newRow?.canEdit).toBe(true);
     expect(newRow?.canDelete).toBe(true);
+  });
+
+  it('keeps verified periods locked for create, edit and delete with an amendment path', async () => {
+    const lockedDate = '2026-07-23';
+    const day = await mockTimesheetService.getDay({ employeeId: 'emp-1001', date: lockedDate });
+    expect(day.status).toBe('success');
+    if (day.status !== 'success') return;
+    expect(day.data.summary.isLocked).toBe(true);
+    expect(day.data.canAddEntry).toBe(false);
+    expect(day.data.entries.every((entry) => !entry.canEdit && !entry.canDelete)).toBe(true);
+
+    const create = await mockTimesheetService.createWorkLog({
+      ...workLogInput(`locked-create-${Math.random()}`),
+      workDate: lockedDate,
+    });
+    expect(create.status).toBe('conflict');
+    if (create.status === 'conflict') {
+      expect(create.code).toBe('PERIOD_LOCKED');
+      expect(create.guidance).toMatch(/amendment/i);
+      expect(create.lockedPeriod).toMatchObject({
+        periodId: 'per-2026-07',
+        label: 'July 2026',
+        amendmentPathAvailable: true,
+      });
+    }
+
+    const editableEntry = mockStore
+      .entriesBetween('emp-1001', lockedDate, lockedDate)
+      .find((entry) => entry.startTime === null && entry.endTime === null);
+    expect(editableEntry).toBeDefined();
+    if (!editableEntry) return;
+    const workLog = await mockTimesheetService.getWorkLog(editableEntry.id);
+    expect(workLog.status).toBe('success');
+    if (workLog.status !== 'success') return;
+
+    const update = await mockTimesheetService.updateWorkLog(workLog.data.id, {
+      ...workLog.data,
+      expectedVersion: workLog.data.version ?? 0,
+      changeReason: 'Correction requested after verification.',
+    });
+    const remove = await mockTimesheetService.deleteWorkLog(workLog.data.id);
+    for (const result of [update, remove]) {
+      expect(result.status).toBe('conflict');
+      if (result.status === 'conflict') {
+        expect(result.code).toBe('PERIOD_LOCKED');
+        expect(result.lockedPeriod?.amendmentPathAvailable).toBe(true);
+      }
+    }
+  });
+
+  it('exposes today\'s active total and Log work action without a timer view', async () => {
+    const result = await mockDashboardService.getEmployeeDashboard('usr-1001', '2026-09-02');
+    expect(result.status).toBe('success');
+    if (result.status !== 'success') return;
+
+    expect(result.data.today.active.minutes).toBeGreaterThanOrEqual(0);
+    expect(result.data.quickActions).toContainEqual(
+      expect.objectContaining({ key: 'log_work', label: 'Log work', enabled: true }),
+    );
+    expect(result.data).not.toHaveProperty('runningTimer');
   });
 
   it('derives task actuals, signed variance and dated breakdown from saved rows', () => {

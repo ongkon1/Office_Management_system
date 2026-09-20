@@ -28,6 +28,7 @@ import type {
   WorkMode,
 } from './domain';
 import type { Result } from './results';
+import type { DepartmentOptionView } from './organization-hierarchy';
 import type {
   DivisionRef,
   DurationView,
@@ -65,7 +66,6 @@ export interface HrEmployeeRowView {
   readonly statusLabel: string;
   readonly primaryDivision: DivisionRef | null;
   readonly divisionCodes: readonly string[];
-  readonly teamLeadName: string | null;
   readonly employmentType: EmploymentType;
   readonly employmentTypeLabel: string;
   readonly workMode: WorkMode;
@@ -91,8 +91,9 @@ export interface HrAssignmentView {
   readonly id: string;
   readonly employeeId: string;
   readonly division: DivisionRef;
+  readonly department: { readonly id: string; readonly name: string; readonly code: string };
   readonly isPrimary: boolean;
-  readonly teamLead: EmployeeRef | null;
+  readonly effectiveTeamLead: EmployeeRef | null;
   readonly allocationPercent: number;
   readonly expectedWeekly: DurationView;
   readonly startDate: IsoDate;
@@ -113,7 +114,6 @@ export interface HrEmployeeDetailView {
   readonly email: string;
   readonly phone: string | null;
   readonly officeLocation: string | null;
-  readonly department: string | null;
   readonly employmentType: EmploymentType;
   readonly employmentTypeLabel: string;
   readonly joiningDateLabel: string;
@@ -174,14 +174,12 @@ export interface EmployeeFormInput {
   readonly fullName: string;
   readonly employeeCode: string;
   readonly designation: string;
-  readonly department: string;
   readonly employmentType: EmploymentType;
   readonly joiningDate: IsoDate;
   readonly email: string;
   readonly phone: string;
   readonly officeLocation: string;
   readonly primaryDivisionId: string;
-  readonly teamLeadEmployeeId: string;
   readonly normalWorkMode: WorkMode;
   readonly standardDailyActiveMinutes: number;
   readonly standardWeeklyActiveMinutes: number;
@@ -189,16 +187,11 @@ export interface EmployeeFormInput {
   readonly status: 'active' | 'inactive';
 }
 
-export interface DepartmentOptionView {
-  readonly value: string;
-  readonly label: string;
-}
-
 export interface AssignmentFormInput {
   readonly employeeId: string;
   readonly divisionId: string;
+  readonly departmentId: string;
   readonly isPrimary: boolean;
-  readonly teamLeadEmployeeId: string;
   readonly allocationPercent: number;
   readonly expectedWeeklyMinutes: number;
   readonly startDate: IsoDate;
@@ -207,6 +200,8 @@ export interface AssignmentFormInput {
   readonly isActive: boolean;
   readonly roleInDivision: string;
 }
+
+export type { DepartmentOptionView } from './organization-hierarchy';
 
 /* ------------------------------------------------------------------------- */
 /* Attendance, WFH, leave, holidays                                          */
@@ -455,7 +450,10 @@ export interface HrEvaluationDetailView extends HrEvaluationRowView {
 export interface HrService {
   getDashboard(userId: string): Promise<Result<HrDashboard>>;
 
-  listDepartmentOptions(userId: string): Promise<Result<readonly DepartmentOptionView[]>>;
+  listDepartmentOptions(
+    userId: string,
+    divisionId: string,
+  ): Promise<Result<readonly DepartmentOptionView[]>>;
 
   listEmployees(
     userId: string,

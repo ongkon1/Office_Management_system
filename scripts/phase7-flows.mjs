@@ -277,6 +277,9 @@ record(
 );
 
 body = await goto(admin.page, '/settings', 900);
+await admin.page.getByRole('tab', { name: 'Work policy' }).click();
+await admin.page.waitForTimeout(500);
+body = await admin.page.locator('main').innerText();
 record(
   body.includes('Work policy') && body.includes('7:00') && body.includes('Read-only'),
   'FE-0732',

@@ -280,16 +280,16 @@ A backend task may be marked `[x]` only when all applicable conditions are true:
 
 ### Employee-Raised Tasks
 
-An employee raises a task for themselves and their Team Lead endorses it. Frontend behaviour is built (`FE-0780`-`FE-0784`); this is the server half.
+An employee raises a task for themselves and their Team Lead endorses it. A Team Lead may use the same narrow self-task boundary, but their task is stored as `team_lead` origin with `review_state = not_required`; it never enters a review queue. Frontend behaviour is built (`FE-0780`-`FE-0784`); this is the server half.
 
-- [x] `BE-0330` Add the task review state, reviewer, decided-at and note columns, with a constraint that a task created by a non-Team-Lead cannot be persisted as needing no review.
+- [x] `BE-0330` Add the task review state, reviewer, decided-at and note columns, with a constraint that a task created by a non-Team-Lead cannot be persisted as needing no review. Team Lead self-tasks are explicitly persisted as `team_lead` origin and `not_required`.
 - [x] `BE-0331` Enforce that only the creator's own current Team Lead may decide, and that nobody may endorse a task they raised.
 - [x] `BE-0332` **Refuse a time entry against a task that is not approved**, in the same server-side validation that already refuses an inactive project. This is the rule the whole feature rests on: a filtered task list is a convenience, and the entry endpoint is the control.
 - [x] `BE-0333` Make the decision idempotent and conflict-safe, and keep it append-only so who endorsed what stays reproducible.
 - [x] `BE-0334` Handle the Team Lead mapping changing while a task is pending, so a raised task can never become unreviewable.
-- [x] `BE-0335` Restrict the employee's create payload to their own assigned divisions and active projects, ignoring any assignee or supporting members it carries.
+- [x] `BE-0335` Restrict the personal-task create payload to the creator's own assigned divisions and active projects, ignoring any assignee or supporting members it carries. Force self-assignment; require review for Employees and bypass it only for Team Leads.
 - [x] `BE-0336` Audit raise, approve and refuse with actor, role, before/after and reason, and notify the Team Lead on raise and the employee on decision.
-- [x] `BE-0337` Test the time-entry refusal at every review state, review by the wrong Team Lead, self-endorsement, concurrent decisions, and Team Lead reassignment mid-review.
+- [x] `BE-0337` Test the time-entry refusal at every review state, review by the wrong Team Lead, self-endorsement, concurrent decisions, Team Lead reassignment mid-review, and Team Lead self-creation without a review notification.
 
 ### Phase 3 Exit Criteria
 
@@ -297,6 +297,7 @@ An employee raises a task for themselves and their Team Lead endorses it. Fronte
 - [x] Effective assignments and project/task scope are enforced for reads and writes.
 - [x] Actual project/task hours reconcile to stored valid time entries.
 - [x] A task an employee raised accepts no time until their own Team Lead has approved it, enforced at the time-entry endpoint.
+- [x] A self-assigned task created by a Team Lead needs no approval and accepts work only after the ordinary transition to In Progress.
 
 Phase 3 evidence is recorded in `docs/backend/phase-3/verification.md`: migration and recovery validation, transaction-aware MySQL repositories, organization/work services, protected profile-photo delivery, and 102 passing backend tests.
 

@@ -54,6 +54,7 @@ import {
   formatMoney,
   formatMoneyCompact,
   formatTimestamp,
+  formatTime,
 } from '@/lib/format';
 import { costOfMinutes, subtractMoney, sumMoney, variancePercent, ZERO_BDT } from '@/lib/money';
 import { toDurationView } from '@/lib/status';
@@ -976,6 +977,61 @@ export const mockFinanceService: FinanceService = {
     const slices = applyFilters(slicesFor(period, REPORTED_EMPLOYEE_IDS), {
       divisionIds: filters.divisionIds,
     });
+    if (filters.reportKey === 'timesheet-detail') {
+      const entries = mockStore.allEntries()
+        .filter((entry) =>
+          entry.state !== 'draft' &&
+          REPORTED_EMPLOYEE_IDS.includes(entry.employeeId) &&
+          entry.workDate >= period.startDate &&
+          entry.workDate <= period.endDate &&
+          (!filters.divisionIds?.length || filters.divisionIds.includes(entry.divisionId)),
+        )
+        .sort((a, b) => a.workDate.localeCompare(b.workDate) || a.employeeId.localeCompare(b.employeeId));
+      const rows = entries.map((entry) => {
+        const task = entry.taskId ? mockStore.findTask(entry.taskId) : null;
+        const historical = Boolean(entry.startTime && entry.endTime);
+        return {
+          date: formatDate(entry.workDate),
+          employee: employeeRef(entry.employeeId).fullName,
+          task: task?.title ?? 'Not recorded',
+          duration: toDurationView(entry.activeMinutes).display,
+          recordType: historical ? 'Historical clock entry' : 'Work log',
+          start: historical ? formatTime(entry.startTime!) : '—',
+          end: historical ? formatTime(entry.endTime!) : '—',
+        };
+      });
+      const totalMinutes = entries.reduce((total, entry) => total + entry.activeMinutes, 0);
+      return success<FinanceReportPreviewView>({
+        reportKey: filters.reportKey,
+        title: 'Timesheet task detail',
+        periodLabel: period.label,
+        rangeLabel: period.rangeLabel,
+        filterSummary: [
+          { label: 'Period', value: period.label },
+          { label: 'Divisions', value: filters.divisionIds?.length ? filters.divisionIds.map((id) => divisionRef(id).code).join(', ') : 'All divisions' },
+          { label: 'Rows', value: 'Task-attributed work logs and immutable historical entries' },
+          { label: 'Verification', value: period.isVerified ? 'Verified only' : 'Includes unverified data' },
+        ],
+        timezone: STANDARD_POLICY.businessTimezone,
+        generatedAtLabel: formatTimestamp(new Date().toISOString()),
+        policyVersion: STANDARD_POLICY.version,
+        unverifiedWarning: unverifiedWarningFor(period),
+        restrictionNote: null,
+        columns: [
+          { field: 'date', label: 'Date', align: 'left', restricted: false },
+          { field: 'employee', label: 'Employee', align: 'left', restricted: false },
+          { field: 'task', label: 'Task', align: 'left', restricted: false },
+          { field: 'duration', label: 'Duration', align: 'right', restricted: false },
+          { field: 'recordType', label: 'Record type', align: 'left', restricted: false },
+          { field: 'start', label: 'Historical start', align: 'right', restricted: false },
+          { field: 'end', label: 'Historical end', align: 'right', restricted: false },
+        ],
+        rows,
+        totals: { date: 'Total', employee: '', task: '', duration: toDurationView(totalMinutes).display, recordType: '', start: '', end: '' },
+        rowCount: rows.length,
+        hasFinancialPermission: canViewCost(userId),
+      });
+    }
 
     const keys = [
       ...new Set(

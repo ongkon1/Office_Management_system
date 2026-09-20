@@ -3,8 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Clock3, Coffee, Lock, MoreHorizontal, Pencil, Play, Plus, Square, Trash2 } from 'lucide-react';
-import type { TimeEntryInput } from '@/contracts/services';
+import { ChevronLeft, ChevronRight, Clock3, Coffee, Lock, MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react';
 import type { WorkLog } from '@/contracts/work-log';
 import type { TimesheetDayView } from '@/contracts/view-models';
 import { cn } from '@/lib/cn';
@@ -23,10 +22,6 @@ import { useToast } from '@/components/feedback/toast';
 import { PageContainer, PageHeader } from '@/components/layout/page';
 import { Skeleton } from '@/components/ui/skeleton';
 import { mockTimesheetService } from '@/services/mock/timesheet';
-import { mockStore } from '@/services/mock/store';
-import { DEMO_TODAY } from '@/lib/demo-context';
-import { EntryDrawer } from './entry-drawer';
-import { TimerPanel } from './timer-panel';
 import { WorkLogDrawer, type CopiedWorkLogDraft } from './work-log-drawer';
 
 export function DayView({
@@ -47,15 +42,11 @@ export function DayView({
     [employeeId, date],
   );
 
-  const [drawerOpen, setDrawerOpen] = React.useState(false);
   const [workLogOpen, setWorkLogOpen] = React.useState(Boolean(initialLogTaskId));
   const [copiedWorkLog, setCopiedWorkLog] = React.useState<CopiedWorkLogDraft>();
   const [editingWorkLog, setEditingWorkLog] = React.useState<WorkLog>();
   const [copyingId, setCopyingId] = React.useState<string | null>(null);
   const [handledLogTaskId, setHandledLogTaskId] = React.useState(initialLogTaskId);
-  const [editingId, setEditingId] = React.useState<string | undefined>();
-  const [initial, setInitial] = React.useState<Partial<TimeEntryInput> | undefined>();
-  const [draftOrigin, setDraftOrigin] = React.useState<'copy' | 'timer' | null>(null);
   const [copyOpen, setCopyOpen] = React.useState(false);
   const [deleteId, setDeleteId] = React.useState<string | null>(null);
 
@@ -92,27 +83,6 @@ export function DayView({
     setWorkLogOpen(true);
   }
 
-  function openLegacyEdit(entryId: string) {
-    const entry = mockStore.findEntry(entryId);
-    if (!entry) return;
-    setEditingId(entryId);
-    setInitial({
-      divisionId: entry.divisionId,
-      projectId: entry.projectId,
-      taskId: entry.taskId,
-      entryMethod: entry.startTime ? 'manual_clock' : 'manual_duration',
-      workLocation: entry.workLocation,
-      startTime: entry.startTime ? entry.startTime.slice(11, 16) : null,
-      endTime: entry.endTime ? entry.endTime.slice(11, 16) : null,
-      activeMinutes: entry.activeMinutes,
-      workDescription: entry.workDescription,
-      completedWork: entry.completedWork,
-      supportingLink: entry.supportingLink,
-    });
-    setDraftOrigin(null);
-    setDrawerOpen(true);
-  }
-
   async function openWorkLogEdit(entryId: string) {
     const result = await mockTimesheetService.getWorkLog(entryId);
     if (result.status !== 'success') {
@@ -141,16 +111,9 @@ export function DayView({
     setWorkLogOpen(true);
   }
 
-  function openTimerDraft(draft: TimeEntryInput) {
-    setEditingId(undefined);
-    setInitial(draft);
-    setDraftOrigin('timer');
-    setDrawerOpen(true);
-  }
-
   async function confirmDelete() {
     if (!deleteId) return;
-    const result = await mockTimesheetService.deleteEntry(deleteId);
+    const result = await mockTimesheetService.deleteWorkLog(deleteId);
     setDeleteId(null);
     if (result.status === 'success') {
       toast.show({ tone: 'success', title: 'Entry removed' });
@@ -255,10 +218,6 @@ export function DayView({
         )}
 
         <DaySummaryCard day={day} />
-
-        {date === DEMO_TODAY && !day.summary.isLocked && (
-          <TimerPanel employeeId={employeeId} workDate={date} onDraft={openTimerDraft} />
-        )}
 
         <Card padding="none">
           <div className="p-4 sm:p-5">
@@ -388,8 +347,7 @@ export function DayView({
                             label: entry.timeRangeLabel ? 'Edit historical entry' : 'Edit work log',
                             icon: <Pencil aria-hidden className="size-4" />,
                             onSelect: () => {
-                              if (entry.timeRangeLabel) openLegacyEdit(entry.id);
-                              else void openWorkLogEdit(entry.id);
+                              void openWorkLogEdit(entry.id);
                             },
                           },
                           {
@@ -466,19 +424,8 @@ export function DayView({
         )}
       </div>
 
-      <EntryDrawer
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        employeeId={employeeId}
-        workDate={date}
-        entryId={editingId}
-        initial={initial}
-        draftOrigin={draftOrigin}
-        onSaved={reload}
-      />
-
       <WorkLogDrawer
-        open={workLogOpen}
+        open={workLogOpen && day.canAddEntry}
         onClose={() => setWorkLogOpen(false)}
         employeeId={employeeId}
         defaultWorkDate={date}
@@ -691,4 +638,3 @@ function CopyWorkLogDialog({
   );
 }
 
-export { Play, Square };

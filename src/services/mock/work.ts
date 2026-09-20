@@ -18,6 +18,7 @@ import { toDurationView, REMARK_STATE_LABEL, TASK_STATUS_LABEL } from '@/lib/sta
 import { DEMO_TODAY, LEAVE_TYPES, STANDARD_POLICY } from '@/fixtures';
 import { DIVISIONS, findAccountByUserId } from './accounts';
 import { mockStore } from './store';
+import { effectiveLeadForAssignment } from './organization-hierarchy';
 import {
   actualTaskMinutes,
   assignmentsFor,
@@ -373,11 +374,6 @@ export const mockDashboardService = {
       .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
       .slice(0, 5);
 
-    const timer = mockStore.getTimer();
-    const elapsedMinutes = timer
-      ? Math.max(0, Math.round((Date.now() - new Date(timer.startedAt).getTime()) / 60000))
-      : 0;
-
     const monthTotalActive = monthSummaries.reduce(
       (total, summary) => total + summary.activeMinutes,
       0,
@@ -399,42 +395,6 @@ export const mockDashboardService = {
 
     const view: EmployeeDashboardView = {
       today: todayView,
-      runningTimer: timer
-        ? {
-            sessionId: timer.id,
-            startedAt: timer.startedAt,
-            elapsed: toDurationView(elapsedMinutes),
-            division: divisionRef(timer.divisionId),
-            project: timer.projectId
-              ? (() => {
-                  const project = projectById(timer.projectId);
-                  return project
-                    ? {
-                        id: project.id,
-                        name: project.name,
-                        code: project.code,
-                        divisionId: project.divisionId,
-                      }
-                    : null;
-                })()
-              : null,
-            task: timer.taskId
-              ? (() => {
-                  const task = mockStore.findTask(timer.taskId);
-                  return task
-                    ? {
-                        id: task.id,
-                        title: task.title,
-                        projectId: task.projectId,
-                        status: task.status,
-                      }
-                    : null;
-                })()
-              : null,
-            workLocation: timer.workLocation,
-            wasRecovered: false,
-          }
-        : null,
       todaysDivisions: today.divisionContributions.map((contribution) => ({
         division: divisionRef(contribution.divisionId),
         active: toDurationView(contribution.activeMinutes),
@@ -489,8 +449,7 @@ export const mockDashboardService = {
         .map(toTaskSummary)
         .slice(0, 3),
       quickActions: [
-        { key: 'add_time', label: 'Add time', href: `/timesheets/${date}`, enabled: !today.isLocked },
-        { key: 'start_timer', label: 'Start timer', href: `/timesheets/${date}`, enabled: !timer },
+        { key: 'log_work', label: 'Log work', href: `/timesheets/${date}`, enabled: !today.isLocked },
         { key: 'request_wfh', label: 'Request WFH', href: '/wfh', enabled: true },
         { key: 'apply_leave', label: 'Apply for leave', href: '/leave', enabled: true },
       ],
@@ -504,12 +463,13 @@ export const mockDivisionsService = {
   async listForEmployee(employeeId: string) {
     await delay();
     const assignments = assignmentsFor(employeeId).map((assignment) => ({
+      ...(() => {
+        const leadEmployeeId = effectiveLeadForAssignment(assignment, DEMO_TODAY);
+        return { teamLead: leadEmployeeId ? employeeRef(leadEmployeeId) : null };
+      })(),
       id: assignment.id,
       division: divisionRef(assignment.divisionId),
       isPrimary: assignment.isPrimary,
-      teamLead: assignment.teamLeadEmployeeId
-        ? employeeRef(assignment.teamLeadEmployeeId)
-        : null,
       allocationPercent: assignment.allocationPercent,
       expectedWeekly: toDurationView(assignment.expectedWeeklyMinutes),
       startDateLabel: formatDate(assignment.startDate),

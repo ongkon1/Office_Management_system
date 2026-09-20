@@ -261,7 +261,6 @@ export function AppShellHost({ children }: { children: React.ReactNode }) {
         permissions: user.permissions,
       }),
       unreadNotificationCount: 3,
-      runningTimer: null,
       sessionExpiresAt: user.sessionExpiresAt,
     };
   }, [user, flags]);

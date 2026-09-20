@@ -104,6 +104,9 @@ export class OrganizationWorkService {
       if(!lead) return conflict('No current Team Lead can review this task.','Ask HR to correct the effective Team Lead assignment.');
       candidate={...row,assigneeEmployeeId:row.creatorEmployeeId,reviewState:'pending_review',reviewerEmployeeId:lead,reviewedAt:null,reviewNote:null};
     } else if(!authorize(actor,'task.manage',{divisionId:row.divisionId,projectId:row.projectId,effective:true},'server_action')) return {status:'permission_denied',code:'FORBIDDEN',message:'You cannot manage this task.'};
+    else if(actor.roles.includes('team_lead')&&actor.employeeId===row.assigneeEmployeeId){
+      candidate={...row,creatorEmployeeId:actor.employeeId,assigneeEmployeeId:actor.employeeId,reviewState:'not_required',reviewerEmployeeId:null,reviewedAt:null,reviewNote:null};
+    }
     const saved=await this.repository.saveTask(candidate,expectedVersion); if(!saved) return conflict('The task changed before this update was saved.','Reload and review the latest version.');
     await this.effects.audit({actorUserId:actor.userId,action:'task.save',resourceType:'task',resourceId:candidate.id,before:null,after:candidate});
     if(employeeRaised&&candidate.reviewerEmployeeId) await this.effects.notify({employeeId:candidate.reviewerEmployeeId,type:'task_review_requested',resourceId:candidate.id});

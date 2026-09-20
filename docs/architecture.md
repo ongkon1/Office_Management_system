@@ -4,11 +4,11 @@
 
 | Field | Value |
 |---|---|
-| Status | Approved architecture baseline - derived from `project_requirement.md` v1.2 |
-| Last updated | 14 September 2026 |
+| Status | Approved architecture baseline - derived from `project_requirement.md` v1.4 |
+| Last updated | 16 September 2026 |
 | Requirements source | `project_requirement.md` |
-| Delivery plans | `frontend_milestone.md`, `backend_milestone.md`, `modify_milestone.md` |
-| Implemented so far | Existing frontend/backend baseline plus Modify Phase 0; task-based coding begins in Modify Phase F1 |
+| Delivery plans | `frontend_milestone.md`, `backend_milestone.md`, `modify_milestone.md`, `organization_hierarchy_milestone.md` |
+| Implemented so far | Organization hierarchy Phase 0 is complete. A preliminary primary-department mock prototype exists, but the approved per-assignment contracts, persistence, scoped authorization, and cutover remain pending. |
 
 This document explains *how* the system is structured and *why*. It derives the structure from the requirements rather than restating them, and it distinguishes decisions that are fixed from decisions still open.
 
@@ -16,7 +16,7 @@ This document explains *how* the system is structured and *why*. It derives the 
 
 ## 1. Architectural Drivers
 
-Most of this system is ordinary CRUD. Six requirements are not, and they are what actually shape the architecture. Every significant structural decision below traces back to one of them.
+Most of this system is ordinary CRUD. The following requirements are not, and they are what actually shape the architecture. Every significant structural decision below traces back to one of them.
 
 | # | Driver | Requirement | Structural consequence |
 |---|---|---|---|
@@ -28,7 +28,10 @@ Most of this system is ordinary CRUD. Six requirements are not, and they are wha
 | D6 | **Latency budgets.** 2 s reads / 3 s writes / 5 s dashboards at p95. | `REQ-NFR-PERF-001`–`003` | Derived daily summaries are materialised, not recomputed per request; long work moves to a durable job runner. |
 | D7 | **AI is assistive, durable, and explainable.** Human-authored minutes survive every AI outcome; AI suggestions never become trusted authorization or identity decisions. | `REQ-MTG-007`–`023`, `AC-MTG-003`–`010` | Save the source first, process asynchronously, validate structured output, match against current authorized data, preserve provenance, and support retry without duplication. |
 
-A seventh, softer driver: the system must remain **one deployable application** (`frontend_milestone.md` §2.1). That constrains the container view but not the module structure.
+| D8 | **Organization hierarchy is authoritative and date-effective.** A department belongs to one division; every employee-division assignment selects a same-division department; lead appointments grant only department scope. | `REQ-ORG-011`–`020`, `REQ-RBAC-022`, `REQ-DATA-013`–`015`, `AC-WF-012`–`013` | Department and DepartmentLeadAssignment are first-class entities; placement lives on EmployeeDivisionAssignment; authorization derives bounded capabilities from effective appointments. |
+| D9 | **A Team Lead retains employee self-service.** Leadership adds scoped team capabilities; it does not remove personal tasks or timesheets. | `REQ-RBAC-007`, `REQ-WORK-018`, `REQ-TIME-001`, `AC-WF-014` | Team Leads use the same self-task boundary with forced self-assignment, `team_lead` origin and `review_state = not_required`; their own work logs use the ordinary personal timesheet path. |
+
+A final, softer driver: the system must remain **one deployable application** (`frontend_milestone.md` §2.1). That constrains the container view but not the module structure.
 
 ---
 
@@ -70,7 +73,7 @@ graph TB
     HR -->|"verifies periods, publishes evaluations"| SYS
     FIN -->|"verified hours, authorized cost"| SYS
     MGT -->|"read-only summaries"| SYS
-    ADM -->|"divisions, roles, policies"| SYS
+    ADM -->|"divisions, departments, roles, policies"| SYS
 
     SYS -.->|"draft entries only"| CAL
     SYS -->|"notifications"| MAIL
@@ -128,7 +131,7 @@ Modules are vertical slices with explicit dependencies. A module may depend on t
 
 ```
 access          identity, sessions, roles, permissions
-organization    employees, divisions, assignments, work policies, holidays
+organization    employees, divisions, departments, department leads, assignments, work policies, holidays
 work            projects, project members, tasks, checklists, status transitions
 time            work logs, historical clock entries, breaks, daily summaries, periods, verification
 hr              WFH, leave, attendance derivation
@@ -145,6 +148,8 @@ ai_matching     provider adapter, schema validation, explainable assignment scor
 ```
 
 Shared layers cut across all of them: **domain rules**, **application services**, **authorization policies**, **repositories**, **job handlers**, and the **contracts** the UI consumes.
+
+Team Lead is additive rather than mutually exclusive with employee self-service. A Team Lead can assign scoped team work through the management boundary and can create a narrower task for themselves through the personal boundary. That personal task is forced to the authenticated employee, is audited as self-created, sends no review request, and starts Pending with `review_state = not_required`. It creates no minutes; the Team Lead must move it to In Progress and explicitly log a duration in their own timesheet.
 
 `time` is the module everything else reads from and nothing else writes to. `reporting`, `finance`, `evaluation`, and `hr` consume its calculated output; none of them recompute hours. That is the structural expression of driver **D1**.
 
@@ -199,9 +204,11 @@ graph LR
 
 **One service, every boundary.** Pages, actions, route handlers, background jobs, search, reports and exports all consult the same policy API. A capability reachable through six entry points must not have six implementations of who may use it.
 
-**Six dimensions of scope**, all of which can apply at once: role, division, project or team, record ownership, date-effectiveness of the assignment, and workflow state.
+**Seven dimensions of scope**, all of which can apply at once: role, division, department, project or team, record ownership, date-effectiveness of the assignment, and workflow state.
 
-Date-effectiveness deserves emphasis. A Team Lead's authority is not "these employees" but "these employees *on this date*" (`REQ-DATA-002`, `REQ-ORG-009`). A temporary assignment that ended in August must not grant access to September records, and time cannot be recorded against a division the employee was not assigned to *on the work date*.
+Date-effectiveness deserves emphasis. A Team Lead's authority is not "these employees" but "these employees *on this date*" (`REQ-DATA-002`, `REQ-ORG-009`, `REQ-DATA-014`). A temporary assignment or department-lead assignment that ended in August must not grant access to September records, and time cannot be recorded against a division the employee was not assigned to *on the work date*.
+
+**A department-lead appointment is a scoped capability source, not a global role mutation.** Any eligible active employee may lead a department without receiving the persistent `team_lead` role. The authorization service unions all effective department scopes for the request date, then intersects them with restricted-data and record-level policies. Ending one appointment removes only that future department scope. Project manager/member authority remains a separate policy input.
 
 **Row filtering precedes aggregation.** Authorization is applied before totals are computed, never after. Otherwise a count, a group total, or an empty-group label leaks the existence of records the viewer cannot see (`REQ-SRCH-003`, `AC-AUTH-004`).
 
@@ -220,7 +227,7 @@ Date-effectiveness deserves emphasis. A Team Lead's authority is not "these empl
 | Domain | Entities |
 |---|---|
 | Access | User, Role, Permission, UserRole, Session, LoginHistory |
-| Organization | Employee, Division, EmployeeDivisionAssignment, Team, WorkPolicy, HolidayCalendar |
+| Organization | Employee, Division, Department, DepartmentLeadAssignment, EmployeeDivisionAssignment, Team, WorkPolicy, HolidayCalendar |
 | Work | Project, ProjectMember, Task, TaskMember, TaskChecklistItem, TaskStatusTransition |
 | Time | WorkLog, HistoricalClockEntry, DailyBreak, DailySummary, TimesheetPeriod, Verification, Amendment |
 | HR | LeaveRequest, WFHRequest, AttendanceDay, EvaluationPeriod, Evaluation, EvaluationResponse, GeneralRemark |
@@ -246,7 +253,7 @@ Durations are **integer minutes**. Money is a **fixed-precision decimal with an 
 
 ### 8.4 Effective dating
 
-Assignments, work policies, holidays, evaluation weights, and cost rates are all effective-dated. Reports for a past period must use the values that applied *then* (`REQ-DATA-005`). This is why "what is this employee's Team Lead" is never a simple column read — it is a query with a date.
+Division assignments, department Team Lead assignments, work policies, holidays, evaluation weights, and cost rates are all effective-dated. Reports for a past period must use the values that applied *then* (`REQ-DATA-005`, `REQ-DATA-014`). This is why "what was this employee's Team Lead" is never a simple column read — it is a query with a date and assignment context.
 
 ### 8.5 Preservation over deletion
 
@@ -261,6 +268,26 @@ Append-only for application users (`REQ-NFR-SEC-005`). Each event carries actor,
 Meeting minutes use a first-class `Client` record and an explicit project-to-client relationship so the create form can safely filter projects after a client is selected. Existing projects may carry a legacy free-text client label during migration; that label remains readable until an owner reviews the mapping. New meeting minutes cannot be saved with a client/project mismatch.
 
 All active roles can enter the module and read minutes that are within their authorized scope. The authorization service is still consulted before list aggregation, search, queue dispatch, task links, notifications, and diagnostics. A view-only principal receives a read model, never a hidden mutation path.
+
+### 8.8 Division, Department, and Team Lead hierarchy
+
+```mermaid
+erDiagram
+    DIVISION ||--o{ DEPARTMENT : owns
+    DEPARTMENT ||--o{ DEPARTMENT_LEAD_ASSIGNMENT : has
+    EMPLOYEE ||--o{ DEPARTMENT_LEAD_ASSIGNMENT : leads
+    EMPLOYEE ||--o{ EMPLOYEE_DIVISION_ASSIGNMENT : receives
+    DIVISION ||--o{ EMPLOYEE_DIVISION_ASSIGNMENT : scopes
+    DEPARTMENT ||--o{ EMPLOYEE_DIVISION_ASSIGNMENT : contains
+```
+
+`Department` has a mandatory `division_id`; `(division_id, normalized_name)` and `(division_id, normalized_code)` are unique. `EmployeeDivisionAssignment.department_id` is mandatory for new active assignments and must reference a department in the same division. This permits one employee to be Technical in PowerInAI and Operations in WesternCF. The database enforces direct foreign keys; the organization application service enforces the cross-record same-division invariant in one transaction.
+
+The effective Team Lead is resolved from `DepartmentLeadAssignment`, never trusted from an employee or assignment form payload. Lead periods for one department cannot overlap. A candidate must be active and effectively assigned to the department's division, but does not need a pre-existing global Team Lead role. One employee may lead several departments. Changing an assignment's division clears an incompatible department; changing its department changes the derived lead without copying a lead identifier onto the employee assignment.
+
+Department option reads are filtered by the selected assignment division. Department and lead mutations require Super Administrator authorization in the service. Referenced departments cannot move divisions or be hard-deleted; deactivation makes them unavailable to new placements while preserving history.
+
+The migration creates departments from distinct legacy division-and-department combinations, maps every employee-division assignment, and creates initial lead periods from reviewed legacy mappings. Null, unmatched, cross-division, and conflicting rows go to a migration-review report and block final cutover. Legacy employee department and lead columns remain read-only during compatibility deployment and are removed only after reconciliation.
 
 ---
 
@@ -395,6 +422,8 @@ Already implemented through Phase 1.
 
 **View models are pre-authorized and pre-formatted.** Components do not recompute totals, re-derive statuses, or re-check permissions.
 
+**Dependent organization controls consume service data.** Every employee-division assignment control requests only active departments belonging to its division, clears stale department state when the division changes, and presents the effective department lead as read-only context. The service repeats every invariant because client filtering is usability, not authorization or integrity enforcement.
+
 **Presentation invariants** enforced in the design system: status renders as shape + text + colour, never colour alone; durations use one central formatter and never round; restricted fields keep their label and render as restricted; no page-level horizontal scrolling at any target width.
 
 Two automated gates run in CI: a contrast audit that parses the real design tokens, and a responsive audit driving Chromium at 375/768/1024/1440 px.
@@ -440,6 +469,9 @@ Also open, and required from the business rather than engineering: authoritative
 | Meeting content crosses an unauthorized boundary | Confidentiality or contractual breach | Authorize before queueing, minimize provider payloads, protect raw artifacts, use approved provider/data region, and re-check access at read time |
 | Retried AI jobs create duplicate tasks | Confusing work queues and duplicate commitments | Durable attempt records, idempotency keys, normalized proposal fingerprints, transactional task creation, and dead-letter monitoring |
 | Legacy client labels conflict with the Client model | Incorrect project filtering or links | Reviewed migration, retained legacy labels, unresolved mapping queue, and strict client-project foreign-key checks for new minutes |
+| Assignment department and division drift apart | Wrong Team Lead scope and possible cross-division exposure | Transactional same-division validation, dependent service queries, migration reconciliation, and contract tests |
+| Department Team Lead is overwritten rather than effective-dated | Historical reviewer authority becomes unreproducible | Append DepartmentLeadAssignment periods and resolve authority for the record date |
+| Scoped lead appointment is cached as a permanent role | Expired or narrow authority becomes persistent or company-wide | Derive effective scopes per request, invalidate principal caches on changes, and test appointment boundaries |
 
 ---
 
@@ -448,9 +480,9 @@ Also open, and required from the business rather than engineering: authoritative
 | Architectural element | Primary requirements |
 |---|---|
 | Calculation engine | `REQ-TIME-011`–`019`, `REQ-NFR-OPS-003`, `REQ-DASH-009`, `AC-CALC-001`–`007` |
-| Authorization service | `REQ-RBAC-001`–`020`, `REQ-NFR-SEC-001`, `-004`, `AC-AUTH-001`–`005` |
+| Authorization service | `REQ-RBAC-001`–`022`, `REQ-NFR-SEC-001`, `-004`, `AC-AUTH-001`–`007` |
 | Period verification | `REQ-TIME-026`–`027`, `REQ-RBAC-015`, `AC-WF-001`, `-003` |
-| Effective dating | `REQ-ORG-005`–`010`, `REQ-DATA-002`, `-005` |
+| Effective dating | `REQ-ORG-005`–`020`, `REQ-DATA-002`, `-005`, `-014`–`015` |
 | Audit | `REQ-NFR-SEC-005`, `REQ-DATA-008`, `AC-WF-002` |
 | Job runner | `REQ-NFR-PERF-003`, `REQ-NOT-005`, `REQ-RPT-008` |
 | Reporting layer | `REQ-RPT-001`–`010`, `AC-RPT-001`–`003` |
@@ -460,3 +492,4 @@ Also open, and required from the business rather than engineering: authoritative
 | Backup and recovery | `REQ-NFR-BACKUP-001`–`003`, `AC-QUAL-003` |
 | Frontend contracts | `frontend_milestone.md` §2.1, `FE-0014`–`FE-0019` |
 | Meeting Minutes and AI pipeline | `REQ-MTG-001`–`024`, `REQ-DATA-009`–`012`, `AC-MTG-001`–`012`, Frontend Phase 11, Backend Phase 13 |
+| Department hierarchy | `REQ-ORG-011`–`020`, `REQ-RBAC-022`, `REQ-DATA-013`–`015`, `REQ-NAV-007`–`008`, `AC-AUTH-006`–`007`, `AC-WF-012`–`013`, `organization_hierarchy_milestone.md` |

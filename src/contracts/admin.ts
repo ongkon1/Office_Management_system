@@ -79,15 +79,19 @@ export interface DivisionFormInput {
 
 export interface DepartmentAdminView {
   readonly id: string;
+  readonly division: DivisionRef;
   readonly name: string;
   readonly code: string;
   readonly description: string | null;
+  readonly currentLead: EmployeeRef | null;
+  readonly isActive: boolean;
   readonly employeeCount: number;
   /** Referenced departments are retained so historical employee records stay readable. */
   readonly canDelete: boolean;
 }
 
 export interface DepartmentFormInput {
+  readonly divisionId: string;
   readonly name: string;
   readonly code: string;
   readonly description: string;

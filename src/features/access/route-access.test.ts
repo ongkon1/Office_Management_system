@@ -15,6 +15,7 @@ function userWith(role: RoleKey, permissions: readonly PermissionKey[] = []): Se
     permissions,
     scopedDivisionIds: [],
     scopedEmployeeIds: [],
+    departmentLeadScopes: [],
     timezone: 'Asia/Dhaka',
     locale: 'en-GB',
     sessionExpiresAt: new Date(Date.now() + 60_000).toISOString(),
@@ -51,6 +52,14 @@ describe('checkRouteAccess', () => {
     expect(allow('/finance', employee)).toBe(false);
     expect(allow('/admin/users', employee)).toBe(false);
     expect(allow('/attendance', employee)).toBe(false);
+  });
+
+  it('keeps Team Lead personal task and timesheet self-service available', () => {
+    const teamLead = userWith('team_lead');
+    expect(allow('/tasks', teamLead)).toBe(true);
+    expect(allow('/tasks/task-1', teamLead)).toBe(true);
+    expect(allow('/timesheets', teamLead)).toBe(true);
+    expect(allow('/timesheets/2026-09-02', teamLead)).toBe(true);
   });
 
   it('separates Finance cost routes from Finance hours by permission', () => {

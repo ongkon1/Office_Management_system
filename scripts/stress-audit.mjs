@@ -128,7 +128,9 @@ const OVERFLOW_SCRIPT = (viewportWidth) => {
 const ROUTES = [
   { path: '/dashboard', email: EMPLOYEE },
   { path: '/timesheets/2026-09-01', email: EMPLOYEE },
+  { path: '/timesheets/2026-09-02', email: EMPLOYEE },
   { path: '/tasks', email: EMPLOYEE },
+  { path: '/tasks/tsk-1', email: EMPLOYEE },
   { path: '/requisitions', email: TEAM_LEAD },
   { path: '/conveyance', email: TEAM_LEAD },
   { path: '/team/timesheets', email: TEAM_LEAD },
@@ -227,7 +229,7 @@ for (const width of WIDTHS) {
     `the mobile bottom navigation is present and tall enough (${bottomNav?.height ?? 0}px)`,
   );
 
-  await page.getByRole('button', { name: /^Add time$/ }).first().click();
+  await page.getByRole('button', { name: /^Log work$/ }).first().click();
   await page.waitForTimeout(900);
 
   // The on-screen keyboard is simulated by shrinking the viewport height, which
@@ -258,22 +260,21 @@ for (const width of WIDTHS) {
   await page.keyboard.press('Escape');
   await page.waitForTimeout(400);
 
-  // The running timer must remain visible and operable at 375px.
-  await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
+  // The duration-based Log Work action must remain visible and operable at 375px.
+  await page.goto(`${baseUrl}/timesheets/2026-09-02`, { waitUntil: 'networkidle' });
   await page.waitForTimeout(1100);
-  const timer = await page.evaluate(() => {
-    const text = document.querySelector('main')?.textContent ?? '';
+  const logWork = await page.evaluate(() => {
     const start = [...document.querySelectorAll('button')].find((button) =>
-      /start timer/i.test(button.textContent ?? ''),
+      /log work/i.test(button.textContent ?? ''),
     );
-    if (!start) return { present: text.includes('timer') || text.includes('Timer'), width: 0 };
+    if (!start) return { present: false, width: 0 };
     const rect = start.getBoundingClientRect();
     return { present: true, width: Math.round(rect.width), height: Math.round(rect.height) };
   });
   record(
-    timer.present,
+    logWork.present,
     'FE-0805',
-    `the timer control is reachable at 375px (${timer.width}x${timer.height ?? 0})`,
+    `the Log Work control is reachable at 375px (${logWork.width}x${logWork.height ?? 0})`,
   );
 
   await context.close();

@@ -58,7 +58,9 @@ export const STANDARD_POLICY: WorkPolicy = {
   requiredTotalMinutes: 480,
   overtimeThresholdMinutes: 480,
   criticalThresholdMinutes: 720,
-  workingWeekdays: [1, 2, 3, 4, 5],
+  // Bangladesh office week: Sunday through Thursday. Friday and Saturday are
+  // the standard weekly holidays.
+  workingWeekdays: [7, 1, 2, 3, 4],
   businessTimezone: 'Asia/Dhaka',
   ...STAMP,
 };
@@ -89,22 +91,22 @@ export const HOLIDAYS: readonly Holiday[] = [
   // the policy's working weekdays, so these describe the same rule for the
   // holiday administration screen rather than duplicating it.
   {
+    id: 'hol-w5',
+    name: 'Weekly holiday — Friday',
+    scope: 'weekly',
+    divisionId: null,
+    date: null,
+    weekday: 5,
+    isActive: true,
+    ...STAMP,
+  },
+  {
     id: 'hol-w6',
     name: 'Weekly holiday — Saturday',
     scope: 'weekly',
     divisionId: null,
     date: null,
     weekday: 6,
-    isActive: true,
-    ...STAMP,
-  },
-  {
-    id: 'hol-w7',
-    name: 'Weekly holiday — Sunday',
-    scope: 'weekly',
-    divisionId: null,
-    date: null,
-    weekday: 7,
     isActive: true,
     ...STAMP,
   },
@@ -121,6 +123,7 @@ function assignment(
   options: {
     isPrimary?: boolean;
     allocationPercent: number;
+    departmentId: string;
     teamLeadEmployeeId: string | null;
     startDate: string;
     endDate?: string | null;
@@ -132,6 +135,7 @@ function assignment(
     id,
     employeeId,
     divisionId,
+    departmentId: options.departmentId,
     isPrimary: options.isPrimary ?? false,
     roleInDivision: null,
     teamLeadEmployeeId: options.teamLeadEmployeeId,
@@ -149,39 +153,46 @@ export const ASSIGNMENTS: readonly EmployeeDivisionAssignment[] = [
   assignment('asg-1', 'emp-1001', 'pia', {
     isPrimary: true,
     allocationPercent: 50,
+    departmentId: 'dept-pia-technical',
     teamLeadEmployeeId: 'emp-2001',
     startDate: '2025-01-01',
   }),
   assignment('asg-2', 'emp-1001', 'gov', {
     allocationPercent: 30,
+    departmentId: 'dept-gov-delivery',
     teamLeadEmployeeId: 'emp-2002',
     startDate: '2025-03-01',
   }),
   assignment('asg-3', 'emp-1001', 'wcf', {
     allocationPercent: 20,
+    departmentId: 'dept-wcf-client-services',
     teamLeadEmployeeId: 'emp-2002',
     startDate: '2025-06-01',
   }),
   assignment('asg-4', 'emp-1002', 'cjg', {
     isPrimary: true,
     allocationPercent: 100,
+    departmentId: 'dept-cjg-production',
     teamLeadEmployeeId: 'emp-2001',
     startDate: '2024-09-15',
   }),
   assignment('asg-5', 'emp-1003', 'pit', {
     isPrimary: true,
     allocationPercent: 80,
+    departmentId: 'dept-pit-training',
     teamLeadEmployeeId: 'emp-2001',
     startDate: '2025-02-01',
   }),
   assignment('asg-6', 'emp-1003', 'pia', {
     allocationPercent: 20,
+    departmentId: 'dept-pia-prompt-engineering',
     teamLeadEmployeeId: 'emp-2001',
     startDate: '2025-02-01',
   }),
   assignment('asg-7', 'emp-1004', 'wcf', {
     isPrimary: true,
     allocationPercent: 100,
+    departmentId: 'dept-wcf-client-services',
     teamLeadEmployeeId: 'emp-2002',
     startDate: '2025-04-01',
   }),
@@ -189,10 +200,60 @@ export const ASSIGNMENTS: readonly EmployeeDivisionAssignment[] = [
   // after 2026-08-31 (`REQ-ORG-009`).
   assignment('asg-8', 'emp-1004', 'gov', {
     allocationPercent: 25,
+    departmentId: 'dept-gov-delivery',
     teamLeadEmployeeId: 'emp-2002',
     startDate: '2026-07-01',
     endDate: '2026-08-31',
     isTemporary: true,
+    isActive: false,
+  }),
+  assignment('asg-9', 'emp-2001', 'pia', {
+    isPrimary: true, allocationPercent: 60, departmentId: 'dept-pia-technical',
+    teamLeadEmployeeId: null, startDate: '2022-06-05',
+  }),
+  assignment('asg-10', 'emp-2001', 'pit', {
+    allocationPercent: 20, departmentId: 'dept-pit-programs',
+    teamLeadEmployeeId: null, startDate: '2025-01-01',
+  }),
+  assignment('asg-11', 'emp-2001', 'cjg', {
+    allocationPercent: 20, departmentId: 'dept-cjg-production',
+    teamLeadEmployeeId: null, startDate: '2025-01-01',
+  }),
+  assignment('asg-12', 'emp-2002', 'gov', {
+    isPrimary: true, allocationPercent: 60, departmentId: 'dept-gov-delivery',
+    teamLeadEmployeeId: null, startDate: '2022-11-20',
+  }),
+  assignment('asg-13', 'emp-2002', 'wcf', {
+    allocationPercent: 40, departmentId: 'dept-wcf-operations',
+    teamLeadEmployeeId: null, startDate: '2025-01-01',
+  }),
+  assignment('asg-14', 'emp-3001', 'pia', {
+    isPrimary: true, allocationPercent: 100, departmentId: 'dept-pia-people',
+    teamLeadEmployeeId: null, startDate: '2021-03-14',
+  }),
+  assignment('asg-15', 'emp-4001', 'pia', {
+    isPrimary: true, allocationPercent: 100, departmentId: 'dept-pia-finance',
+    teamLeadEmployeeId: null, startDate: '2021-08-02',
+  }),
+  assignment('asg-16', 'emp-4002', 'pia', {
+    isPrimary: true, allocationPercent: 100, departmentId: 'dept-pia-finance',
+    teamLeadEmployeeId: 'emp-4001', startDate: '2024-01-08',
+  }),
+  assignment('asg-17', 'emp-5001', 'pia', {
+    isPrimary: true, allocationPercent: 100, departmentId: 'dept-pia-executive',
+    teamLeadEmployeeId: null, startDate: '2020-01-06',
+  }),
+  assignment('asg-18', 'emp-9001', 'pia', {
+    isPrimary: true, allocationPercent: 100, departmentId: 'dept-pia-it',
+    teamLeadEmployeeId: null, startDate: '2020-05-18',
+  }),
+  assignment('asg-19', 'emp-1090', 'cjg', {
+    isPrimary: true, allocationPercent: 100, departmentId: 'dept-cjg-production',
+    teamLeadEmployeeId: 'emp-2001', startDate: '2023-01-09',
+  }),
+  assignment('asg-20', 'emp-1091', 'cjg', {
+    isPrimary: true, allocationPercent: 100, departmentId: 'dept-cjg-editorial',
+    teamLeadEmployeeId: 'emp-2001', startDate: '2024-07-01', endDate: '2025-12-31',
     isActive: false,
   }),
 ];
@@ -361,6 +422,9 @@ export const TASKS: readonly Task[] = [
     reviewedAt: '2026-08-30T09:30:00+06:00',
     reviewNote: 'This is IT support work, not project work. Raise a requisition instead.',
   }),
+  task('tsk-14', 'Publish benchmark variance note', 'prj-vp2', 'pia', 'emp-1001', 'completed', 5.75, '2026-08-21', {
+    completed: '2026-08-21',
+  }),
 ];
 
 export const CHECKLIST_ITEMS: readonly TaskChecklistItem[] = [
@@ -451,7 +515,7 @@ function buildEntry(spec: EntrySpec): TimeEntry {
   };
 }
 
-/** A routine complete day: 3:00 + 4:00 with the recognized break. */
+/** A routine task-based day: 3:00 + 4:00 plus the single recognized break. */
 function completeDay(
   employeeId: string,
   workDate: string,
@@ -467,8 +531,7 @@ function completeDay(
       divisionId,
       projectId,
       taskId,
-      start: '09:00',
-      end: '12:00',
+      minutes: 180,
       location,
       description: 'Focused delivery work on the current milestone.',
       completedWork: 'Completed the planned items for the morning block.',
@@ -479,8 +542,7 @@ function completeDay(
       divisionId,
       projectId,
       taskId,
-      start: '13:00',
-      end: '17:00',
+      minutes: 240,
       location,
       description: 'Continued implementation and review.',
       completedWork: 'Closed out the afternoon items and updated the task notes.',
@@ -549,7 +611,7 @@ const JULY_VERIFIED_PLAN: readonly {
     employeeId: 'emp-1003',
     divisionId: 'pia',
     projectId: 'prj-vp2',
-    taskId: null,
+    taskId: 'tsk-1',
     dates: ['2026-07-09', '2026-07-16'],
   },
   {
@@ -572,6 +634,34 @@ const JULY_VERIFIED_SPECS: readonly EntrySpec[] = JULY_VERIFIED_PLAN.flatMap((pl
   ),
 );
 
+/** A deliberately small pre-cutover clock sample retained as immutable history. */
+const HISTORICAL_CLOCK_SPECS: readonly EntrySpec[] = [
+  {
+    employeeId: 'emp-1001',
+    workDate: '2026-07-27',
+    divisionId: 'pia',
+    projectId: 'prj-vp2',
+    taskId: 'tsk-1',
+    start: '09:00',
+    end: '12:00',
+    description: 'Pre-cutover evaluation work retained with its original clock range.',
+    completedWork: 'Historical metric review completed.',
+    locked: true,
+  },
+  {
+    employeeId: 'emp-1002',
+    workDate: '2026-07-28',
+    divisionId: 'cjg',
+    projectId: 'prj-mip',
+    taskId: 'tsk-5',
+    start: '13:00',
+    end: '17:00',
+    description: 'Pre-cutover production work retained with its original clock range.',
+    completedWork: 'Historical production block completed.',
+    locked: true,
+  },
+];
+
 const ENTRY_SPECS: readonly EntrySpec[] = [
   /* --- Nadia Rahman: the cross-division complete day (AC-CALC-001) ------- */
   {
@@ -580,8 +670,7 @@ const ENTRY_SPECS: readonly EntrySpec[] = [
     divisionId: 'pia',
     projectId: 'prj-vp2',
     taskId: 'tsk-1',
-    start: '09:00',
-    end: '12:00',
+    minutes: 180,
     description: 'Evaluation harness: metric definitions and fixture wiring.',
     completedWork: 'Metrics agreed and the fixture dataset loaded end to end.',
   },
@@ -591,8 +680,7 @@ const ENTRY_SPECS: readonly EntrySpec[] = [
     divisionId: 'gov',
     projectId: 'prj-nrd',
     taskId: 'tsk-3',
-    start: '13:00',
-    end: '15:00',
+    minutes: 120,
     description: 'Records intake schema review with the client team.',
     completedWork: 'Field list confirmed for the first intake batch.',
   },
@@ -602,27 +690,28 @@ const ENTRY_SPECS: readonly EntrySpec[] = [
     divisionId: 'wcf',
     projectId: 'prj-wpr',
     taskId: 'tsk-6',
-    start: '15:00',
-    end: '17:00',
+    minutes: 120,
     description: 'Portal accessibility audit: keyboard pass.',
     completedWork: 'Keyboard-only pass finished; three issues raised.',
   },
 
-  /* --- Nadia: today, partially recorded, timer still running ------------- */
+  /* --- Nadia: today, partially recorded as a saved duration work log ----- */
   {
     employeeId: 'emp-1001',
     workDate: DEMO_TODAY,
     divisionId: 'pia',
     projectId: 'prj-vp2',
     taskId: 'tsk-1',
-    start: '09:00',
-    end: '11:00',
+    minutes: 120,
     description: 'Benchmark run and result triage.',
     completedWork: 'First full benchmark completed; results triaged.',
   },
 
   /* --- Nadia: WFH complete day ------------------------------------------ */
   ...completeDay('emp-1001', '2026-08-28', 'pia', 'prj-vp2', 'tsk-8', 'wfh'),
+
+  /* --- Nadia: completed at +1:15 against a 5:45 estimate ---------------- */
+  ...completeDay('emp-1001', '2026-08-21', 'pia', 'prj-vp2', 'tsk-14'),
 
   /* --- Nadia: routine complete days ------------------------------------- */
   ...completeDay('emp-1001', '2026-08-31', 'pia', 'prj-vp2', 'tsk-1'),
@@ -657,8 +746,7 @@ const ENTRY_SPECS: readonly EntrySpec[] = [
     divisionId: 'cjg',
     projectId: 'prj-mip',
     taskId: 'tsk-5',
-    start: '09:00',
-    end: '17:30',
+    minutes: 510,
     description: 'Layout pass for the September issue, extended for the print deadline.',
     completedWork: 'All 48 pages laid out and sent for proofing.',
   },
@@ -670,8 +758,7 @@ const ENTRY_SPECS: readonly EntrySpec[] = [
     divisionId: 'cjg',
     projectId: 'prj-mip',
     taskId: 'tsk-5',
-    start: '08:00',
-    end: '19:00',
+    minutes: 660,
     description: 'Pre-deadline production run.',
     completedWork: 'Colour correction and imposition completed for the full issue.',
   },
@@ -683,8 +770,7 @@ const ENTRY_SPECS: readonly EntrySpec[] = [
     divisionId: 'cjg',
     projectId: 'prj-mip',
     taskId: 'tsk-5',
-    start: '07:30',
-    end: '19:00',
+    minutes: 690,
     description: 'Press incident recovery.',
     completedWork: 'Re-plated the failed signatures and restarted the run.',
   },
@@ -699,8 +785,7 @@ const ENTRY_SPECS: readonly EntrySpec[] = [
     divisionId: 'pit',
     projectId: 'prj-alb',
     taskId: 'tsk-4',
-    start: '09:00',
-    end: '12:00',
+    minutes: 180,
     description: 'Cohort 7 curriculum review.',
     completedWork: 'Modules 1 to 3 reviewed.',
   },
@@ -722,8 +807,7 @@ const ENTRY_SPECS: readonly EntrySpec[] = [
     divisionId: 'pit',
     projectId: 'prj-alb',
     taskId: 'tsk-4',
-    start: '09:00',
-    end: '12:30',
+    minutes: 210,
     description: 'Morning session before leaving on approved half-day leave.',
     completedWork: 'Cohort 7 slides updated for the first two sessions.',
   },
@@ -735,6 +819,8 @@ const ENTRY_SPECS: readonly EntrySpec[] = [
   /* --- Sumaiya Noor ------------------------------------------------------ */
   ...completeDay('emp-1004', '2026-09-01', 'wcf', 'prj-wpr', 'tsk-7'),
   ...completeDay('emp-1004', '2026-08-31', 'wcf', 'prj-wpr', 'tsk-7'),
+
+  ...HISTORICAL_CLOCK_SPECS,
 ];
 
 export const TIME_ENTRIES: readonly TimeEntry[] = ENTRY_SPECS.map(buildEntry);

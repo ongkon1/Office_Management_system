@@ -124,14 +124,14 @@ if (!routeFilter) {
   const afterSkip = await page.evaluate(() => document.activeElement?.id ?? '');
   record(afterSkip === 'main-content', 'FE-0811', 'the skip link moves focus to main content');
 
-  /* Reach a time entry and open the drawer from the keyboard. */
+  /* Reach Log Work and open the drawer from the keyboard. */
   await goto(page, '/timesheets/2026-09-01', 1200);
-  const addEntry = page.getByRole('button', { name: /^Add time$/ }).first();
+  const addEntry = page.getByRole('button', { name: /^Log work$/ }).first();
   await addEntry.focus();
   await page.keyboard.press('Enter');
   await page.waitForTimeout(700);
   const drawerOpen = (await page.getByRole('dialog').count()) > 0;
-  record(drawerOpen, 'FE-0810', 'the time-entry drawer opens from the keyboard');
+  record(drawerOpen, 'FE-0810', 'the Log Work drawer opens from the keyboard');
 
   if (drawerOpen) {
     /* Focus must be inside the drawer, and Tab must not escape it. */
@@ -161,6 +161,11 @@ if (!routeFilter) {
 
     await page.keyboard.press('Escape');
     await page.waitForTimeout(500);
+    const discard = page.getByRole('button', { name: 'Discard', exact: true });
+    if (await discard.isVisible().catch(() => false)) {
+      await discard.click();
+      await page.waitForTimeout(500);
+    }
     record(
       (await page.getByRole('dialog').count()) === 0,
       'FE-0810',
@@ -168,7 +173,7 @@ if (!routeFilter) {
     );
     const restored = await page.evaluate(() => {
       const active = document.activeElement;
-      return (active?.textContent ?? '').trim().startsWith('Add time');
+      return (active?.textContent ?? '').trim().startsWith('Log work');
     });
     record(restored, 'FE-0811', 'focus returns to the control that opened the overlay');
   }
@@ -184,7 +189,9 @@ const ROUTES = [
   { path: '/dashboard', email: EMPLOYEE, title: 'Dashboard' },
   { path: '/timesheets', email: EMPLOYEE, title: 'My Timesheet' },
   { path: '/timesheets/2026-09-01', email: EMPLOYEE, title: null },
+  { path: '/timesheets/2026-09-02', email: EMPLOYEE, title: null },
   { path: '/tasks', email: EMPLOYEE, title: 'My Tasks' },
+  { path: '/tasks/tsk-1', email: EMPLOYEE, title: null },
   { path: '/remarks', email: EMPLOYEE, title: 'Remarks' },
   { path: '/requisitions', email: EMPLOYEE, title: 'Requisition' },
   { path: '/requisitions/new', email: EMPLOYEE, title: null },
@@ -485,9 +492,9 @@ if (!routeFilter) {
   /* -- FE-0812 validation announcement ------------------------------------- */
 
   await goto(page, '/timesheets/2026-09-01', 1200);
-  await page.getByRole('button', { name: /^Add time$/ }).first().click();
+  await page.getByRole('button', { name: /^Log work$/ }).first().click();
   await page.waitForTimeout(800);
-  const saveButton = page.getByRole('button', { name: /^Save entry$/ });
+  const saveButton = page.getByRole('button', { name: /^Save work log$/ });
   if ((await saveButton.count()) > 0) {
     await saveButton.first().click();
     await page.waitForTimeout(700);

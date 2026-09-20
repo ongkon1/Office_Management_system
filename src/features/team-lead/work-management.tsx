@@ -165,8 +165,73 @@ function TaskForm({ initial, onCancel, onSaved }: { initial?: TeamTaskView; onCa
   const [files, setFiles] = React.useState<readonly { id: string; name: string; size: string }[]>([]);
   const [error, setError] = React.useState('');
   const set = <K extends keyof TaskFormInput>(key: K, value: TaskFormInput[K]) => setForm((current) => ({ ...current, [key]: value }));
-  async function submit(event: React.FormEvent) { event.preventDefault(); if (!form.title.trim()) { setError('Enter a task title.'); return; } const result = await mockTeamLeadService.saveTask(user?.userId ?? '', { ...form, checklist: checklistText.split('\n').map((item) => item.trim()).filter(Boolean) }, initial?.id); if (result.status === 'success') onSaved(result.data); }
-  return <form onSubmit={submit} className="space-y-4"><Field label="Task title" required error={error}><Input value={form.title} onChange={(event) => set('title', event.target.value)} /></Field><div className="grid gap-4 sm:grid-cols-2"><Field label="Project" required><Select value={form.projectId} onChange={(event) => set('projectId', event.target.value)} options={[{ value: 'prj-vp2', label: 'PIA-VP2 · Vision Platform v2' }, { value: 'prj-alb', label: 'PIT-ALB · AI Literacy Bootcamp' }, { value: 'prj-mip', label: 'CJG-MIP · Monthly Issue Production' }]} /></Field><Field label="Assignee" required><Select value={form.assigneeEmployeeId} onChange={(event) => set('assigneeEmployeeId', event.target.value)} options={[{ value: 'emp-1001', label: 'Nadia Rahman' }, { value: 'emp-1002', label: 'Tanvir Ahmed' }, { value: 'emp-1004', label: 'Sumaiya Noor' }]} /></Field><Field label="Start date"><Input type="date" value={form.startDate ?? ''} onChange={(event) => set('startDate', event.target.value || null)} /></Field><Field label="Due date"><Input type="date" value={form.dueDate ?? ''} onChange={(event) => set('dueDate', event.target.value || null)} /></Field><Field label="Priority"><Select value={form.priority} onChange={(event) => set('priority', event.target.value as Priority)} options={PRIORITIES.map((value) => ({ value, label: value }))} /></Field><Field label="Estimate in minutes"><NumberInput min={0} value={form.estimatedMinutes} onChange={(event) => set('estimatedMinutes', Number(event.target.value))} /></Field></div><fieldset className="rounded-md border border-border p-3"><legend className="px-1 text-label text-ink">Supporting members</legend><Checkbox label="Tanvir Ahmed" checked={form.supportingMemberIds.includes('emp-1002')} onChange={(event) => set('supportingMemberIds', event.target.checked ? [...form.supportingMemberIds, 'emp-1002'] : form.supportingMemberIds.filter((id) => id !== 'emp-1002'))} /></fieldset><Field label="Description"><Textarea rows={4} value={form.description} onChange={(event) => set('description', event.target.value)} /></Field><Field label="Checklist" helperText="One item per line."><Textarea rows={4} value={checklistText} onChange={(event) => setChecklistText(event.target.value)} /></Field><FileUpload label="Attach task files" multiple files={files} onFilesSelected={(selected) => setFiles(Array.from(selected).map((file, index) => ({ id: `${Date.now()}-${index}`, name: file.name, size: `${Math.ceil(file.size / 1024)} KB` })))} onRemove={(id) => setFiles((current) => current.filter((file) => file.id !== id))} /><StickyActionBar><Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button><Button type="submit" variant="primary">{initial ? 'Save task' : 'Create task'}</Button></StickyActionBar></form>;
+  const selfEmployeeId = user?.employeeId ?? '';
+  const isSelfAssigned = Boolean(selfEmployeeId && form.assigneeEmployeeId === selfEmployeeId);
+  const assigneeOptions = [
+    ...(selfEmployeeId ? [{ value: selfEmployeeId, label: `Self (me) — ${user?.displayName ?? 'Team Lead'}` }] : []),
+    { value: 'emp-1001', label: 'Nadia Rahman' },
+    { value: 'emp-1002', label: 'Tanvir Ahmed' },
+    { value: 'emp-1004', label: 'Sumaiya Noor' },
+  ];
+
+  function setAssignee(assigneeEmployeeId: string) {
+    setForm((current) => ({
+      ...current,
+      assigneeEmployeeId,
+      supportingMemberIds: assigneeEmployeeId === selfEmployeeId ? [] : current.supportingMemberIds,
+    }));
+  }
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!form.title.trim()) {
+      setError('Enter a task title.');
+      return;
+    }
+    const result = await mockTeamLeadService.saveTask(
+      user?.userId ?? '',
+      {
+        ...form,
+        supportingMemberIds: isSelfAssigned ? [] : form.supportingMemberIds,
+        checklist: checklistText.split('\n').map((item) => item.trim()).filter(Boolean),
+      },
+      initial?.id,
+    );
+    if (result.status === 'success') onSaved(result.data);
+  }
+
+  return (
+    <form onSubmit={submit} className="space-y-4">
+      <Field label="Task title" required error={error}>
+        <Input value={form.title} onChange={(event) => set('title', event.target.value)} />
+      </Field>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Project" required>
+          <Select value={form.projectId} onChange={(event) => set('projectId', event.target.value)} options={[{ value: 'prj-vp2', label: 'PIA-VP2 · Vision Platform v2' }, { value: 'prj-alb', label: 'PIT-ALB · AI Literacy Bootcamp' }, { value: 'prj-mip', label: 'CJG-MIP · Monthly Issue Production' }]} />
+        </Field>
+        <Field
+          label="Assignee"
+          required
+          helperText={isSelfAssigned ? 'Only you can complete and record work against this task.' : 'Choose yourself or one employee in your team scope.'}
+        >
+          <Select value={form.assigneeEmployeeId} onChange={(event) => setAssignee(event.target.value)} options={assigneeOptions} />
+        </Field>
+        <Field label="Start date"><Input type="date" value={form.startDate ?? ''} onChange={(event) => set('startDate', event.target.value || null)} /></Field>
+        <Field label="Due date"><Input type="date" value={form.dueDate ?? ''} onChange={(event) => set('dueDate', event.target.value || null)} /></Field>
+        <Field label="Priority"><Select value={form.priority} onChange={(event) => set('priority', event.target.value as Priority)} options={PRIORITIES.map((value) => ({ value, label: value }))} /></Field>
+        <Field label="Estimate in minutes"><NumberInput min={0} value={form.estimatedMinutes} onChange={(event) => set('estimatedMinutes', Number(event.target.value))} /></Field>
+      </div>
+      <fieldset className="rounded-md border border-border p-3" disabled={isSelfAssigned}>
+        <legend className="px-1 text-label text-ink">Supporting members</legend>
+        <Checkbox label="Tanvir Ahmed" checked={form.supportingMemberIds.includes('emp-1002')} onChange={(event) => set('supportingMemberIds', event.target.checked ? [...form.supportingMemberIds, 'emp-1002'] : form.supportingMemberIds.filter((id) => id !== 'emp-1002'))} />
+        {isSelfAssigned && <p className="mt-2 text-caption text-ink-muted">Unavailable because this is a personal task.</p>}
+      </fieldset>
+      <Field label="Description"><Textarea rows={4} value={form.description} onChange={(event) => set('description', event.target.value)} /></Field>
+      <Field label="Checklist" helperText="One item per line."><Textarea rows={4} value={checklistText} onChange={(event) => setChecklistText(event.target.value)} /></Field>
+      <FileUpload label="Attach task files" multiple files={files} onFilesSelected={(selected) => setFiles(Array.from(selected).map((file, index) => ({ id: `${Date.now()}-${index}`, name: file.name, size: `${Math.ceil(file.size / 1024)} KB` })))} onRemove={(id) => setFiles((current) => current.filter((file) => file.id !== id))} />
+      <StickyActionBar><Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button><Button type="submit" variant="primary">{initial ? 'Save task' : 'Create task'}</Button></StickyActionBar>
+    </form>
+  );
 }
 
 export function TeamTaskBoard() {
@@ -190,16 +255,18 @@ export function TeamTaskBoard() {
     <PageContainer>
       <PageHeader
         title="Tasks"
-        description="Manage scoped team work through Pending, In Progress, and Completed."
+        description="Manage team work and create your own tasks through Pending, In Progress, and Completed."
         meta={<Scope />}
         actions={
-          <Button
-            variant="primary"
-            iconLeading={<Plus aria-hidden className="size-4" />}
-            onClick={() => setFormOpen(true)}
-          >
-            New task
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="primary"
+              iconLeading={<Plus aria-hidden className="size-4" />}
+              onClick={() => setFormOpen(true)}
+            >
+              New task
+            </Button>
+          </div>
         }
       />
       <TaskReviewQueue onDecided={() => setVersion((value) => value + 1)} />
@@ -212,7 +279,7 @@ export function TeamTaskBoard() {
         open={formOpen}
         onClose={() => setFormOpen(false)}
         title="Create task"
-        description="Assign work within your project scope."
+        description="Assign the task to yourself or an employee within your project scope."
         size="lg"
       >
         <TaskForm

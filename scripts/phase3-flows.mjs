@@ -7,9 +7,9 @@
  *   DEMO-01  three divisions totalling 7 active + 1 break = a complete 8h day
  *   DEMO-02  overtime requires a reason, and the status follows through the UI
  *   DEMO-03  above twelve hours requires a critical explanation
- *   FE-0324  overlap across divisions, inactive project, expired assignment
+ *   MFE-0301 duration-only Log Work and daily-cap validation
  *   FE-0327  copy previous entry lands as a draft on the target date
- *   FE-0330  a timer restored after a refresh announces itself
+ *   MFE-0305 task board and duration-based Log Work are the only work-entry paths
  *   REQ-TIME-027  a verified period refuses ordinary edits
  *
  * Requires a dev server on --url (default http://localhost:3000).
@@ -158,7 +158,7 @@ console.log(`Phase 3 flow verification against ${baseUrl}\n`);
   await context.close();
 }
 
-/* 5. Validation: overlap across divisions, and the live preview. */
+/* 5. Validation: task-based duration logging, daily cap, and live preview. */
 {
   const context = await browser.newContext({ viewport: { width: 1400, height: 1000 } });
   const page = await context.newPage();
@@ -166,30 +166,30 @@ console.log(`Phase 3 flow verification against ${baseUrl}\n`);
   await page.goto(`${baseUrl}/timesheets/2026-09-02`, { waitUntil: 'networkidle' });
   await page.waitForTimeout(600);
 
-  await page.getByRole('button', { name: 'Add time', exact: true }).click();
+  await page.getByRole('button', { name: 'Log work', exact: true }).click();
   await page.getByRole('dialog').waitFor({ timeout: 8000 });
   await page.waitForTimeout(400);
 
-  // The preview appears before anything is saved.
-  const previewVisible = await page.getByText('If you save this').isVisible();
+  await page.selectOption('select[name="divisionId"]', 'pia');
+  await page.selectOption('select[name="projectId"]', 'prj-vp2');
+  await page.selectOption('select[name="taskId"]', 'tsk-1');
+  await page.fill('input[name="durationMinutes"]', '1:00');
+  await page.fill('textarea[name="workDescription"]', 'Daily-cap validation entry');
+  await page.fill('textarea[name="completedWork"]', 'Testing duration plausibility validation');
+  await page.locator('textarea[name="workDescription"]').click();
+  await page.waitForTimeout(700);
+  const previewVisible = await page.getByRole('heading', { name: 'Daily calculation preview' }).isVisible();
   check(previewVisible, 'FE-0323: the calculation preview did not appear');
   log(previewVisible, 'FE-0323', 'the live calculation preview renders before saving');
-
-  // An entry in a different division that overlaps 09:00-11:00 must be refused.
-  await page.selectOption('select[name="divisionId"]', 'gov');
-  await page.fill('input[name="startTime"]', '10:00');
-  await page.fill('input[name="endTime"]', '12:00');
-  await page.fill('input[name="workDescription"]', 'Overlapping test entry');
-  await page.fill('textarea[name="completedWork"]', 'Testing overlap rejection');
-  await page.getByRole('button', { name: 'Save entry' }).click();
+  await page.fill('input[name="durationMinutes"]', '23:00');
+  await page.locator('textarea[name="workDescription"]').click();
+  await page.getByRole('button', { name: 'Save work log' }).click();
   await page.waitForTimeout(900);
 
   const drawer = await page.getByRole('dialog').innerText();
-  const overlapRefused = /overlap/i.test(drawer);
-  const mentionsDivisions = /different divisions/i.test(drawer);
-  check(overlapRefused, 'AC-CALC-005: the overlap was not refused');
-  check(mentionsDivisions, 'AC-CALC-005: the guidance did not mention cross-division overlap');
-  log(overlapRefused && mentionsDivisions, 'AC-CALC-005', 'overlap is refused across divisions');
+  const capRefused = /24:00|24 hours|daily.*limit/i.test(drawer);
+  check(capRefused, 'MFE-0105: active time above 24:00 was not refused');
+  log(capRefused, 'MFE-0105', 'duration logging refuses the daily active-time cap');
 
   if (shoot) await page.screenshot({ path: 'screenshots/p3-validation.png' });
   await context.close();
@@ -203,7 +203,7 @@ console.log(`Phase 3 flow verification against ${baseUrl}\n`);
   await page.goto(`${baseUrl}/timesheets/2026-09-02`, { waitUntil: 'networkidle' });
   await page.waitForTimeout(600);
 
-  await page.getByRole('button', { name: 'Add time', exact: true }).click();
+  await page.getByRole('button', { name: 'Log work', exact: true }).click();
   await page.getByRole('dialog').waitFor({ timeout: 8000 });
 
   // Before crossing eight hours there is no reason field.
@@ -214,9 +214,11 @@ console.log(`Phase 3 flow verification against ${baseUrl}\n`);
   check(!beforeVisible, 'FE-0325: the overtime reason was visible before the threshold');
 
   // 2:00 already recorded today; a 7:00 duration takes the day past eight.
-  await page.getByRole('radio', { name: 'Duration only' }).click();
-  await page.fill('input[name="activeMinutes"]', '7:00');
-  await page.locator('input[name="workDescription"]').click();
+  await page.selectOption('select[name="divisionId"]', 'pia');
+  await page.selectOption('select[name="projectId"]', 'prj-vp2');
+  await page.selectOption('select[name="taskId"]', 'tsk-1');
+  await page.fill('input[name="durationMinutes"]', '7:00');
+  await page.locator('textarea[name="workDescription"]').click();
   await page.waitForTimeout(700);
 
   const afterVisible = await page
@@ -240,55 +242,33 @@ console.log(`Phase 3 flow verification against ${baseUrl}\n`);
   const body = await page.locator('main').innerText();
   const locked = /verified/i.test(body) && /locked/i.test(body);
   const noAddButton = !(await page
-    .getByRole('button', { name: 'Add time', exact: true })
+    .getByRole('button', { name: 'Log work', exact: true })
     .isVisible()
     .catch(() => false));
 
   check(locked, 'REQ-TIME-027: the locked period was not announced');
-  check(noAddButton, 'REQ-TIME-027: Add time was offered inside a verified period');
-  log(locked && noAddButton, 'REQ-TIME-027', 'a verified period is locked and offers no Add time');
+  check(noAddButton, 'REQ-TIME-027: Log work was offered inside a verified period');
+  log(locked && noAddButton, 'REQ-TIME-027', 'a verified period is locked and offers no Log work action');
 
   if (shoot) await page.screenshot({ path: 'screenshots/p3-locked.png' });
   await context.close();
 }
 
-/* 8. Timer: start, one-at-a-time, and recovery after a reload. */
+/* 8. Task board and Log Work are the work-entry paths. */
 {
   const context = await browser.newContext({ viewport: { width: 1400, height: 1000 } });
   const page = await context.newPage();
   await signIn(page, 'nadia.rahman@demo.local');
-  await page.goto(`${baseUrl}/timesheets/2026-09-02`, { waitUntil: 'networkidle' });
+  await page.goto(`${baseUrl}/tasks`, { waitUntil: 'networkidle' });
   await page.waitForTimeout(600);
+  const board = await page.getByLabel('Task status board').isVisible();
+  const body = await page.locator('main').innerText();
+  const explainsNoTime = /moving a task never records active time/i.test(body);
+  check(board, 'MFE-0201: the task status board was not visible');
+  check(explainsNoTime, 'MFE-0201: the board did not explain that moves create no time');
+  log(board && explainsNoTime, 'MFE-0201/0305', 'task board is reachable and separates transitions from active time');
 
-  await page.getByRole('button', { name: 'Start timer' }).click();
-  await page.waitForTimeout(900);
-
-  let body = await page.locator('main').innerText();
-  const running = body.includes('Timer running');
-  check(running, 'FE-0328: the timer did not start');
-
-  // Reload: the timer must survive and say it was recovered.
-  await page.reload({ waitUntil: 'networkidle' });
-  await page.waitForTimeout(900);
-  body = await page.locator('main').innerText();
-  const survived = body.includes('Timer running');
-  const announced = /still running|recovered/i.test(body);
-  check(survived, 'FE-0330: the timer did not survive a reload');
-  check(announced, 'FE-0330: recovery was not announced');
-  log(running && survived && announced, 'FE-0330', 'the timer survives a reload and says it was recovered');
-
-  // Stopping produces a draft rather than recording time directly.
-  await page.getByRole('button', { name: 'Stop and review' }).click();
-  await page.waitForTimeout(900);
-  const drawerText = await page
-    .getByRole('dialog')
-    .innerText()
-    .catch(() => '');
-  const draft = /draft/i.test(drawerText);
-  check(draft, 'REQ-TIME-009: stopping did not produce a draft for review');
-  log(draft, 'REQ-TIME-009', 'stopping the timer produces a draft, not recorded time');
-
-  if (shoot) await page.screenshot({ path: 'screenshots/p3-timer-draft.png' });
+  if (shoot) await page.screenshot({ path: 'screenshots/p3-task-board.png' });
   await context.close();
 }
 
@@ -307,8 +287,8 @@ console.log(`Phase 3 flow verification against ${baseUrl}\n`);
   await page.goto(`${baseUrl}/tasks/tsk-1`, { waitUntil: 'networkidle' });
   await page.waitForTimeout(700);
   const detail = await page.locator('main').innerText();
-  const derived = detail.includes('derived from your linked time entries');
-  const hasHistory = detail.includes('Work history');
+  const derived = detail.includes('derived from linked work logs and preserved historical entries');
+  const hasHistory = detail.includes('Task history');
   check(derived, 'REQ-WORK-007: the detail did not state that actual time is derived');
   check(hasHistory, 'FE-0341: the work history was missing');
   log(hasOverdue && derived && hasHistory, 'FE-0340/0341', 'task list shows overdue; detail derives actual time');

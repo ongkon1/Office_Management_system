@@ -148,6 +148,8 @@ export interface SessionUser {
   readonly scopedDivisionIds: readonly string[];
   /** Employees the viewer may review, effective today. Empty for Employees. */
   readonly scopedEmployeeIds: readonly string[];
+  /** Effective appointments grant scoped lead authority without changing global roles. */
+  readonly departmentLeadScopes: readonly DepartmentLeadScope[];
   readonly timezone: string;
   readonly locale: string;
   readonly sessionExpiresAt: IsoDateTime;
@@ -177,6 +179,32 @@ export interface Division extends AuditableRecord {
   readonly isRestricted: boolean;
 }
 
+export interface Department extends AuditableRecord {
+  readonly id: string;
+  readonly divisionId: string;
+  readonly name: string;
+  readonly code: string;
+  readonly description: string | null;
+  readonly isActive: boolean;
+}
+
+/** An immutable, effective-dated appointment. End dates are inclusive. */
+export interface DepartmentLeadAssignment extends AuditableRecord {
+  readonly id: string;
+  readonly departmentId: string;
+  readonly leadEmployeeId: string;
+  readonly effectiveFrom: IsoDate;
+  readonly effectiveTo: IsoDate | null;
+  readonly reason: string | null;
+}
+
+export interface DepartmentLeadScope {
+  readonly departmentId: string;
+  readonly divisionId: string;
+  readonly effectiveFrom: IsoDate;
+  readonly effectiveTo: IsoDate | null;
+}
+
 export type EmploymentType =
   | 'full_time'
   | 'part_time'
@@ -199,6 +227,7 @@ export interface Employee extends AuditableRecord {
   readonly fullName: string;
   readonly photoUrl: string | null;
   readonly designation: string;
+  /** @deprecated Migration-only snapshot. Placement is owned by division assignments. */
   readonly department: string | null;
   readonly employmentType: EmploymentType;
   readonly joiningDate: IsoDate;
@@ -207,6 +236,7 @@ export interface Employee extends AuditableRecord {
   readonly phone: string | null;
   readonly officeLocation: string | null;
   readonly primaryDivisionId: string | null;
+  /** @deprecated Migration-only snapshot. Resolve authority from department lead history. */
   readonly teamLeadEmployeeId: string | null;
   readonly skills: readonly string[];
   readonly normalWorkMode: WorkMode;
@@ -219,8 +249,10 @@ export interface EmployeeDivisionAssignment extends AuditableRecord {
   readonly id: string;
   readonly employeeId: string;
   readonly divisionId: string;
+  readonly departmentId: string;
   readonly isPrimary: boolean;
   readonly roleInDivision: string | null;
+  /** @deprecated Compatibility snapshot; current forms and authorization must not write it. */
   readonly teamLeadEmployeeId: string | null;
   /** Whole percent, 0-100 (`REQ-ORG-006`). */
   readonly allocationPercent: number;
@@ -903,6 +935,11 @@ export type NotificationType =
   | 'overtime'
   | 'critical_time'
   | 'task_assigned'
+  | 'task_reassigned'
+  | 'task_started'
+  | 'task_completed'
+  | 'task_reopened'
+  | 'significant_variance'
   | 'deadline_approaching'
   | 'task_overdue'
   | 'remark_added'

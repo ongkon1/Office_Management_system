@@ -37,7 +37,7 @@ describe('timesheet day copy-work flow', () => {
   it('shows preserved historical ranges as explicitly read-only records', async () => {
     render(
       <ToastProvider>
-        <DayView employeeId="emp-1001" date="2026-09-01" />
+        <DayView employeeId="emp-1001" date="2026-07-27" />
       </ToastProvider>,
     );
 
@@ -80,6 +80,7 @@ describe('timesheet day copy-work flow', () => {
     expect(screen.getByText(/Recognized break — shown once/)).toBeInTheDocument();
     expect(screen.queryByText('Start time')).not.toBeInTheDocument();
     expect(screen.queryByText('End time')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Start a timer|Timer running|Stop timer/i)).not.toBeInTheDocument();
   });
 
   it('opens a previous work log as an unsaved target-date draft in Log Work', async () => {
@@ -106,5 +107,19 @@ describe('timesheet day copy-work flow', () => {
     expect(within(drawer).getByRole('textbox', { name: /Duration/ })).toHaveValue('0:35');
     expect(within(drawer).getByRole('textbox', { name: /Completed work/ })).toHaveValue('');
     expect(screen.queryByRole('dialog', { name: 'Add time entry' })).not.toBeInTheDocument();
+  });
+
+  it('keeps a verified day locked even when a Log Work deep link is requested', async () => {
+    render(
+      <ToastProvider>
+        <DayView employeeId="emp-1001" date="2026-07-23" initialLogTaskId="tsk-1" />
+      </ToastProvider>,
+    );
+
+    expect(await screen.findByText('This period is verified and locked')).toBeInTheDocument();
+    expect(screen.getByText(/request an amendment instead/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Log work' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Log work' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Actions for/ })).not.toBeInTheDocument();
   });
 });

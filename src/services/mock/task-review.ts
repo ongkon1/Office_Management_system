@@ -1,8 +1,9 @@
 /**
  * Mock task-review service (`FE-0780`–`FE-0784`).
  *
- * Two operations with one rule between them: an employee may raise a task for
- * themselves, and it accepts no time until their own Team Lead endorses it.
+ * An employee may raise a task for themselves and it accepts no time until
+ * their own Team Lead endorses it. A Team Lead may create the same narrow
+ * self-assigned task without reviewing or approving their own work.
  *
  * The endorsement is enforced in three places on purpose, because each covers a
  * gap the others leave:
@@ -218,14 +219,12 @@ export const mockTaskReviewService: TaskReviewService = {
     if (!viewer) return notFound();
 
     const role = viewer.primaryRole;
-    if (role !== 'employee') {
+    if (role !== 'employee' && role !== 'team_lead') {
       return success({
         projects: [],
         canCreate: false,
-        createBlockedReason:
-          role === 'team_lead'
-            ? 'You create tasks directly from the team task board, without review.'
-            : 'Only an employee raises a task for review.',
+        createBlockedReason: 'Only an employee or Team Lead can create a task for themselves.',
+        requiresReview: false,
         reviewerName: null,
         maxDueDateHint: DEMO_TODAY,
       } satisfies EmployeeTaskOptionsView);
@@ -239,19 +238,21 @@ export const mockTaskReviewService: TaskReviewService = {
         divisions.includes(project.divisionId) && project.isActive && project.acceptsTimeEntries,
     );
 
-    const leadId = teamLeadOf(viewer.employeeId);
+    const requiresReview = role === 'employee';
+    const leadId = requiresReview ? teamLeadOf(viewer.employeeId) : null;
     return success({
       projects: projects.map((project) => ({
         value: project.id,
         label: `${project.code} · ${project.name}`,
       })),
-      canCreate: leadId !== null && projects.length > 0,
+      canCreate: (!requiresReview || leadId !== null) && projects.length > 0,
       createBlockedReason:
-        leadId === null
+        requiresReview && leadId === null
           ? 'You have no Team Lead assigned, so a task you raise has nobody to review it. Contact HR.'
           : projects.length === 0
             ? 'You are not assigned to a division with an active project.'
             : null,
+      requiresReview,
       reviewerName: leadId ? employeeName(leadId) : null,
       maxDueDateHint: DEMO_TODAY,
     } satisfies EmployeeTaskOptionsView);
@@ -262,15 +263,16 @@ export const mockTaskReviewService: TaskReviewService = {
     const viewer = viewerOf(userId);
     if (!viewer) return notFound();
 
-    if (viewer.primaryRole !== 'employee') {
+    if (viewer.primaryRole !== 'employee' && viewer.primaryRole !== 'team_lead') {
       return denied(
-        'Only an employee raises a task for review.',
-        'A Team Lead creates tasks directly from the team task board.',
+        'Only an employee or Team Lead can create a task for themselves.',
+        'Ask a Team Lead to assign the work if you need a task.',
       );
     }
 
-    const leadId = teamLeadOf(viewer.employeeId);
-    if (!leadId) {
+    const requiresReview = viewer.primaryRole === 'employee';
+    const leadId = requiresReview ? teamLeadOf(viewer.employeeId) : null;
+    if (requiresReview && !leadId) {
       return conflict(
         'You have no Team Lead assigned, so this task has nobody to review it.',
         'Ask HR to record your Team Lead, then raise the task again.',
@@ -306,7 +308,7 @@ export const mockTaskReviewService: TaskReviewService = {
       estimatedMinutes: Math.round(Number(input.estimatedHours.trim()) * 60),
       description: input.description.trim() || null,
       status: 'pending',
-      reviewState: 'pending_review',
+      reviewState: requiresReview ? 'pending_review' : 'not_required',
       reviewerEmployeeId: null,
       reviewedAt: null,
       reviewNote: null,

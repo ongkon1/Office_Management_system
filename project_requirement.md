@@ -4,10 +4,10 @@
 
 | Document field | Value |
 |---|---|
-| Version | 1.2 |
-| Status | Approved baseline including task-based work logging and Meeting Minutes amendment |
-| Amendment approval | Task-based work-logging decisions approved for milestone delivery on 14 September 2026 |
-| Source baseline | Multi-Division Timesheet & Work Management System Feature Requirements, Version 1.0, June 2026; Meeting Minutes to AI Task Generation and Assignment feature brief, September 2026; Recommended Task-Based Timesheet Model, 14 September 2026 |
+| Version | 1.4 |
+| Status | Approved baseline including task-based work logging, Meeting Minutes, and per-division-assignment department hierarchy |
+| Amendment approval | Task-based work-logging decisions approved on 14 September 2026; final Division → Department → Team Lead → Employees hierarchy approved on 16 September 2026 |
+| Source baseline | Multi-Division Timesheet & Work Management System Feature Requirements, Version 1.0, June 2026; Meeting Minutes to AI Task Generation and Assignment feature brief, September 2026; Recommended Task-Based Timesheet Model, 14 September 2026; organization hierarchy decision and `organization_hierarchy_milestone.md`, 16 September 2026 |
 | Product owner | PowerInAI |
 | Initial divisions | PowerInAI, PowerInAI Training, Government Projects, Computer Jagat, WesternCF |
 | Intended audience | Product owners, designers, developers, QA engineers, operations, HR, Finance, and management |
@@ -23,6 +23,7 @@ The system must:
 - Relate time to measurable work through projects, tasks, descriptions, and completed-work details.
 - Support Work From Home (WFH), leave, attendance, evaluations, reports, and controlled financial analysis.
 - Preserve historical and audit information while enforcing role-, division-, and project-based access.
+- Represent each division's departments, effective department leadership, and employee placement without collapsing multi-division assignments into one global department.
 - Let every active user role access authorized meeting minutes and optionally turn meeting decisions into traceable tasks with AI assistance.
 - Deliver a focused operational product before adding broad collaboration and AI capabilities.
 
@@ -45,7 +46,7 @@ The full product vision includes identity and access, employee and division admi
 
 The MVP must include:
 
-- Secure login, roles, permissions, the five initial divisions, employee profiles, and multi-division assignments.
+- Secure login, roles, permissions, the five initial divisions, division-owned departments, effective department leads, employee profiles, and multi-division assignments with per-assignment departments.
 - Projects, basic tasks and status transitions, daily duration-based work logs, copied work logs, active-time and break calculations, validation, and overtime highlighting.
 - Work-location recording, including Office and WFH.
 - A single general remark model and correction workflow without daily Team Lead approval.
@@ -76,6 +77,8 @@ The MVP must include:
 | Verified period | A payroll/reporting period reviewed and locked or explicitly verified by HR. It is not a daily Team Lead approval. |
 | Planned allocation | The expected division or project allocation percentage/hours assigned to an employee. |
 | Actual contribution | Valid active work recorded in timesheets for a division or project. |
+| Department | An administrative unit owned by exactly one division. Department names and codes are unique within that division, and each department has one effective Team Lead at a time. |
+| Department lead appointment | An effective-dated appointment that gives an eligible employee Team Lead capabilities only for the appointed department; it is not a company-wide role grant. |
 | Work log | An employee-reported duration of active work for one local work date, attributed to an authorized division, project, and task. A work log has no start or end time. |
 | Task transition | An append-only record that a task moved between Pending, In Progress, and Completed. Its timestamp records workflow history and never creates active minutes. |
 | Historical clock entry | A read-only time entry created before the task-based cutover, retaining its original start/end range and calculation treatment. |
@@ -98,13 +101,15 @@ The MVP must include:
 - `REQ-RBAC-003`: The system must allow a Super Administrator to assign Team Lead, HR Manager, Finance Manager, management/view-only, and administrative roles.
 - `REQ-RBAC-004`: The system must allow a Super Administrator to manage permissions, holidays, working-hour policies, overtime rules, integrations, and system settings.
 - `REQ-RBAC-005`: The system must give authorized Super Administrators company-wide dashboards, reports, activity logs, and integration administration.
+- `REQ-RBAC-021`: The system must allow only Super Administrators to create, view, update, and delete unreferenced departments and to assign each department's Team Lead.
 
 #### Team Lead
 
 - `REQ-RBAC-006`: The system must limit a Team Lead's operational access to assigned divisions, projects, teams, and employees unless a broader permission is explicitly granted.
-- `REQ-RBAC-007`: The system must allow Team Leads to create projects, create and assign tasks, review team timesheets, add general remarks, and request corrections.
+- `REQ-RBAC-007`: The system must allow Team Leads to create projects, create and assign team tasks, create self-assigned tasks without approval, maintain their own timesheet, review team timesheets, add general remarks, and request corrections.
 - `REQ-RBAC-008`: The system must allow Team Leads to review WFH and leave requests for assigned employees and conduct authorized evaluations.
 - `REQ-RBAC-009`: The system must allow Team Leads to generate reports only for their authorized scope.
+- `REQ-RBAC-022`: The system must grant department-scoped Team Lead capabilities to an employee while their DepartmentLeadAssignment is effective, without requiring or creating a company-wide Team Lead role, and must remove that future scope when the appointment ends.
 
 #### Employee
 
@@ -133,9 +138,11 @@ The MVP must include:
 
 Legend: **M** = manage, **O** = own records, **A** = assigned scope, **V** = view only when authorized, **F** = separately granted financial permission, **-** = no default access.
 
+The **Team Lead** column applies both to users with an authorized global Team Lead role and to employees holding an effective department-lead appointment; appointment-derived access is limited to the appointed departments.
+
 | Capability | Super Admin | Team Lead | Employee | HR | Finance | Management |
 |---|---:|---:|---:|---:|---:|---:|
-| Divisions and system policy | M | V | V | V | V | V |
+| Divisions, departments, and system policy | M | V | V | V | V | V |
 | Employee profiles/assignments | M | A/V | O/V | M | V | V |
 | Projects and tasks | M | A/M | O/A | V | V | V |
 | Timesheet entry | M | A/V | O/M | V | V/verified | V |
@@ -155,15 +162,25 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 ### 5.1 Employee and Division Management
 
 - `REQ-ORG-001`: The system must seed PowerInAI, PowerInAI Training, Government Projects, Computer Jagat, and WesternCF as the initial divisions while allowing authorized administrators to configure divisions later.
-- `REQ-ORG-002`: The system must store employee ID, full name, profile photo, designation, department, employment type, joining date, status, contact details, and office location.
-- `REQ-ORG-003`: The system must store each employee's primary division, additional divisions, Team Lead, skills, active projects, standard daily hours, standard weekly hours, and normal work mode.
+- `REQ-ORG-002`: The system must store employee ID, full name, profile photo, designation, employment type, joining date, status, contact details, and office location.
+- `REQ-ORG-003`: The system must store each employee's primary and additional division assignments, skills, active projects, standard daily hours, standard weekly hours, and normal work mode.
 - `REQ-ORG-004`: The system must support Office, WFH, Hybrid, Field Work, Official Travel, Training, and Client Location as employee work modes.
 - `REQ-ORG-005`: The system must allow an employee to have multiple concurrent division assignments.
-- `REQ-ORG-006`: Each division assignment must store division, employee role, Team Lead, allocation percentage, expected weekly hours, start date, end date, and active status.
+- `REQ-ORG-006`: Each division assignment must store division, department, employee role in the division, allocation percentage, expected weekly hours, start date, end date, and active status.
 - `REQ-ORG-007`: The system must retain historical assignment periods and must prevent destructive deletion when an assignment or employee is referenced by operational records.
 - `REQ-ORG-008`: The system must support dated temporary assignments for events, campaigns, government work, training, client projects, content creation, emergency support, and implementation work.
 - `REQ-ORG-009`: Every temporary assignment must have a start date and end date and must become unavailable for new work logs outside that range.
 - `REQ-ORG-010`: The system must validate allocation percentages and visibly warn when an employee's concurrent planned allocation differs from 100 percent.
+- `REQ-ORG-011`: Each department must belong to exactly one division, and a division must support zero or more independently managed departments.
+- `REQ-ORG-012`: Department names and department codes must be unique within their owning division; the same name or code may be used by another division.
+- `REQ-ORG-013`: Each department must have no more than one effective Team Lead at a time; an eligible lead must be an active employee with an effective assignment to the same division and does not need a pre-existing global Team Lead role.
+- `REQ-ORG-014`: When an authorized administrator creates or edits an employee-division assignment, the system must show only active departments belonging to that assignment's division and must clear an incompatible selection when the division changes.
+- `REQ-ORG-015`: Selecting an assignment's department must derive the effective department Team Lead; the client must not be able to substitute another Team Lead in the same placement operation.
+- `REQ-ORG-016`: A referenced department must retain its division and historical identity and must not be physically deleted; authorized administrators must deactivate it to prevent new placements while preserving existing history.
+- `REQ-ORG-017`: Department Team Lead scope must govern access to employees, requests, tasks, and timesheet exceptions in that department, subject to any narrower record restriction or explicitly broader permission.
+- `REQ-ORG-018`: Every new active employee-division assignment must reference exactly one active department belonging to the same division; migration exceptions must be reported and resolved before cutover.
+- `REQ-ORG-019`: One employee may hold effective Team Lead appointments for multiple departments, including across divisions in which that employee has effective assignments.
+- `REQ-ORG-020`: Employee placement and department leadership must be effective-dated so historical membership, responsibility, and authorization can be reconstructed without rewriting past records.
 
 ### 5.2 Projects and Tasks
 
@@ -184,10 +201,11 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 - `REQ-WORK-015`: Employees must have All, Pending, In Progress, Completed, Overdue, and Upcoming task views; All is a combined filter, while Overdue and Upcoming must be derived from due dates rather than stored as workflow statuses.
 - `REQ-WORK-016`: A task must accept new work logs only while In Progress, assigned or explicitly available to the employee, approved where employee-raised-task review applies, and attached to an active project and effective division assignment.
 - `REQ-WORK-017`: Task actual time and estimate variance must be derived from work logs, must not overwrite the estimate, and must not cap actual time at the estimate.
+- `REQ-WORK-018`: The Team Lead task form must include an explicit `Self (me)` assignee option. Selecting it must force the creator and assignee to the authenticated Team Lead, remove supporting members so only that Team Lead can complete or log work against the task, store `review_state = not_required`, send no self-assignment or approval notification, enter no review queue, and follow the normal Pending → In Progress → Completed workflow before accepting work logs.
 
 ### 5.3 Timesheet Management
 
-- `REQ-TIME-001`: Employees must have daily, weekly, monthly, calendar, and list views of their timesheets.
+- `REQ-TIME-001`: Employees, including employees whose primary role is Team Lead, must have daily, weekly, monthly, calendar, and list views of their own timesheets.
 - `REQ-TIME-002`: Authorized Team Leads and HR users must have employee-, division-, project-, and month-based summary views.
 - `REQ-TIME-003`: The system must provide focused views for missing timesheets, under-time, overtime, critical exceptions, and WFH work logs.
 - `REQ-TIME-004`: A work log must store local work date, employee, division, project, task, positive integer duration minutes, work location, work description, completed work, source, idempotency key, and optional attachment or supporting link.
@@ -428,6 +446,17 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 7. A failure must mark the minute Failed without changing its original content and must offer an authorized retry.
 8. Every active role must be able to return to the module and view authorized minutes; mutation and diagnostics must remain permission-controlled.
 
+### 6.8 Department and Employee Placement Workflow
+
+1. A Super Administrator must create a department under one division with its name, code, description, and active status.
+2. The system must allow two divisions to use the same department name or code while preventing duplicates inside one division.
+3. A Super Administrator must appoint any eligible active employee from that division as department lead with an effective date; a later appointment must end the previous non-overlapping period rather than overwrite it.
+4. When HR or a Super Administrator edits any employee-division assignment, the form must load only active departments from that assignment's division and clear an incompatible prior selection.
+5. Selecting a department must display its effective Team Lead as read-only context; the placement save must not accept an authoritative Team Lead value from the client.
+6. The service must reject a department that does not belong to the submitted assignment division.
+7. A referenced department must be deactivated rather than moved or deleted, and all placement and leadership changes must be audited.
+8. While a lead appointment is effective, the appointed employee must receive Team Lead capabilities only for the department's effective employees; the same person may hold several such scopes.
+
 ## 7. Data Requirements
 
 ### 7.1 Core Entities
@@ -435,7 +464,7 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 | Domain | Required entities |
 |---|---|
 | Access | User, Role, Permission, UserRole, LoginHistory, Session/AuthenticationEvent |
-| Organization | Employee, Division, EmployeeDivisionAssignment, Team, WorkPolicy, HolidayCalendar |
+| Organization | Employee, Division, Department, DepartmentLeadAssignment, EmployeeDivisionAssignment, Team, WorkPolicy, HolidayCalendar |
 | Work | Project, ProjectMember, Task, TaskMember, TaskChecklistItem, TaskStatusTransition |
 | Time | WorkLog, HistoricalClockEntry, DailyBreak, DailySummary, TimesheetPeriod, Verification/Amendment |
 | HR | LeaveRequest, WFHRequest, AttendanceDay, EvaluationPeriod, Evaluation, EvaluationResponse, GeneralRemark |
@@ -458,6 +487,9 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 - `REQ-DATA-010`: Each AI processing attempt must belong to one meeting minute and store status, schema/provider/model identifiers, idempotency key, correlation ID, timestamps, protected raw response reference, safe error, and attempt number.
 - `REQ-DATA-011`: Each generated task must retain an immutable origin link to its meeting minute and processing attempt after archival, reassignment, or later task edits.
 - `REQ-DATA-012`: Match results must distinguish suggested, automatically assigned, unassigned, and later manually reassigned outcomes without rewriting the original matching evidence.
+- `REQ-DATA-013`: A Department must reference exactly one Division, and every EmployeeDivisionAssignment department must belong to that same assignment division.
+- `REQ-DATA-014`: Department Team Lead assignments must be effective-dated and audited so historical responsibility can be reconstructed without rewriting earlier records.
+- `REQ-DATA-015`: DepartmentLeadAssignment periods for one department must not overlap, and the lead employee must have an effective assignment to the department's division for the appointment period.
 
 ## 8. Navigation Requirements
 
@@ -467,6 +499,8 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 - `REQ-NAV-004`: Finance navigation must include Finance Dashboard, Employee Hours, Overtime, Project Costs, Division Costs, Payroll Reports, and Financial Reports when enabled and authorized.
 - `REQ-NAV-005`: Navigation must hide unauthorized modules and must also enforce authorization at the server/API layer.
 - `REQ-NAV-006`: Every active authenticated role must have a Meeting Minutes navigation entry when the module is enabled; list and detail access must be record-scoped, and mutation controls must be role- and ownership-scoped.
+- `REQ-NAV-007`: Super Administrator navigation must include department administration; other roles must not receive department mutation controls or endpoints.
+- `REQ-NAV-008`: An employee with at least one effective department-lead appointment must receive Team Lead navigation for only the effective department scopes, even when the employee has no global Team Lead role.
 
 ## 9. Non-Functional Requirements
 
@@ -521,6 +555,7 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 ### 10.1 MVP Exit Checklist
 
 - [ ] Employees can belong to and record authorized time for multiple divisions.
+- [ ] Each division can maintain its own departments, each department has one effective Team Lead, and every employee-division assignment selects a department from the same division.
 - [ ] Time can be linked to a division, project, and task and includes completed-work details.
 - [ ] Employees can move authorized tasks through Pending, In Progress, and Completed with the required optional/mandatory transition notes and a non-destructive history.
 - [ ] Task status changes create no minutes; actual time comes only from explicit duration-based work logs.
@@ -537,7 +572,7 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 
 ## 11. Dependencies and Constraints
 
-- The product owner must supply the authoritative employee list, division membership, Team Lead mapping, holiday calendars, employment schedules, leave balances, and initial projects.
+- The product owner must supply the authoritative employee list, all employee-division-to-department mappings, department list for every division, effective department Team Lead mapping, holiday calendars, employment schedules, leave balances, and initial projects.
 - HR must approve the work-policy definitions, payroll periods, verification process, leave rules, and retention periods.
 - HR must confirm whether exact attendance intervals are a compliance obligation; if required, a separately owned attendance capability must be approved before task-based cutover.
 - Finance must approve cost-rate handling, billable classifications, budget rules, payroll export fields, and permissions before Finance features are released.
@@ -550,7 +585,12 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 ## 12. Assumptions and Decisions
 
 - The five named divisions are configurable seed records, not hard-coded permanent limits.
+- Departments are owned by divisions rather than shared globally; PowerInAI and WesternCF may each have their own Sales department without conflict.
+- Department belongs to EmployeeDivisionAssignment, not Employee. An employee may therefore belong to different departments in different divisions.
+- A department lead appointment is itself the source of department-scoped Team Lead authority. It does not silently grant a permanent company-wide role.
+- One eligible employee may lead multiple departments. Project manager, project member, and other explicit workflow-reviewer authority remain separate from department leadership.
 - The standard policy is a five-day week with 7 active hours and 1 break hour per full day; authorized employee/work-policy overrides may define part-time or special schedules.
+- The standard weekly holidays are Friday and Saturday; the standard working week is Sunday through Thursday. Authorized calendar or policy overrides remain effective-dated.
 - Both the 7-hour active threshold and 8-hour total threshold must be satisfied for a normal full day.
 - Break is a daily value displayed separately; individual work entries contribute active time and do not each receive an additional break.
 - Daily Team Lead approval does not exist. Team Leads perform exception-based review, and HR performs period verification.
@@ -578,6 +618,9 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 
 | Risk | Impact | Required mitigation |
 |---|---|---|
+| Assignment department does not belong to its division | Incorrect Team Lead scope and data exposure | Enforce the relationship in the database and service, filter dependent dropdowns by assignment division, and derive the Team Lead server-side. |
+| Department Team Lead changes rewrite responsibility history | Reviews and audit evidence become ambiguous | Store effective-dated DepartmentLeadAssignment records and retain historical assignments. |
+| Department appointment is mistaken for a global role grant | A lead gains unrelated employee or division access | Derive a bounded department capability at authorization time and test counts, search, routes, reports, and exports. |
 | Incorrect cross-division aggregation | Payroll and reporting errors | Use one authoritative calculation contract and automated boundary tests. |
 | Ambiguous break handling | False under-time/overtime results | Store and display one recognized daily break separately from active entries. |
 | No daily approval misunderstood as no control | Unverified data reaches Finance | Use exception review, HR period verification, locks, and audited amendments. |
@@ -613,6 +656,8 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 - `AC-AUTH-003`: A Finance user without cost permission must see verified hours but must not see cost rates, salaries, or calculated labour costs.
 - `AC-AUTH-004`: An unauthorized user must not discover government-project records or documents through counts, notifications, search results, filenames, or exports.
 - `AC-AUTH-005`: A view-only user must be unable to modify data through either the user interface or API.
+- `AC-AUTH-006`: A non-Super-Administrator must be unable to create, edit, delete, move, or reassign the Team Lead of a department through the interface, direct request, or API.
+- `AC-AUTH-007`: An employee appointed to lead one department without a global Team Lead role must receive Team Lead capabilities for that department only, must receive no access before the effective start or after the effective end, and must not gain unrelated division, project, government-project, salary, cost, evaluation, export, attachment, or audit access.
 
 ### 14.3 Workflow and Audit Scenarios
 
@@ -627,6 +672,9 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 - `AC-WF-009`: A Completed task must reject a work log submitted through either the interface or API; after reopening to In Progress with a required reason, it must accept an otherwise valid work log.
 - `AC-WF-010`: Retrying the same work-log or transition request with the same idempotency key must produce exactly one operational record.
 - `AC-WF-011`: Historical clock entries must render read-only with their original ranges and must produce the same verified-period totals after migration.
+- `AC-WF-012`: Given one employee with PowerInAI and WesternCF assignments, the assignment forms must allow Technical for PowerInAI and Operations for WesternCF; submitting either department against the other division must be rejected with field-level corrective guidance.
+- `AC-WF-013`: Given one employee appointed to lead two departments, both scopes must coexist while effective; ending one appointment must remove only that future scope while historical decisions continue to identify the responsible lead.
+- `AC-WF-014`: Given a Team Lead creates a personal task, the task must be self-assigned and Pending with no review required, must appear in no approval queue, and after moving to In Progress must accept duration work logs in that Team Lead's own timesheet.
 
 ### 14.4 Reporting and Quality Scenarios
 

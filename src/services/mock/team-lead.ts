@@ -38,6 +38,8 @@ import { actualProjectMinutes, actualTaskMinutes } from './organization';
 import { buildDayView, summaryFor } from './timesheet';
 import { mockStore } from './store';
 import { toReviewStateView } from './task-review';
+import { departmentLeadEmployeeIds, departmentLeadScopes } from './organization-hierarchy';
+import { notifyEmployee } from './notification-store';
 
 const WAIT_MS = 120;
 const delay = () => new Promise((resolve) => setTimeout(resolve, WAIT_MS));
@@ -80,14 +82,34 @@ function divisionRef(divisionId: string) {
 }
 
 function inEmployeeScope(userId: string, employeeId: string) {
-  return account(userId)?.scopedEmployeeIds.includes(employeeId) ?? false;
+  return scopedEmployees(userId).includes(employeeId);
+}
+
+function scopedEmployees(userId: string): readonly string[] {
+  const viewer = account(userId);
+  if (!viewer) return [];
+  const leadScopes = departmentLeadScopes(viewer.employeeId);
+  return leadScopes.length > 0
+    ? departmentLeadEmployeeIds(viewer.employeeId)
+    : viewer.scopedEmployeeIds;
+}
+
+function hasLeadScope(userId: string): boolean {
+  const viewer = account(userId);
+  return Boolean(viewer && (
+    viewer.primaryRole === 'team_lead' || departmentLeadScopes(viewer.employeeId).length > 0
+  ));
 }
 
 function inDivisionScope(userId: string, divisionId: string) {
   const viewer = account(userId);
-  if (!viewer?.scopedDivisionIds.includes(divisionId)) return false;
+  const divisionIds = viewer ? [
+    ...viewer.scopedDivisionIds,
+    ...departmentLeadScopes(viewer.employeeId).map((scope) => scope.divisionId),
+  ] : [];
+  if (!divisionIds.includes(divisionId)) return false;
   if (divisionId !== 'gov') return true;
-  return viewer.permissions.includes(SENSITIVE_PERMISSIONS.governmentProjects);
+  return viewer?.permissions.includes(SENSITIVE_PERMISSIONS.governmentProjects) ?? false;
 }
 
 function actorFor(userId: string) {
@@ -252,6 +274,14 @@ const EVALUATION_WEIGHTS: Readonly<Record<EvaluationAreaKey, number>> = {
 };
 
 function initialEvaluation(employeeId: string, index: number): TeamEvaluationView {
+  const summaries = teamDates().map((date) => summaryFor(employeeId, date));
+  const activeMinutes = summaries.reduce((total, summary) => total + summary.activeMinutes, 0);
+  const assignedTasks = mockStore.tasks().filter((task) => task.assigneeEmployeeId === employeeId);
+  const estimatedMinutes = assignedTasks.reduce((total, task) => total + task.estimatedMinutes, 0);
+  const actualMinutes = assignedTasks.reduce((total, task) => total + actualTaskMinutes(task.id), 0);
+  const variancePercent = estimatedMinutes
+    ? Math.round(((actualMinutes - estimatedMinutes) / estimatedMinutes) * 100)
+    : 0;
   const scores = Object.fromEntries(AREAS.map((area) => [area, index === 0 ? 4 : 0])) as Record<EvaluationAreaKey, number>;
   const comments = Object.fromEntries(AREAS.map((area) => [area, ''])) as Record<EvaluationAreaKey, string>;
   return {
@@ -262,10 +292,10 @@ function initialEvaluation(employeeId: string, index: number): TeamEvaluationVie
     state: index === 0 ? 'reviewer_scoring' : index === 1 ? 'not_started' : 'published',
     weightedScore: index === 0 ? 4 : index === 2 ? 4.3 : null,
     facts: [
-      { label: 'Active work', value: index === 1 ? '121:35' : '139:20' },
-      { label: 'Missing days', value: index === 1 ? '2' : '0' },
-      { label: 'Tasks completed', value: index === 2 ? '9' : '6' },
-      { label: 'Estimate variance', value: index === 1 ? '+18%' : '+4%' },
+      { label: 'Active work', value: toDurationView(activeMinutes).display },
+      { label: 'Missing days', value: String(summaries.filter((summary) => summary.status === 'missing').length) },
+      { label: 'Tasks completed', value: String(assignedTasks.filter((task) => task.status === 'completed').length) },
+      { label: 'Estimate variance', value: `${variancePercent > 0 ? '+' : ''}${variancePercent}%` },
       { label: 'WFH days', value: index === 0 ? '2' : '1' },
       { label: 'General remarks', value: index === 0 ? '2' : '1' },
     ],
@@ -285,8 +315,8 @@ export const mockTeamLeadService: TeamLeadService = {
   async listTimesheets(userId) {
     await delay();
     const viewer = account(userId);
-    if (!viewer || viewer.primaryRole !== 'team_lead') return denied();
-    const rows = viewer.scopedEmployeeIds.flatMap((employeeId) =>
+    if (!viewer || !hasLeadScope(userId)) return denied();
+    const rows = scopedEmployees(userId).flatMap((employeeId) =>
       teamDates().map((date) => rowFor(employeeId, date)),
     );
     return success(rows.sort((a, b) => b.date.localeCompare(a.date)));
@@ -295,8 +325,8 @@ export const mockTeamLeadService: TeamLeadService = {
   async listMembers(userId) {
     await delay();
     const viewer = account(userId);
-    if (!viewer || viewer.primaryRole !== 'team_lead') return denied();
-    return success(viewer.scopedEmployeeIds.map((employeeId) => {
+    if (!viewer || !hasLeadScope(userId)) return denied();
+    return success(scopedEmployees(userId).map((employeeId) => {
       const row = rowFor(employeeId, DEMO_TODAY);
       const divisions = mockStore.assignments().filter((item) => item.employeeId === employeeId && item.isActive)
         .filter((item) => inDivisionScope(userId, item.divisionId))
@@ -467,6 +497,15 @@ export const mockTeamLeadService: TeamLeadService = {
       createdBy: actorFor(userId), updatedBy: actorFor(userId),
     };
     mockStore.addRemark(remark);
+    if (requestedChanges) {
+      notifyEmployee(employeeId, {
+        type: 'correction_requested',
+        title: `Work-log correction requested for ${formatDate(date)}`,
+        body: 'A correction was requested on one of your work logs. Open the timesheet for the authorized details.',
+        href: `/timesheets/${date}`,
+        relatedLabel: `Timesheet, ${formatDate(date)}`,
+      });
+    }
     return success({ id, state: remark.state });
   },
 
@@ -538,11 +577,13 @@ export const mockTeamLeadService: TeamLeadService = {
       fieldErrors: [{ field: 'title', code: 'REQUIRED', message: 'Task title is required.', guidance: 'Enter a short, specific title.' }],
     };
     const existing = id ? mockStore.findTask(id) : undefined;
+    const creatorEmployeeId = account(userId)?.employeeId ?? userId;
+    const isSelfAssigned = input.assigneeEmployeeId === creatorEmployeeId;
     const now = new Date().toISOString();
     const task: Task = {
       id: existing?.id ?? `tsk-${Date.now()}`, title: input.title.trim(), projectId: input.projectId,
       divisionId: project.divisionId, assigneeEmployeeId: input.assigneeEmployeeId,
-      supportingMemberIds: input.supportingMemberIds, creatorEmployeeId: account(userId)?.employeeId ?? userId,
+      supportingMemberIds: isSelfAssigned ? [] : input.supportingMemberIds, creatorEmployeeId,
       priority: input.priority, startDate: input.startDate, dueDate: input.dueDate,
       completedDate: existing?.completedDate ?? null, estimatedMinutes: input.estimatedMinutes,
       description: input.description || null, status: existing?.status ?? 'pending',
@@ -555,6 +596,15 @@ export const mockTeamLeadService: TeamLeadService = {
     if (existing) mockStore.updateTask(task.id, task as ReturnType<typeof mockStore.tasks>[number]);
     else mockStore.addTask(task as ReturnType<typeof mockStore.tasks>[number]);
     mockStore.replaceChecklist(task.id, input.checklist);
+    if ((!existing || existing.assigneeEmployeeId !== task.assigneeEmployeeId) && !isSelfAssigned) {
+      notifyEmployee(task.assigneeEmployeeId, {
+        type: existing ? 'task_reassigned' : 'task_assigned',
+        title: existing ? 'Task reassigned to you' : 'Task assigned to you',
+        body: 'A task assignment changed. Open the task to see the authorized details.',
+        href: `/tasks/${task.id}`,
+        relatedLabel: 'Task',
+      });
+    }
     return success(taskView(task));
   },
 
@@ -594,8 +644,8 @@ export const mockTeamLeadService: TeamLeadService = {
   async listWorkload(userId) {
     await delay();
     const viewer = account(userId);
-    if (!viewer || viewer.primaryRole !== 'team_lead') return denied();
-    const result: WorkloadMemberView[] = viewer.scopedEmployeeIds.map((employeeId, index) => {
+    if (!viewer || !hasLeadScope(userId)) return denied();
+    const result: WorkloadMemberView[] = scopedEmployees(userId).map((employeeId, index) => {
       const capacity = index === 1 ? 1680 : 2100;
       const assigned = index === 0 ? 2400 : index === 1 ? 1080 : 1980;
       const actual = teamDates().slice(0, 5).reduce((total, date) => total + summaryFor(employeeId, date).activeMinutes, 0);

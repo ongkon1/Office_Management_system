@@ -3,10 +3,9 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { CalendarPlus, House, Play, Plus } from 'lucide-react';
+import { CalendarPlus, House, Plus } from 'lucide-react';
 import type { EmployeeDashboardView } from '@/contracts/view-models';
 import { useAsync } from '@/lib/use-async';
-import { formatElapsed, useTimer } from '@/features/timesheet/use-timer';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Duration } from '@/components/ui/misc';
@@ -14,7 +13,7 @@ import { ProgressBar } from '@/components/ui/progress';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardHeader, MetricCard } from '@/components/feedback/card';
-import { Alert, EmptyState } from '@/components/feedback/alert';
+import { EmptyState } from '@/components/feedback/alert';
 import { BarChart, ChartContainer } from '@/components/charts/chart';
 import {
   DashboardGrid,
@@ -27,8 +26,7 @@ import { DEMO_TODAY } from '@/lib/demo-context';
 import { ATTENDANCE_LABEL } from '@/lib/status';
 
 const QUICK_ACTION_ICONS: Record<string, React.ReactNode> = {
-  add_time: <Plus aria-hidden className="size-4" />,
-  start_timer: <Play aria-hidden className="size-4" />,
+  log_work: <Plus aria-hidden className="size-4" />,
   request_wfh: <House aria-hidden className="size-4" />,
   apply_leave: <CalendarPlus aria-hidden className="size-4" />,
 };
@@ -45,7 +43,6 @@ export function EmployeeDashboard({ userId }: { userId: string }) {
     () => mockDashboardService.getEmployeeDashboard(userId, DEMO_TODAY),
     [userId],
   );
-  const timer = useTimer();
 
   if (state.status === 'loading') {
     return (
@@ -96,7 +93,7 @@ export function EmployeeDashboard({ userId }: { userId: string }) {
           .map((action) => (
             <Button
               key={action.key}
-              variant={action.key === 'add_time' ? 'primary' : 'secondary'}
+              variant={action.key === 'log_work' ? 'primary' : 'secondary'}
               iconLeading={QUICK_ACTION_ICONS[action.key]}
               onClick={() => {
                 router.push(action.href);
@@ -108,26 +105,6 @@ export function EmployeeDashboard({ userId }: { userId: string }) {
       />
 
       <div className="mt-5 flex flex-col gap-5">
-        {timer.session?.isRunning && (
-          <Alert
-            tone="info"
-            title={`Timer running — ${formatElapsed(timer.elapsedSeconds)}`}
-            actions={
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => {
-                  router.push(`/timesheets/${DEMO_TODAY}`);
-                }}
-              >
-                Go to timesheet
-              </Button>
-            }
-          >
-            Stopping the timer creates a draft you review before it counts toward the day.
-          </Alert>
-        )}
-
         {/* FE-0301: today's summary. */}
         <Card>
           <CardHeader

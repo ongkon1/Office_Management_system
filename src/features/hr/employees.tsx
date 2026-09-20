@@ -243,12 +243,6 @@ export function EmployeeDirectory({ incompleteOnly = false }: { incompleteOnly?:
             ),
           },
           {
-            key: 'lead',
-            header: 'Team Lead',
-            hideBelow: 'lg',
-            render: (row) => row.teamLeadName ?? <span className="text-ink-muted">Not assigned</span>,
-          },
-          {
             key: 'employment',
             header: 'Employment',
             hideBelow: 'lg',
@@ -307,14 +301,12 @@ const EMPTY_FORM: EmployeeFormInput = {
   fullName: '',
   employeeCode: '',
   designation: '',
-  department: '',
   employmentType: 'full_time',
   joiningDate: '2026-09-01',
   email: '',
   phone: '',
   officeLocation: '',
   primaryDivisionId: 'pia',
-  teamLeadEmployeeId: 'emp-2001',
   normalWorkMode: 'office',
   standardDailyActiveMinutes: 420,
   standardWeeklyActiveMinutes: 2100,
@@ -339,10 +331,6 @@ export function EmployeeForm({ employeeId }: { employeeId?: string }) {
         : Promise.resolve({ status: 'success' as const, data: null }),
     [user?.userId, employeeId],
   );
-  const { state: departmentState } = useAsync(
-    () => mockHrService.listDepartmentOptions(user?.userId ?? ''),
-    [user?.userId],
-  );
 
   // Adjusting state during render rather than in an effect: the form is
   // seeded once per loaded employee, and an effect here would run after a
@@ -355,15 +343,12 @@ export function EmployeeForm({ employeeId }: { employeeId?: string }) {
       fullName: detail.employee.fullName,
       employeeCode: detail.employee.employeeCode,
       designation: detail.employee.designation ?? '',
-      department: detail.department ?? '',
       employmentType: detail.employmentType,
       joiningDate: '2026-01-01',
       email: detail.email,
       phone: detail.phone ?? '',
       officeLocation: detail.officeLocation ?? '',
       primaryDivisionId: detail.assignments.find((item) => item.isPrimary)?.division.id ?? 'pia',
-      teamLeadEmployeeId:
-        detail.assignments.find((item) => item.isPrimary)?.teamLead?.id ?? 'emp-2001',
       normalWorkMode: detail.workMode,
       standardDailyActiveMinutes: detail.standardDaily.minutes,
       standardWeeklyActiveMinutes: detail.standardWeekly.minutes,
@@ -373,14 +358,11 @@ export function EmployeeForm({ employeeId }: { employeeId?: string }) {
     setSkillText(detail.skills.join(', '));
   }
 
-  if (state.status === 'loading' || departmentState.status === 'loading') {
+  if (state.status === 'loading') {
     return <HrLoading label="employee record" />;
   }
   if (state.status !== 'success') {
     return <HrResultFallback result={state.failure} subject="Employee" />;
-  }
-  if (departmentState.status !== 'success') {
-    return <HrResultFallback result={departmentState.failure} subject="Departments" />;
   }
 
   function update<K extends keyof EmployeeFormInput>(key: K, value: EmployeeFormInput[K]) {
@@ -478,18 +460,6 @@ export function EmployeeForm({ employeeId }: { employeeId?: string }) {
                 onChange={(event) => update('designation', event.target.value)}
               />
             </Field>
-            <Field
-              label="Department"
-              error={fieldError('department')}
-              helperText="Departments are managed by the Super Administrator."
-            >
-              <Select
-                value={form.department}
-                options={departmentState.data}
-                placeholder="Select department"
-                onChange={(event) => update('department', event.target.value)}
-              />
-            </Field>
           </div>
         </Card>
 
@@ -516,14 +486,12 @@ export function EmployeeForm({ employeeId }: { employeeId?: string }) {
               <Select
                 value={form.primaryDivisionId}
                 options={DIVISION_OPTIONS}
-                onChange={(event) => update('primaryDivisionId', event.target.value)}
-              />
-            </Field>
-            <Field label="Team Lead">
-              <Select
-                value={form.teamLeadEmployeeId}
-                options={TEAM_LEAD_OPTIONS}
-                onChange={(event) => update('teamLeadEmployeeId', event.target.value)}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    primaryDivisionId: event.target.value,
+                  }))
+                }
               />
             </Field>
             <Field label="Record status" helperText="An inactive employee keeps their history but cannot sign in.">
@@ -624,8 +592,8 @@ export function EmployeeForm({ employeeId }: { employeeId?: string }) {
 
 const EMPTY_ASSIGNMENT = {
   divisionId: 'pia',
+  departmentId: 'dept-pia-technical',
   isPrimary: false,
-  teamLeadEmployeeId: 'emp-2001',
   allocationPercent: 20,
   expectedWeeklyMinutes: 420,
   startDate: '2026-09-01',
@@ -653,6 +621,10 @@ function AssignmentEditor({
   const [form, setForm] = React.useState(EMPTY_ASSIGNMENT);
   const [errors, setErrors] = React.useState<readonly { field: string; message: string }[]>([]);
   const [seededFor, setSeededFor] = React.useState<string | null>(null);
+  const { state: departmentState } = useAsync(
+    () => mockHrService.listDepartmentOptions(user?.userId ?? '', form.divisionId),
+    [user?.userId, form.divisionId],
+  );
 
   const seedKey = open ? (assignment?.id ?? 'new') : null;
   if (seedKey !== seededFor) {
@@ -662,8 +634,8 @@ function AssignmentEditor({
       assignment
         ? {
             divisionId: assignment.division.id,
+            departmentId: assignment.department.id,
             isPrimary: assignment.isPrimary,
-            teamLeadEmployeeId: assignment.teamLead?.id ?? 'emp-2001',
             allocationPercent: assignment.allocationPercent,
             expectedWeeklyMinutes: assignment.expectedWeekly.minutes,
             startDate: assignment.startDate,
@@ -680,8 +652,8 @@ function AssignmentEditor({
     const input: AssignmentFormInput = {
       employeeId,
       divisionId: form.divisionId,
+      departmentId: form.departmentId,
       isPrimary: form.isPrimary,
-      teamLeadEmployeeId: form.teamLeadEmployeeId,
       allocationPercent: form.allocationPercent,
       expectedWeeklyMinutes: form.expectedWeeklyMinutes,
       startDate: form.startDate,
@@ -744,14 +716,26 @@ function AssignmentEditor({
             <Select
               value={form.divisionId}
               options={DIVISION_OPTIONS}
-              onChange={(event) => setForm({ ...form, divisionId: event.target.value })}
+              onChange={(event) => setForm({
+                ...form, divisionId: event.target.value, departmentId: '',
+              })}
             />
           </Field>
-          <Field label="Team Lead">
+          <Field label="Department" required error={fieldError('departmentId')}>
             <Select
-              value={form.teamLeadEmployeeId}
-              options={TEAM_LEAD_OPTIONS}
-              onChange={(event) => setForm({ ...form, teamLeadEmployeeId: event.target.value })}
+              value={form.departmentId}
+              options={departmentState.status === 'success' ? departmentState.data : []}
+              placeholder={departmentState.status === 'loading' ? 'Loading departments' : 'Select department'}
+              onChange={(event) => setForm({ ...form, departmentId: event.target.value })}
+            />
+          </Field>
+          <Field label="Effective Team Lead" helperText="Resolved from department leadership history.">
+            <Input
+              readOnly
+              value={departmentState.status === 'success'
+                ? departmentState.data.find((option) => option.value === form.departmentId)
+                    ?.currentLead?.fullName ?? 'Not appointed'
+                : 'Loading'}
             />
           </Field>
           <Field
@@ -886,7 +870,8 @@ function AssignmentsPanel({
                     {assignment.division.isRestricted && <Badge tone="warning">Restricted</Badge>}
                   </p>
                   <p className="text-caption text-ink-muted">
-                    Team Lead {assignment.teamLead?.fullName ?? 'not assigned'} ·{' '}
+                    {assignment.department.name} · Team Lead{' '}
+                    {assignment.effectiveTeamLead?.fullName ?? 'not appointed'} ·{' '}
                     {assignment.roleInDivision ?? 'No division role'}
                   </p>
                 </div>
@@ -956,8 +941,8 @@ function AssignmentsPanel({
                 </p>
                 <p className="text-caption text-ink-muted">
                   {assignment.startDateLabel} – {assignment.endDateLabel ?? 'no end date'} ·{' '}
-                  {assignment.allocationPercent}% · Team Lead{' '}
-                  {assignment.teamLead?.fullName ?? 'not assigned'}
+                  {assignment.allocationPercent}% · {assignment.department.name} · Team Lead{' '}
+                  {assignment.effectiveTeamLead?.fullName ?? 'not appointed'}
                 </p>
               </div>
             </li>
@@ -1076,12 +1061,6 @@ export function EmployeeDetail({ employeeId }: { employeeId: string }) {
                   <dt className="text-caption text-ink-muted">Office location</dt>
                   <dd className="text-body-sm text-ink">
                     {detail.officeLocation ?? <span className="text-ink-muted">Not recorded</span>}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-caption text-ink-muted">Department</dt>
-                  <dd className="text-body-sm text-ink">
-                    {detail.department ?? <span className="text-ink-muted">Not recorded</span>}
                   </dd>
                 </div>
                 <div>

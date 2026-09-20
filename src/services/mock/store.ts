@@ -4,10 +4,6 @@
  * Seeded from the deterministic fixtures, then mutated by the services so a
  * demo behaves like a real application within a session. It is the mock
  * equivalent of the database, and nothing above the service layer touches it.
- *
- * The running timer is mirrored into `localStorage` so it survives a refresh,
- * which is what makes the timer-recovery state (`FE-0330`, `REQ-NFR-PERF-004`)
- * demonstrable rather than described.
  */
 
 import type { ConveyanceClaim } from '@/contracts/conveyance';
@@ -18,7 +14,6 @@ import type {
   Holiday,
   LeaveRequest,
   TimeEntry,
-  TimerSession,
   TimesheetPeriod,
   WfhRequest,
 } from '@/contracts/domain';
@@ -36,8 +31,6 @@ import {
 } from '@/fixtures';
 import { REQUISITIONS } from '@/fixtures/requisition';
 import { CONVEYANCE_CLAIMS } from '@/fixtures/conveyance';
-
-const TIMER_KEY = 'oms.timer';
 
 interface DayReason {
   overtimeReason?: string;
@@ -59,7 +52,6 @@ interface MockState {
   periods: TimesheetPeriod[];
   requisitions: Requisition[];
   conveyanceClaims: ConveyanceClaim[];
-  timer: TimerSession | null;
 }
 
 function seed(): MockState {
@@ -77,7 +69,6 @@ function seed(): MockState {
     periods: [...PERIODS],
     requisitions: [...REQUISITIONS],
     conveyanceClaims: [...CONVEYANCE_CLAIMS],
-    timer: null,
   };
 }
 
@@ -90,30 +81,6 @@ const listeners = new Set<() => void>();
 function notify(): void {
   version += 1;
   for (const listener of listeners) listener();
-}
-
-function readStoredTimer(): TimerSession | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = window.localStorage.getItem(TIMER_KEY);
-    return raw ? (JSON.parse(raw) as TimerSession) : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeStoredTimer(timer: TimerSession | null): void {
-  if (typeof window === 'undefined') return;
-  try {
-    if (timer) window.localStorage.setItem(TIMER_KEY, JSON.stringify(timer));
-    else window.localStorage.removeItem(TIMER_KEY);
-  } catch {
-    // Storage unavailable: the timer degrades to memory-only for this tab.
-  }
-}
-
-if (typeof window !== 'undefined') {
-  state.timer = readStoredTimer();
 }
 
 export const mockStore = {
@@ -267,18 +234,6 @@ export const mockStore = {
         date >= period.startDate &&
         date <= period.endDate,
     );
-  },
-
-  /* --- Timer ------------------------------------------------------------- */
-
-  getTimer(): TimerSession | null {
-    return state.timer;
-  },
-
-  setTimer(timer: TimerSession | null): void {
-    state.timer = timer;
-    writeStoredTimer(timer);
-    notify();
   },
 
   /* --- Tasks ------------------------------------------------------------- */
@@ -454,7 +409,6 @@ export const mockStore = {
   /** Test seam: restores the fixture state. */
   reset(): void {
     state = seed();
-    writeStoredTimer(null);
     notify();
   },
 };

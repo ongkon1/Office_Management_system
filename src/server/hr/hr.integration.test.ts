@@ -246,9 +246,9 @@ describe('Phase 5 real database workflows', () => {
     });
     it('draft time cannot establish a duty location or active attendance', async () => {
         const id = randomUUID();
-        await pool.execute(`INSERT INTO time_entries(id,employee_id,work_date,division_id,policy_version_id,timezone,entry_method,work_location,active_minutes,work_description,completed_work,status,created_by_user_id)
-            VALUES(?,?,?,?,?,'Asia/Dhaka','manual_duration','official_travel',60,'Draft travel','', 'draft',?)`,
-            [id, eid, '2026-11-03', division, '60000000-0000-4000-8000-000000000001', employee.userId]);
+        await pool.execute(`INSERT INTO time_entries(id,employee_id,work_date,division_id,policy_version_id,timezone,entry_method,source,idempotency_key,work_location,active_minutes,work_description,completed_work,status,created_by_user_id)
+            VALUES(?,?,?,?,?,'Asia/Dhaka','manual_duration','manual',?,'official_travel',60,'Draft travel','', 'draft',?)`,
+            [id, eid, '2026-11-03', division, '60000000-0000-4000-8000-000000000001', `hr-test:${id}`, employee.userId]);
         const day = data(await new AttendanceApplication(self).day(eid, '2026-11-03'));
         expect(day).toMatchObject({ state: 'missing_timesheet', activeMinutes: 0, workLocation: null });
     });

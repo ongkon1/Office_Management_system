@@ -18,7 +18,7 @@ describe('BE-0145 MySQL foundation', () => {
       `SELECT table_name AS tableName FROM information_schema.tables WHERE table_schema = ?`, [database.name],
     );
     const names = new Set(rows.map((row) => row.tableName));
-    for (const required of ['users','auth_two_factor','auth_rate_limits','auth_security_events','employee_division_assignments','projects','time_entries','daily_breaks','daily_summaries','leave_requests','evaluations','cost_rates','notifications','documents','integration_connections','audit_events']) {
+    for (const required of ['users','auth_two_factor','auth_rate_limits','auth_security_events','employee_division_assignments','projects','time_entries','task_status_transitions','time_capture_cutovers','daily_breaks','daily_summaries','leave_requests','evaluations','cost_rates','notifications','documents','integration_connections','audit_events']) {
       expect(names.has(required), required).toBe(true);
     }
     const [floatingColumns] = await database.connection.query<RowDataPacket[]>(
@@ -61,6 +61,6 @@ describe('BE-0145 MySQL foundation', () => {
     database = await createIsolatedDatabase();
     const [rows] = await database.connection.query<(RowDataPacket & { keyName: string })[]>("EXPLAIN SELECT * FROM time_entries WHERE employee_id='40000000-0000-4000-8000-000000000003' AND work_date='2026-09-02'");
     const keyName = rows[0].keyName ?? rows[0].key;
-    expect(keyName).toBe('ix_time_employee_date');
+    expect(keyName).toBe('ix_work_log_employee_date');
   });
 });

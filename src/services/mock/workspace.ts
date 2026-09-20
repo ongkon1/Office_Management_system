@@ -59,12 +59,12 @@ import {
   DOCUMENTS,
   MESSAGES,
   MESSAGE_THREADS,
-  NOTIFICATIONS,
   type NotificationFixture,
 } from '@/fixtures/workspace';
 import { DIVISIONS, findAccountByUserId } from './accounts';
 import { mockStore } from './store';
 import { summaryFor } from './timesheet';
+import { allMockNotifications, resetMockNotifications } from './notification-store';
 
 const LATENCY_MS = 150;
 const delay = () => new Promise((resolve) => setTimeout(resolve, LATENCY_MS));
@@ -146,6 +146,11 @@ function groupOf(type: NotificationFixture['type']): NotificationGroupKey {
     case 'critical_time':
       return 'time';
     case 'task_assigned':
+    case 'task_reassigned':
+    case 'task_started':
+    case 'task_completed':
+    case 'task_reopened':
+    case 'significant_variance':
     case 'deadline_approaching':
     case 'task_overdue':
     case 'workload_warning':
@@ -198,7 +203,7 @@ function notificationView(fixture: NotificationFixture): NotificationItemView {
 }
 
 function buildNotificationCentre(userId: string): NotificationCentreView {
-  const items = NOTIFICATIONS.filter((item) => item.recipientUserId === userId).map(
+  const items = allMockNotifications().filter((item) => item.recipientUserId === userId).map(
     notificationView,
   );
   const order: NotificationGroupKey[] = [
@@ -547,7 +552,7 @@ export const mockWorkspaceService: WorkspaceService = {
 
   async markNotificationRead(userId, id, isRead) {
     await delay();
-    const fixture = NOTIFICATIONS.find(
+    const fixture = allMockNotifications().find(
       (item) => item.id === id && item.recipientUserId === userId,
     );
     // Another recipient's notification is not found, not denied.
@@ -559,7 +564,7 @@ export const mockWorkspaceService: WorkspaceService = {
   async markAllNotificationsRead(userId) {
     await delay();
     const next = { ...readOverrides };
-    for (const item of NOTIFICATIONS.filter((entry) => entry.recipientUserId === userId)) {
+    for (const item of allMockNotifications().filter((entry) => entry.recipientUserId === userId)) {
       next[item.id] = true;
     }
     readOverrides = next;
@@ -1103,6 +1108,7 @@ export const mockWorkspaceService: WorkspaceService = {
 
 /** Test seam: restores the Phase 7 workspace state. */
 export function resetWorkspaceState(): void {
+  resetMockNotifications();
   readOverrides = {};
   recentSearches = {};
   selfEvaluationDrafts = {};

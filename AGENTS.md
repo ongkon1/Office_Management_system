@@ -37,6 +37,7 @@ Everything below already exists. Read the relevant one *before* starting work ra
 | `frontend_milestone.md` | You are doing frontend work. `FE-*` tasks, Phases 0–9, progress table. |
 | `backend_milestone.md` | You are doing backend work. `BE-*` tasks, Phases 0–9. Backend Phase 0 is blocked until frontend contracts are stable. |
 | `modify_milestone.md` | You are implementing the approved task-based work-logging replacement. Phase 0 is done; follow F1–F4 before B1–B4 and preserve all historical clock records. |
+| `organization_hierarchy_milestone.md` | You are changing divisions, departments, employee placements, Team Lead scope, or any workflow/report that depends on reporting lines. Phase 0 is done; F1 is next. |
 | `docs/frontend/phase-0/traceability-and-priority.md` | You need a screen's route, roles, requirement ids, or MVP/Phase-2/3/4 label. |
 | `docs/frontend/phase-0/information-architecture.md` | You are building navigation, a screen flow, breadcrumbs, deep links, or mobile behavior. Covers all six roles and ten flows. |
 | `docs/frontend/phase-0/terminology-and-formats.md` | You are about to display a date, time, duration, money, percentage, status, name, or empty value. **Also lists forbidden wording.** |
@@ -57,11 +58,14 @@ Each of these has a natural-looking wrong implementation that passes casual revi
 
 - **A normal full day is 7 active hours + 1 separate break hour = 8 total.** Both thresholds must be met for "Complete".
 - **The break is one recognized value per day.** It is *never* added per work log. This is the single most common misreading of the domain.
+- **The standard working week is Sunday through Thursday.** Friday and Saturday are the default weekly holidays; authorized calendar and policy overrides remain effective-dated.
 - **Classification:** Missing / Under-time / Complete / Overtime (above 8:00 through **exactly 12:00**, reason required) / Critical (above 12:00, explanation required + Team Lead and HR notification). Two traps: exactly 12:00 is **Overtime**, and Under-time triggers on failing *either* threshold, not both.
 - **There is no daily Team Lead approval anywhere in this product.** Team Leads do exception review and correction requests; HR verifies and locks payroll periods. Approval wording is allowed only on WFH requests, leave requests, employee-raised task review, and HR period verification — never on a daily work log. Do not add an approve button, an "awaiting approval" state, or approval language to a timesheet.
 - **One general remark type.** Not multiple remark categories.
+- **Departments are division-owned; placement belongs to EmployeeDivisionAssignment.** Every new active division assignment selects one active department from that same division. Each department has at most one effective lead at a time; any eligible active employee in the division may be appointed, one employee may lead multiple departments, and the appointment itself grants only department-scoped Team Lead capabilities. Never trust a client-supplied lead or treat the appointment as a company-wide role. Only Super Administrators mutate departments and appointments.
 - **New active time comes only from explicit duration-based work logs against eligible In Progress tasks.** A task transition creates no minutes. New logs have no start/end range, so overlap detection does not apply; reject a save that would raise active work above 24:00 for one local date.
 - **Task workflow has three stored statuses:** Pending, In Progress, Completed. All is a combined view; Overdue and Upcoming are derived filters, not statuses. Pending tasks reject logs, and Completed tasks reject logs until reopened with a required reason.
+- **Team Lead capability is additive.** A Team Lead keeps employee self-service, including My Timesheet and personal tasks. A Team Lead self-created task is forced to themselves, has `review_state = not_required`, sends no approval request, and still must move from Pending to In Progress before it accepts work.
 - **Historical clock entries are immutable operational history.** Preserve their original ranges and calculation behavior. The B4 production deployment UTC instant is the cutover boundary, based on record creation time rather than work date.
 - **Deny by default** for government-project, salary, cost, evaluation, export, attachment, and audit data. Hiding it in the UI is *not* the control. A restricted field is omitted or explicitly marked `Restricted` — never blanked, never zeroed.
 - **Durations are integer minutes. Money is a fixed-precision decimal string plus a currency code.** No floating-point hours, no bare numbers for money. `6:59` must never render as `7:00`.
@@ -125,6 +129,8 @@ returns carries a field, a message **and** corrective guidance, because
 
 Assignments, holidays and payroll periods are held in `src/services/mock/store.ts`, not as fixture constants, because HR mutates them and the daily calculation reads them. Adding an assignment must immediately widen which divisions accept time; verifying a period must immediately lock its dates. That only holds while both sides read the same state — `mockStore.isDateLocked` is the single lock check, and nothing re-derives it.
 
+The current `src/services/mock/department-store.ts` and employee-level department fields are a preliminary, incomplete prototype. The approved replacement is tracked in `organization_hierarchy_milestone.md`: Department is division-owned, EmployeeDivisionAssignment carries `departmentId`, DepartmentLeadAssignment is effective-dated, and authorization derives bounded lead scopes. Names/codes are unique within a division. Referenced departments are deactivated rather than moved or deleted. Do not extend the primary-department prototype as if it were final.
+
 ### Money arithmetic is exact and centralised
 
 `src/lib/money.ts` is the only place a money value is computed. It works in minor units on `bigint` and rounds half-up once, at the end — never per row. A rate carrying more precision than the currency holds is rejected rather than truncated. Never use `number` for money, and never derive a cost from an already-rounded hours figure.
@@ -166,6 +172,7 @@ project_requirement.md          Requirements (REQ-*, AC-*)
 frontend_milestone.md           Frontend plan (FE-*)
 backend_milestone.md            Backend plan (BE-*)
 modify_milestone.md             Task-based replacement plan (MOD-*, MFE-*, MBE-*)
+organization_hierarchy_milestone.md Organization hierarchy plan (OH-*)
 MEMORY.md                       Project context and decision log
 AGENTS.md                       This file (CLAUDE.md imports it)
 
@@ -194,7 +201,7 @@ src/
                                 reports · workspace · admin · settings
   services/mock/                auth · organization · timesheet · work ·
                                 team-lead · hr · finance · reporting ·
-                                workspace · admin · store
+                                workspace · admin · department-store · store
   fixtures/                     index.ts (core dataset) · hr.ts (employees,
                                 evaluations, amendments) · finance.ts (rates,
                                 billability, payroll periods, exports) ·
@@ -271,9 +278,10 @@ React Compiler lint errors (`set-state-in-effect`, render-phase mutation) are re
 | Backend | 10 — Requisition | Pending (0/20) — new milestone |
 | Backend | 11 — Conveyance | Pending (0/22) — new milestone, depends on 10 |
 | Backend | 12 — Role consolidation: Finance into HR | Pending (0/11) — new milestone |
-| Modify | F3 — Frontend Log Work and timesheet rework | In progress (4/11; through `MFE-0307`) |
+| Modify | B1 — Backend schema and data migration | Technical implementation done (9/10); HR rehearsal sign-off pending |
+| Organization hierarchy | 0 — Product rules and architecture | Done (10/10); F1 implementation is next |
 
-Gates: contrast 48/48, responsive 268/268, accessibility 217/217, content-stress 63/63, role journeys 41/41, performance 16/16, Phase 2 flows 16/16, Phase 3 flows 18/18, Phase 4 flows 20/20, Phase 5 flows 51/51, Phase 6 flows 40/40, Phase 7 flows 55/55. Modify F3 progress through `MFE-0307` passes type-check, lint, contrast 48/48, 485 frontend/shared tests and a 60-route production build. The dedicated task-work browser gate remains scheduled for F4.
+Baseline gates before the preliminary hierarchy prototype: contrast 48/48, responsive 268/268, accessibility 217/217, content-stress 63/63, role journeys 41/41, performance 16/16, Phase 2 flows 16/16, Phase 3 flows 18/18, Phase 4 flows 20/20, Phase 5 flows 51/51, Phase 6 flows 40/40, Phase 7 flows 55/55. Modify F3 evidence is in `docs/frontend/modify/phase-f3-verification.md`. Modify B1 now has migration `0011`, guarded recovery, runtime-grant hardening and 7/7 focused database tests; evidence is in `docs/backend/modify/phase-b1-verification.md`. Its technical work is complete, but `MBE-0110` stays `[~]` until HR signs the rehearsal totals. The preliminary hierarchy prototype now type-checks, but it is not completion evidence for the approved per-assignment hierarchy. Complete `OH-FE-0101`–`OH-FE-0112` and rerun every applicable gate before claiming that milestone complete.
 
 Signing in: `/login`, password `Demo1234!` for every demo account, picker on the sign-in page. Auth fixtures (2FA code, reset tokens, lockout) are in `docs/frontend/phase-0/demo-setup.md` §1.1.
 
@@ -293,7 +301,7 @@ These read as settled in the deliverable files, but **no stakeholder has confirm
 - **The MVP vs Phase-2 boundary** for attendance, HR reports, and Finance cost tiles — `project_requirement.md` §2.3 doesn't name these; they were read as Phase 2 by association.
 - **Stakeholder approval of the component showcase** — the one Phase 1 exit criterion still at `[~]`.
 
-Still owed by the business (`project_requirement.md` §11): authoritative employee list, division membership, Team Lead mapping, holiday calendars, schedules, leave balances, initial projects; HR approval of work policies and payroll periods; Finance approval of cost-rate and payroll-export rules.
+Still owed by the business (`project_requirement.md` §11): authoritative employee list, every employee-division-to-department mapping, department catalogue per division, effective department Team Lead mapping, holiday calendars, schedules, leave balances, initial projects; HR approval of work policies and payroll periods; Finance approval of cost-rate and payroll-export rules.
 
 Backend Phase 0 selected Drizzle/mysql2, Better Auth, Zod, BullMQ/Redis, private Amazon S3, Resend, persistent Node.js 24 LTS containers, and MySQL 8.4 LTS. See `docs/backend/phase-0/technology-decisions.md`; do not silently replace these choices.
 
@@ -302,6 +310,8 @@ Backend Phase 0 selected Drizzle/mysql2, Better Auth, Zod, BullMQ/Redis, private
 ## 8. How Work Is Run Here
 
 The user drives delivery **one phase at a time** — "Start Phase 2" means complete every task in that phase, not a representative subset.
+
+For organization hierarchy work, follow `organization_hierarchy_milestone.md` in order. Do not mark preliminary primary-department UI/service code complete against the final per-assignment model.
 
 **Task markers.** Exactly one per task: `[ ]` pending, `[~]` in progress, `[x]` done. When status changes, update both the task line *and* the "Current Progress Summary" table at the bottom of the milestone file. Record which deliverable file satisfies which task id.
 

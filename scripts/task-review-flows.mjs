@@ -139,7 +139,7 @@ console.log(`Employee task review flow verification against ${baseUrl}\n`);
   const { context, page } = await openAs(EMPLOYEE);
   await goto(page, '/timesheets/2026-09-02');
 
-  await page.getByRole('button', { name: /Add time/i }).first().click();
+  await page.getByRole('button', { name: /Log work/i }).first().click();
   await page.waitForTimeout(900);
 
   // Choose the division and project the pending fixture task belongs to.
@@ -152,7 +152,7 @@ console.log(`Employee task review flow verification against ${baseUrl}\n`);
   record(
     !taskOptions.some((option) => /Refactor the annotation import script/i.test(option)),
     'FE-0780',
-    'a task awaiting review is absent from the time-entry task list',
+    'a task awaiting review is absent from the work-log task list',
   );
   record(
     !taskOptions.some((option) => /Rebuild the demo laptop image/i.test(option)),

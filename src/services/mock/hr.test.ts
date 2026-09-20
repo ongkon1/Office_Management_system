@@ -13,6 +13,19 @@ beforeEach(() => {
 });
 
 describe('HR scope', () => {
+  it('reconciles duration work logs and immutable historical rows in one period view', async () => {
+    const result = await mockHrService.getPeriod(HR, 'per-2026-07');
+    expect(result.status).toBe('success');
+    if (result.status !== 'success') return;
+    const employee = result.data.rows.find((row) => row.employee.id === 'emp-1001');
+    const expected = mockStore.entriesBetween('emp-1001', result.data.startDate, result.data.endDate)
+      .filter((entry) => entry.state !== 'draft')
+      .reduce((total, entry) => total + entry.activeMinutes, 0);
+    expect(employee?.active.minutes).toBe(expected);
+    expect(mockStore.entriesBetween('emp-1001', result.data.startDate, result.data.endDate).some((entry) => entry.startTime)).toBe(true);
+    expect(mockStore.entriesBetween('emp-1001', result.data.startDate, result.data.endDate).some((entry) => !entry.startTime)).toBe(true);
+  });
+
   it('denies the employee directory to a non-HR role', async () => {
     const result = await mockHrService.listEmployees(EMPLOYEE);
     expect(result.status).toBe('permission_denied');
@@ -28,24 +41,88 @@ describe('HR scope', () => {
   });
 
   it('returns the administrator-managed department catalogue for employee forms', async () => {
-    const result = await mockHrService.listDepartmentOptions(HR);
+    const result = await mockHrService.listDepartmentOptions(HR, 'pia');
     expect(result.status).toBe('success');
     if (result.status === 'success') {
-      expect(result.data).toContainEqual({ value: 'Engineering', label: 'Engineering' });
+      expect(result.data).toContainEqual({
+        value: 'dept-pia-technical',
+        label: 'Technical',
+        divisionId: 'pia',
+        isActive: true,
+        currentLead: expect.objectContaining({ id: 'emp-2001', fullName: 'Imran Hossain' }),
+      });
+      expect(result.data.every((item) => item.divisionId === 'pia')).toBe(true);
       expect(result.data.map((item) => item.label)).toEqual(
         [...result.data.map((item) => item.label)].sort(),
       );
     }
   });
+
+  it('returns a separate department list for each division', async () => {
+    const powerInAi = await mockHrService.listDepartmentOptions(HR, 'pia');
+    const westernCf = await mockHrService.listDepartmentOptions(HR, 'wcf');
+    if (powerInAi.status !== 'success' || westernCf.status !== 'success') return;
+    expect(powerInAi.data.some((item) => item.label === 'Technical')).toBe(true);
+    expect(westernCf.data.some((item) => item.label === 'Client Services')).toBe(true);
+    expect(westernCf.data.some((item) => item.label === 'Technical')).toBe(false);
+  });
+
+  it('saves employee identity without accepting authoritative placement or lead fields', async () => {
+    const base = {
+      fullName: 'Department Test',
+      employeeCode: 'EMP-7777',
+      designation: 'Specialist',
+      employmentType: 'full_time' as const,
+      joiningDate: '2026-09-01',
+      email: 'department.test@demo.local',
+      phone: '',
+      officeLocation: '',
+      primaryDivisionId: 'pia',
+      normalWorkMode: 'office' as const,
+      standardDailyActiveMinutes: 420,
+      standardWeeklyActiveMinutes: 2100,
+      skills: [],
+      status: 'active' as const,
+    };
+    const saved = await mockHrService.saveEmployee(HR, base);
+    expect(saved.status).toBe('success');
+    if (saved.status !== 'success') return;
+    const detail = await mockHrService.getEmployee(HR, saved.data.employee.id);
+    expect(detail.status).toBe('success');
+    if (detail.status === 'success') {
+      expect(detail.data.assignments).toEqual([]);
+    }
+  });
 });
 
 describe('assignments', () => {
+  it('rejects a department owned by another division', async () => {
+    const result = await mockHrService.saveAssignment(HR, {
+      employeeId: 'emp-1002',
+      divisionId: 'pia',
+      departmentId: 'dept-wcf-client-services',
+      isPrimary: false,
+      allocationPercent: 20,
+      expectedWeeklyMinutes: 420,
+      startDate: '2026-09-01',
+      endDate: null,
+      isTemporary: false,
+      isActive: true,
+      roleInDivision: '',
+    });
+    expect(result.status).toBe('validation_failure');
+    if (result.status === 'validation_failure') {
+      expect(result.fieldErrors[0]).toMatchObject({ field: 'departmentId' });
+      expect(result.fieldErrors[0].guidance).toBeTruthy();
+    }
+  });
+
   it('requires an end date for a temporary assignment', async () => {
     const result = await mockHrService.saveAssignment(HR, {
       employeeId: 'emp-1002',
       divisionId: 'pia',
+      departmentId: 'dept-pia-technical',
       isPrimary: false,
-      teamLeadEmployeeId: 'emp-2001',
       allocationPercent: 20,
       expectedWeeklyMinutes: 420,
       startDate: '2026-09-01',
@@ -66,8 +143,8 @@ describe('assignments', () => {
     const result = await mockHrService.saveAssignment(HR, {
       employeeId: 'emp-1001',
       divisionId: 'wcf',
+      departmentId: 'dept-wcf-client-services',
       isPrimary: true,
-      teamLeadEmployeeId: 'emp-2002',
       allocationPercent: 20,
       expectedWeeklyMinutes: 420,
       startDate: '2026-09-01',
@@ -92,8 +169,8 @@ describe('assignments', () => {
     await mockHrService.saveAssignment(HR, {
       employeeId: 'emp-1002',
       divisionId: 'pit',
+      departmentId: 'dept-pit-training',
       isPrimary: false,
-      teamLeadEmployeeId: 'emp-2001',
       allocationPercent: 10,
       expectedWeeklyMinutes: 210,
       startDate: '2026-08-01',
@@ -333,6 +410,19 @@ describe('evaluations', () => {
 });
 
 describe('holidays', () => {
+  it('uses Friday and Saturday as the standard weekly holidays', async () => {
+    const holidays = await mockHrService.listHolidays(HR);
+    expect(holidays.status).toBe('success');
+    if (holidays.status === 'success') {
+      const weeklyDays = holidays.data
+        .filter((holiday) => holiday.scope === 'weekly' && holiday.isActive)
+        .map((holiday) => holiday.weekdayLabel);
+      expect(weeklyDays).toEqual(['Friday', 'Saturday']);
+    }
+    expect(summaryFor('emp-1001', '2026-09-04').exemption).toBe('weekly_off');
+    expect(summaryFor('emp-1001', '2026-09-06').isRequiredWorkingDay).toBe(true);
+  });
+
   it('requires a weekday for a weekly holiday and a date otherwise', async () => {
     const weekly = await mockHrService.saveHoliday(HR, {
       name: 'Weekly holiday',

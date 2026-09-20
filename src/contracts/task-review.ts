@@ -80,11 +80,13 @@ export interface TaskReviewQueueView {
   readonly href: string;
 }
 
-/** Options an employee may raise a task against. */
+/** Options an employee or Team Lead may use to create a task for themselves. */
 export interface EmployeeTaskOptionsView {
   readonly projects: readonly { readonly value: string; readonly label: string }[];
   readonly canCreate: boolean;
   readonly createBlockedReason: string | null;
+  /** False for Team Leads, whose own tasks become ordinary work immediately. */
+  readonly requiresReview: boolean;
   /** The Team Lead who will review it, named up front. */
   readonly reviewerName: string | null;
   readonly maxDueDateHint: IsoDate;
@@ -101,9 +103,9 @@ export interface TaskReviewDecisionInput {
 }
 
 export interface TaskReviewService {
-  /** Projects and reviewer for the employee's create form. */
+  /** Projects and review policy for the signed-in person's self-task form. */
   options(userId: string): Promise<Result<EmployeeTaskOptionsView>>;
-  /** Raises a task for the signed-in employee, pending their Team Lead. */
+  /** Creates a self-assigned task; ordinary employees require review, Team Leads do not. */
   create(userId: string, input: EmployeeTaskFormInput): Promise<Result<{ readonly id: string }>>;
   /** Tasks awaiting this Team Lead's endorsement. */
   queue(userId: string): Promise<Result<TaskReviewQueueView>>;

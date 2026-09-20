@@ -37,7 +37,7 @@ const EMPLOYEE_SELF_GROUP: NavGroupDefinition = {
   key: 'my-work',
   label: 'My work',
   items: [
-    { key: 'my-timesheet', label: 'My Timesheet', href: '/timesheets', iconKey: 'clock' },
+    { key: 'my-timesheet', label: 'My Timesheet', href: '/timesheets', iconKey: 'clock', inMobileBottomNav: true },
     { key: 'my-tasks', label: 'My Tasks', href: '/tasks', iconKey: 'check-square' },
     { key: 'my-wfh', label: 'WFH', href: '/wfh', iconKey: 'house', flag: 'wfhRequests' },
     { key: 'my-leave', label: 'Leave', href: '/leave', iconKey: 'calendar-off', flag: 'leaveManagement' },
@@ -89,7 +89,6 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
         { key: 'team', label: 'My Team', href: '/team', iconKey: 'users', inMobileBottomNav: true },
         { key: 'team-timesheets', label: 'Team Timesheets', href: '/team/timesheets', iconKey: 'clock', inMobileBottomNav: true },
         { key: 'projects', label: 'Projects', href: '/projects', iconKey: 'folder-kanban', inMobileBottomNav: true },
-        { key: 'tasks', label: 'Tasks', href: '/tasks', iconKey: 'check-square' },
         { key: 'meeting-minutes', label: 'Meeting Minutes', href: '/meeting-minutes', iconKey: 'clipboard-list', flag: 'meetingMinutes' },
       ],
     },

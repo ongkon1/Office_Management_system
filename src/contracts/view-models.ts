@@ -97,7 +97,6 @@ export interface MetricTileView {
 
 export interface EmployeeDashboardView {
   readonly today: TodaySummaryView;
-  readonly runningTimer: RunningTimerView | null;
   readonly todaysDivisions: readonly DivisionContributionView[];
   readonly activeTasks: readonly TaskSummaryView[];
   readonly upcomingDeadlines: readonly DeadlineView[];
@@ -135,18 +134,6 @@ export interface TodaySummaryView {
    */
   readonly overtimeReason: string | null;
   readonly criticalExplanation: string | null;
-}
-
-export interface RunningTimerView {
-  readonly sessionId: string;
-  readonly startedAt: IsoDateTime;
-  readonly elapsed: DurationView;
-  readonly division: DivisionRef;
-  readonly project: ProjectRef | null;
-  readonly task: TaskRef | null;
-  readonly workLocation: WorkLocation;
-  /** True when the timer was restored after a refresh (`FE-0330`). */
-  readonly wasRecovered: boolean;
 }
 
 export interface PeriodTotalsView {
@@ -188,7 +175,7 @@ export interface ClientContributionView {
 
 export interface QuickActionView {
   readonly key:
-    | 'add_time'
+    | 'log_work'
     | 'start_timer'
     | 'add_completed_work'
     | 'request_wfh'
@@ -607,7 +594,6 @@ export interface AppShellView {
   };
   readonly navigation: readonly NavGroupView[];
   readonly unreadNotificationCount: number;
-  readonly runningTimer: RunningTimerView | null;
   readonly sessionExpiresAt: IsoDateTime;
 }
 

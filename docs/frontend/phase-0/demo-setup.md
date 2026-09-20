@@ -118,7 +118,7 @@ business confirmation (`AGENTS.md` §7).
 | August 2026 payroll period | 2026-08-01 – 2026-08-31 | Closed for entry, pending HR verification, 4 open exceptions |
 | September 2026 payroll period | 2026-09-01 – 2026-09-30 | **Current and open** |
 
-The demo "today" is **2026-09-02**. All relative states (today's summary, running timer, upcoming deadlines, overdue tasks) are computed against this fixed date so every presentation is reproducible.
+The demo "today" is **2026-09-02**. All relative states (today's summary, task status, upcoming deadlines, overdue tasks) are computed against this fixed date so every presentation is reproducible.
 
 ## 7. Time Scenarios (`FE-0008`, feeding `FE-0902`/`FE-0903`)
 
@@ -134,12 +134,15 @@ The demo "today" is **2026-09-02**. All relative states (today's summary, runnin
 | Half-day leave | Sadia Karim | 2026-08-18 | Half-day sick leave + 3:30 active | Requirement adjusted to 3:30 active / 4:00 total, **Complete** |
 | Company holiday | All | 2026-08-15 | Holiday calendar entry | Not missing |
 | WFH day | Nadia Rahman | 2026-08-28 | Approved WFH, 7:00 active recorded with WFH location | Attendance = WFH, normal Complete day, no auto-generated hours |
-| Overlap rejection | Nadia Rahman | 2026-09-02 (attempt) | PowerInAI 09:00–11:00 and Government Projects 10:00–12:00 | Rejected across divisions with field-level error |
+| Three-task complete day | Nadia Rahman | 2026-09-01 | Three duration work logs: PowerInAI 3:00, Government Projects 2:00, WesternCF 2:00 | 7:00 active across three tasks and divisions; one 1:00 break; **Complete** |
+| Completion variance | Nadia Rahman | 2026-08-21 | `tsk-14` estimate 5:45, actual work logs 7:00 | Completed with **+1:15** variance; actual is not capped and the completion note stays optional |
+| Reopened task | Nadia Rahman | 2026-08-26 | `tsk-6` started, completed, then reopened with a reason | Original completion remains in append-only history; current state is **In Progress** |
+| Completed-task log refusal | Nadia Rahman | 2026-09-02 (attempt) | Try to log work against completed `tsk-8` | Refused with guidance to reopen the task first |
+| Daily active cap | Nadia Rahman | 2026-09-02 (attempt) | Try to save enough duration to raise the local date above 24:00 active | Refused with a field-level daily-cap error |
 | Inactive project rejection | Nadia Rahman | 2026-09-02 (attempt) | Time against `PIA-LSM` | Rejected with corrective guidance |
 | Expired assignment rejection | Sumaiya Noor | 2026-09-02 (attempt) | Time against Government Projects | Rejected: assignment not effective on work date |
 | Correction cycle | Tanvir Ahmed | 2026-08-26 | Team Lead remark → correction request → employee clarification → corrected entry | Full remark history preserved |
 | Locked period | Nadia Rahman | 2026-07-14 | Verified period edit attempt | Locked state with amendment path shown |
-| Running timer | Nadia Rahman | 2026-09-02 | Timer started 09:15 on `PIA-VP2` | Global running-timer indicator, recovery after refresh |
 
 ## 8. Requests and Evaluations
 

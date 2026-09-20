@@ -44,15 +44,17 @@ import { formatDate, formatTimestamp } from '@/lib/format';
 import { PROJECTS, STANDARD_POLICY } from '@/fixtures';
 import { EMPLOYEES } from '@/fixtures/hr';
 import { AUDIT_EVENTS } from '@/fixtures/workspace';
-import { DEMO_ACCOUNTS, DIVISIONS, findAccountByUserId } from './accounts';
+import { DEMO_ACCOUNTS, DEMO_DATE, DIVISIONS, findAccountByUserId } from './accounts';
 import { mockStore } from './store';
 import {
   departmentRecords,
+  effectiveLeadAssignment,
   removeDepartmentRecord,
   resetDepartmentState,
   saveDepartmentRecord,
   type DepartmentRecord,
 } from './department-store';
+import { departmentMembers } from './organization-hierarchy';
 import {
   DEFAULT_BRANDING,
   commitBranding,
@@ -197,16 +199,25 @@ function divisionAdminView(record: DivisionRecord): DivisionAdminView {
 /* -------------------------------------------------------------------------- */
 
 function departmentAdminView(record: DepartmentRecord): DepartmentAdminView {
+  const lead = effectiveLeadAssignment(record.id, DEMO_DATE);
+  const employeeCount = departmentMembers(record.id, DEMO_DATE).length;
   return {
     ...record,
-    canDelete: record.employeeCount === 0,
+    division: divisionRef(record.divisionId),
+    currentLead: lead ? employeeRef(lead.leadEmployeeId) : null,
+    employeeCount,
+    canDelete: employeeCount === 0,
   };
 }
 
 function departmentViews(): readonly DepartmentAdminView[] {
   return departmentRecords()
     .slice()
-    .sort((left, right) => left.name.localeCompare(right.name))
+    .sort(
+      (left, right) =>
+        divisionRef(left.divisionId).name.localeCompare(divisionRef(right.divisionId).name) ||
+        left.name.localeCompare(right.name),
+    )
     .map(departmentAdminView);
 }
 
@@ -744,6 +755,10 @@ export const mockAdminService: AdminService = {
     const name = input.name.trim();
     const code = input.code.trim().toUpperCase();
     const description = input.description.trim() || null;
+    const divisionId = input.divisionId.trim();
+    if (!DIVISIONS[divisionId as keyof typeof DIVISIONS]) {
+      return invalid('divisionId', 'Choose a valid division.', 'Select the division that owns this department.');
+    }
     if (!name) {
       return invalid('name', 'Enter a department name.', 'Use the department name employees recognize.');
     }
@@ -760,19 +775,29 @@ export const mockAdminService: AdminService = {
 
     const current = id ? departmentRecords().find((department) => department.id === id) : undefined;
     if (id && !current) return notFound('Department not found.');
-    if (current && current.employeeCount > 0 && current.name !== name) {
+    if (
+      current &&
+      departmentMembers(current.id, DEMO_DATE).length > 0 &&
+      (current.name !== name || current.divisionId !== divisionId)
+    ) {
       return {
         status: 'conflict' as const,
         code: 'CONFLICT' as const,
         message: `${current.name} is already referenced by employee records.`,
-        guidance: 'Keep its name unchanged; you can still update its code and description.',
+        guidance: 'Keep its division and name unchanged; you can still update its Team Lead, code, and description.',
       };
     }
     const duplicateName = departmentRecords().find(
-      (department) => department.id !== id && department.name.toLowerCase() === name.toLowerCase(),
+      (department) =>
+        department.id !== id &&
+        department.divisionId === divisionId &&
+        department.name.toLowerCase() === name.toLowerCase(),
     );
     const duplicateCode = departmentRecords().find(
-      (department) => department.id !== id && department.code.toLowerCase() === code.toLowerCase(),
+      (department) =>
+        department.id !== id &&
+        department.divisionId === divisionId &&
+        department.code.toLowerCase() === code.toLowerCase(),
     );
     if (duplicateName || duplicateCode) {
       return {
@@ -781,16 +806,27 @@ export const mockAdminService: AdminService = {
         message: duplicateName
           ? `A department named ${duplicateName.name} already exists.`
           : `Department code ${duplicateCode?.code} is already in use.`,
-        guidance: 'Use a unique department name and code.',
+        guidance: 'Use a department name and code that are unique within the selected division.',
       };
     }
 
     saveDepartmentRecord({
       id: current?.id ?? `dept-${Date.now()}`,
+      divisionId,
       name,
       code,
       description,
-      employeeCount: current?.employeeCount ?? 0,
+      isActive: current?.isActive ?? true,
+      createdAt: current?.createdAt ?? new Date().toISOString(),
+      createdBy: current?.createdBy ?? {
+        userId,
+        displayName: findAccountByUserId(userId)?.fullName ?? 'Administrator',
+      },
+      updatedAt: new Date().toISOString(),
+      updatedBy: {
+        userId,
+        displayName: findAccountByUserId(userId)?.fullName ?? 'Administrator',
+      },
     });
     return success(departmentViews());
   },
@@ -800,11 +836,12 @@ export const mockAdminService: AdminService = {
     if (!isAdministrator(userId)) return denied(ADMIN_DENIAL.message, ADMIN_DENIAL.guidance);
     const department = departmentRecords().find((item) => item.id === id);
     if (!department) return notFound('Department not found.');
-    if (department.employeeCount > 0) {
+    const employeeCount = departmentMembers(department.id, DEMO_DATE).length;
+    if (employeeCount > 0) {
       return {
         status: 'conflict' as const,
         code: 'CONFLICT' as const,
-        message: `${department.name} is assigned to ${department.employeeCount} employee(s).`,
+        message: `${department.name} is assigned to ${employeeCount} employee(s).`,
         guidance: 'Move those employees to another department before deleting it.',
       };
     }

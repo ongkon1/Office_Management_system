@@ -24,6 +24,7 @@ import {
   type AccountStatus,
   type DemoAccount,
 } from './accounts';
+import { departmentLeadEmployeeIds, departmentLeadScopes } from './organization-hierarchy';
 
 /** How long a mock session lasts. Short enough to demo the expiry warning. */
 export const SESSION_DURATION_MS = 30 * 60 * 1000;
@@ -51,6 +52,7 @@ function delay(ms = LATENCY_MS): Promise<void> {
 }
 
 export function toSessionUser(account: DemoAccount): SessionUser {
+  const leadScopes = departmentLeadScopes(account.employeeId);
   return {
     userId: account.userId,
     employeeId: account.employeeId,
@@ -60,8 +62,14 @@ export function toSessionUser(account: DemoAccount): SessionUser {
     roles: account.roles,
     primaryRole: account.primaryRole,
     permissions: account.permissions,
-    scopedDivisionIds: account.scopedDivisionIds,
-    scopedEmployeeIds: account.scopedEmployeeIds,
+    scopedDivisionIds: [...new Set([
+      ...account.scopedDivisionIds,
+      ...leadScopes.map((scope) => scope.divisionId),
+    ])],
+    scopedEmployeeIds: leadScopes.length > 0
+      ? departmentLeadEmployeeIds(account.employeeId)
+      : account.scopedEmployeeIds,
+    departmentLeadScopes: leadScopes,
     timezone: DEMO_TIMEZONE,
     locale: DEMO_LOCALE,
     sessionExpiresAt: new Date(Date.now() + SESSION_DURATION_MS).toISOString(),

@@ -89,7 +89,7 @@ The final route names may be refined without changing the feature ownership belo
 | Access | `/login`, `/forgot-password`, `/reset-password`, `/two-factor` |
 | Shared app | `/dashboard`, `/notifications`, `/search`, `/profile`, `/settings` |
 | Employee | `/timesheets`, `/timesheets/[date]`, `/tasks`, `/tasks/[id]`, `/divisions`, `/wfh`, `/leave`, `/evaluations` |
-| Team Lead | `/team`, `/team/timesheets`, `/projects`, `/projects/[id]`, `/workload`, `/requests`, `/evaluations`, `/reports` |
+| Team Lead | `/timesheets`, `/timesheets/[date]`, `/tasks`, `/tasks/[id]`, `/team`, `/team/timesheets`, `/projects`, `/projects/[id]`, `/workload`, `/requests`, `/evaluations`, `/reports` |
 | HR | `/hr`, `/employees`, `/employees/[id]`, `/attendance`, `/hr/timesheets`, `/wfh`, `/leave`, `/evaluations`, `/reports` |
 | Finance | `/finance`, `/finance/hours`, `/finance/overtime`, `/finance/project-costs`, `/finance/division-costs`, `/finance/payroll`, `/finance/reports` |
 | Administration | `/admin/divisions`, `/admin/users`, `/admin/roles`, `/admin/policies`, `/admin/holidays`, `/admin/audit` |
@@ -592,7 +592,7 @@ Added after conveyance. Until now every task was created by a Team Lead; an empl
 **This is deliberately not the shared approval chain.** `src/contracts/approval.ts` models a request travelling to a Team Lead and then to three parallel reviewers. A task is endorsed by one person and then stops being a request — it becomes work that time is recorded against. Forcing it into the chain would add a `reviewer_review` stage and three reviewer roles to a shape that has neither, and put a special case in every transition function for one workflow.
 
 - [x] `FE-0780` Add `TaskReviewState` to the domain, with `taskAcceptsTime` as the single predicate, and enforce it in `selectableTasks` and in `src/lib/calculation/validation.ts` with a field, a message and corrective guidance.
-- [x] `FE-0781` Build the employee raise-a-task form, naming the reviewer before anything is typed, restricted to projects in divisions the employee is assigned to, and validated at the service boundary.
+- [x] `FE-0781` Build the personal task form, restricted to active projects in the creator's assigned divisions and validated at the service boundary. For Employees it names the reviewer and creates Pending Review. The Team Lead `New task` form includes an explicit `Self (me)` assignee option; choosing it removes supporting members and creates a Team-Lead-only task with no review or self-notification. **Amended 20 September 2026: the consolidated Team Lead assignee flow is implemented and tested.**
 - [x] `FE-0782` Build the Team Lead review queue on the team task board, with approve and do-not-approve, a required note on refusal, and a named list region.
 - [x] `FE-0783` Surface the queue on the Team Lead dashboard inside the existing waiting-for-you prompt, and add the notification.
 - [x] `FE-0784` Add unit tests for the scope, review and time-entry rules, and a `npm run audit:task-review` browser gate.
@@ -620,6 +620,7 @@ Phase 7 evidence is recorded in `docs/frontend/phase-7/verification.md`: shared 
 - [x] A requisition can be submitted by an Employee and a Team Lead, routed through the correct review chain, and is invisible to every role it has not reached.
 - [x] A conveyance claim travels the same chain on the same shared implementation, and its receipt is subject to the same access rule as the claim.
 - [x] An employee can raise a task, their Team Lead reviews it, and no time can be recorded against it until they do.
+- [x] A Team Lead can create a self-assigned task without approval, move it through the normal workflow, and record work in their own timesheet once it is In Progress.
 
 ## Phase 8 - Responsive, Accessibility, and Quality Hardening
 
@@ -854,6 +855,7 @@ A frontend task may be marked `[x]` only when all applicable conditions are true
 - [x] `DEMO-13` An Employee submits a conveyance claim with a receipt, their Team Lead reviews it, and it then reaches HR, Finance and the Super Administrator — while a second Employee can see neither the claim nor the receipt.
 - [x] `DEMO-15` An Employee raises a task, cannot select it when recording time, and their Team Lead approves it — after which it becomes selectable.
 - [x] `DEMO-16` A task the Team Lead does not approve carries the reason back to the employee and still refuses time.
+- [x] `DEMO-21` A Team Lead creates a personal task without approval, moves it to In Progress, and records duration work in My Timesheet.
 - [x] `DEMO-14` A conveyance claim submitted without a receipt is accepted, because the upload is optional.
 - [x] `DEMO-12` A Team Lead submits a new-item requisition and it reaches HR, Finance, and the Super Administrator without a Team Lead review step.
 

@@ -79,11 +79,12 @@ import { actualProjectMinutes, isEffectiveOn } from './organization';
 import { mockStore } from './store';
 import { summaryFor } from './timesheet';
 import {
-  departmentByName,
+  departmentById,
   departmentRecords,
-  recordEmployeeDepartmentChange,
+  effectiveLeadAssignment,
   resetDepartmentState,
 } from './department-store';
+import { effectiveLeadForAssignment, validateAssignmentDepartment } from './organization-hierarchy';
 
 const LATENCY_MS = 160;
 const delay = () => new Promise((resolve) => setTimeout(resolve, LATENCY_MS));
@@ -237,7 +238,9 @@ function missingFieldsOf(employee: Employee): readonly string[] {
   const missing: string[] = [];
   if (!employee.phone) missing.push('Phone number');
   if (!employee.officeLocation) missing.push('Office location');
-  if (!employee.department) missing.push('Department');
+  if (!assignmentsOf(employee.id).some((assignment) => assignment.isActive)) {
+    missing.push('Division assignment');
+  }
   if (employee.skills.length === 0) missing.push('Skills');
   return missing;
 }
@@ -251,12 +254,16 @@ function assignmentsOf(employeeId: string): readonly EmployeeDivisionAssignment[
 }
 
 function assignmentView(assignment: EmployeeDivisionAssignment): HrAssignmentView {
+  const department = departmentById(assignment.departmentId);
+  if (!department) throw new Error(`Assignment ${assignment.id} has an unknown department.`);
+  const leadEmployeeId = effectiveLeadForAssignment(assignment, DEMO_TODAY);
   return {
     id: assignment.id,
     employeeId: assignment.employeeId,
     division: divisionRef(assignment.divisionId)!,
+    department: { id: department.id, name: department.name, code: department.code },
     isPrimary: assignment.isPrimary,
-    teamLead: assignment.teamLeadEmployeeId ? employeeRef(assignment.teamLeadEmployeeId) : null,
+    effectiveTeamLead: leadEmployeeId ? employeeRef(leadEmployeeId) : null,
     allocationPercent: assignment.allocationPercent,
     expectedWeekly: toDurationView(assignment.expectedWeeklyMinutes),
     startDate: assignment.startDate,
@@ -281,9 +288,6 @@ function employeeRow(employee: Employee): HrEmployeeRowView {
     divisionCodes: [
       ...new Set(divisions.map((assignment) => divisionRef(assignment.divisionId)!.code)),
     ],
-    teamLeadName: employee.teamLeadEmployeeId
-      ? employeeRef(employee.teamLeadEmployeeId).fullName
-      : null,
     employmentType: employee.employmentType,
     employmentTypeLabel: EMPLOYMENT_TYPE_LABEL[employee.employmentType],
     workMode: employee.normalWorkMode,
@@ -760,7 +764,7 @@ function evaluationPeriodView(period: EvaluationPeriod): HrEvaluationPeriodView 
 /* -------------------------------------------------------------------------- */
 
 export const mockHrService: HrService = {
-  async listDepartmentOptions(userId) {
+  async listDepartmentOptions(userId, divisionId) {
     await delay();
     if (!canAdminister(userId)) {
       return denied(
@@ -770,9 +774,20 @@ export const mockHrService: HrService = {
     }
     return success(
       departmentRecords()
+        .filter((department) => department.divisionId === divisionId)
+        .filter((department) => department.isActive)
         .slice()
         .sort((left, right) => left.name.localeCompare(right.name))
-        .map((department) => ({ value: department.name, label: department.name })),
+        .map((department) => {
+          const lead = effectiveLeadAssignment(department.id, DEMO_TODAY);
+          return {
+            value: department.id,
+            label: department.name,
+            divisionId: department.divisionId,
+            isActive: department.isActive,
+            currentLead: lead ? employeeRef(lead.leadEmployeeId) : null,
+          };
+        }),
     );
   },
 
@@ -1000,7 +1015,6 @@ export const mockHrService: HrService = {
       email: employee.email,
       phone: employee.phone,
       officeLocation: employee.officeLocation,
-      department: employee.department,
       employmentType: employee.employmentType,
       employmentTypeLabel: EMPLOYMENT_TYPE_LABEL[employee.employmentType],
       joiningDateLabel: formatDate(employee.joiningDate),
@@ -1134,15 +1148,6 @@ export const mockHrService: HrService = {
     if (!input.email.trim()) {
       return invalid('email', 'Enter a work email address.', 'The employee signs in with this address.');
     }
-    const selectedDepartment = input.department.trim();
-    const department = selectedDepartment ? departmentByName(selectedDepartment) : undefined;
-    if (selectedDepartment && !department) {
-      return invalid(
-        'department',
-        'Choose an available department.',
-        'Select a department created by the Super Administrator.',
-      );
-    }
     const duplicate = employees.find(
       (employee) =>
         employee.id !== employeeId &&
@@ -1166,7 +1171,7 @@ export const mockHrService: HrService = {
       fullName: input.fullName.trim(),
       photoUrl: existing?.photoUrl ?? null,
       designation: input.designation.trim(),
-      department: department?.name ?? null,
+      department: existing?.department ?? null,
       employmentType: input.employmentType,
       joiningDate: input.joiningDate,
       status: input.status,
@@ -1174,7 +1179,7 @@ export const mockHrService: HrService = {
       phone: input.phone.trim() || null,
       officeLocation: input.officeLocation.trim() || null,
       primaryDivisionId: input.primaryDivisionId,
-      teamLeadEmployeeId: input.teamLeadEmployeeId || null,
+      teamLeadEmployeeId: existing?.teamLeadEmployeeId ?? null,
       skills: input.skills.filter((skill) => skill.trim().length > 0),
       normalWorkMode: input.normalWorkMode,
       standardDailyActiveMinutes: input.standardDailyActiveMinutes,
@@ -1188,7 +1193,6 @@ export const mockHrService: HrService = {
     employees = existing
       ? employees.map((employee) => (employee.id === record.id ? record : employee))
       : [...employees, record];
-    recordEmployeeDepartmentChange(existing?.department ?? null, record.department);
     return success(employeeRow(record));
   },
 
@@ -1218,6 +1222,10 @@ export const mockHrService: HrService = {
         'Choose an end date on or after the start date.',
       );
     }
+    const departmentError = validateAssignmentDepartment(input.divisionId, input.departmentId);
+    if (departmentError) {
+      return invalid(departmentError.field, departmentError.message, departmentError.guidance);
+    }
 
     const now = new Date().toISOString();
     const actor = { userId, displayName: actorName(userId) };
@@ -1228,9 +1236,11 @@ export const mockHrService: HrService = {
       id: existing?.id ?? `asg-${Date.now()}`,
       employeeId: input.employeeId,
       divisionId: input.divisionId,
+      departmentId: input.departmentId,
       isPrimary: input.isPrimary,
       roleInDivision: input.roleInDivision.trim() || null,
-      teamLeadEmployeeId: input.teamLeadEmployeeId || null,
+      teamLeadEmployeeId:
+        effectiveLeadAssignment(input.departmentId, input.startDate)?.leadEmployeeId ?? null,
       allocationPercent: input.allocationPercent,
       expectedWeeklyMinutes: input.expectedWeeklyMinutes,
       startDate: input.startDate,

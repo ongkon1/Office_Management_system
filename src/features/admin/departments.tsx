@@ -12,12 +12,18 @@ import { Card } from '@/components/feedback/card';
 import { Alert, Callout, EmptyState } from '@/components/feedback/alert';
 import { Dialog } from '@/components/feedback/overlay';
 import { Field, FormErrorSummary } from '@/components/forms/field';
-import { Input, Textarea } from '@/components/forms/inputs';
+import { Input, Select, Textarea } from '@/components/forms/inputs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ReportsFallback, ReportsLoading } from '@/features/reports/report-catalogue';
+import { DIVISION_OPTIONS } from '@/features/hr/shared';
 
-const EMPTY: DepartmentFormInput = { name: '', code: '', description: '' };
+const EMPTY: DepartmentFormInput = {
+  divisionId: 'pia',
+  name: '',
+  code: '',
+  description: '',
+};
 
 export function DepartmentAdministration() {
   const { user } = useSession();
@@ -45,6 +51,7 @@ export function DepartmentAdministration() {
     setForm(
       editing
         ? {
+            divisionId: editing.division.id,
             name: editing.name,
             code: editing.code,
             description: editing.description ?? '',
@@ -122,7 +129,7 @@ export function DepartmentAdministration() {
     <PageContainer width="full">
       <PageHeader
         title="Departments"
-        description="Manage the controlled department list used when employee records are created or edited."
+        description="Manage division-owned departments and the Team Lead responsible for each one."
         meta={<Badge tone="neutral">{departments.length} departments</Badge>}
         actions={
           <Button
@@ -139,8 +146,8 @@ export function DepartmentAdministration() {
       />
 
       <Callout tone="info" className="mt-5">
-        Only Super Administrators can change this catalogue. A department assigned to an employee
-        cannot be deleted until those employee records are moved to another department.
+        Only Super Administrators can change this catalogue. Department names and codes are unique
+        within their division. A referenced department cannot be deleted or moved.
       </Callout>
 
       {departments.length === 0 ? (
@@ -168,7 +175,8 @@ export function DepartmentAdministration() {
                     <Badge tone="neutral">{department.code}</Badge>
                   </h2>
                   <p className="mt-1 text-caption text-ink-muted">
-                    {department.employeeCount} employee{department.employeeCount === 1 ? '' : 's'}
+                    {department.division.name} · {department.employeeCount} employee
+                    {department.employeeCount === 1 ? '' : 's'}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -202,6 +210,9 @@ export function DepartmentAdministration() {
               {department.description && (
                 <p className="mt-3 text-body-sm text-ink-muted">{department.description}</p>
               )}
+              <p className="mt-3 text-body-sm text-ink-subtle">
+                Team Lead: {department.currentLead?.fullName ?? 'Not appointed'}
+              </p>
               {!department.canDelete && (
                 <p className="mt-3 border-t border-border pt-3 text-caption text-ink-subtle">
                   Protected while employee records reference this department.
@@ -216,7 +227,7 @@ export function DepartmentAdministration() {
         open={open}
         onClose={() => setOpen(false)}
         title={editing ? 'Edit department' : 'New department'}
-        description="The name appears in employee profiles and the department dropdown."
+        description="The department appears only under its owning division. Lead appointments are managed separately and retain history."
         dismissOnBackdrop={false}
         footer={
           <>
@@ -236,6 +247,25 @@ export function DepartmentAdministration() {
               {failure}
             </Alert>
           )}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field
+              label="Division"
+              required
+              disabled={Boolean(editing && editing.employeeCount > 0)}
+              error={fieldError('divisionId')}
+              helperText={
+                editing && editing.employeeCount > 0
+                  ? 'The division is protected while employees reference this department.'
+                  : 'The department is available only to employees in this division.'
+              }
+            >
+              <Select
+                value={form.divisionId}
+                options={DIVISION_OPTIONS}
+                onChange={(event) => setForm({ ...form, divisionId: event.target.value })}
+              />
+            </Field>
+          </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field
               label="Name"

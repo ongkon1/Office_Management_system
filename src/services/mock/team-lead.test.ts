@@ -3,19 +3,26 @@ import type { EvaluationAreaKey } from '@/contracts/domain';
 import { mockTeamLeadService } from './team-lead';
 import { mockTimesheetService } from './timesheet';
 import { mockStore } from './store';
+import { departmentLeadEmployeeIds } from './organization-hierarchy';
+import { allMockNotifications, resetMockNotifications } from './notification-store';
 
 const IMRAN = 'usr-2001';
 
 describe('mockTeamLeadService scope and calculations', () => {
+  it('keeps only the four daily calculation exception categories', async () => {
+    const result = await mockTeamLeadService.getDashboard(IMRAN);
+    expect(result.status).toBe('success');
+    if (result.status !== 'success') return;
+    expect(Object.keys(result.data.exceptions)).toEqual(['missing', 'underTime', 'overtime', 'critical']);
+  });
+
   it('returns only employees assigned to the Team Lead', async () => {
     const result = await mockTeamLeadService.listMembers(IMRAN);
     expect(result.status).toBe('success');
     if (result.status !== 'success') return;
-    expect(result.data.map((item) => item.employee.id)).toEqual([
-      'emp-1001',
-      'emp-1002',
-      'emp-1004',
-    ]);
+    expect(result.data.map((item) => item.employee.id)).toEqual(
+      departmentLeadEmployeeIds('emp-2001'),
+    );
   });
 
   it('removes restricted government projects before aggregation', async () => {
@@ -26,8 +33,31 @@ describe('mockTeamLeadService scope and calculations', () => {
     expect(result.data.find((item) => item.id === 'prj-vp2')?.budgetRestricted).toBe(true);
   });
 
+  it('creates a Team Lead self-task with no supporting members or self-notification', async () => {
+    resetMockNotifications();
+    const result = await mockTeamLeadService.saveTask(IMRAN, {
+      title: 'Prepare department plan',
+      projectId: 'prj-vp2',
+      assigneeEmployeeId: 'emp-2001',
+      supportingMemberIds: ['emp-1002'],
+      startDate: '2026-09-02',
+      dueDate: null,
+      priority: 'medium',
+      estimatedMinutes: 90,
+      description: '',
+      checklist: [],
+    });
+
+    expect(result.status).toBe('success');
+    if (result.status !== 'success') return;
+    expect(result.data.assignee.id).toBe('emp-2001');
+    expect(result.data.supportingMembers).toEqual([]);
+    expect(result.data.review.state).toBe('not_required');
+    expect(allMockNotifications().some((item) => item.recipientUserId === IMRAN && item.href === `/tasks/${result.data.id}`)).toBe(false);
+  });
+
   it('denies a timesheet outside assigned employee scope', async () => {
-    const result = await mockTeamLeadService.getTimesheet(IMRAN, 'emp-1003', '2026-09-02');
+    const result = await mockTeamLeadService.getTimesheet(IMRAN, 'emp-2002', '2026-09-02');
     expect(result.status).toBe('permission_denied');
   });
 
@@ -69,12 +99,12 @@ describe('mockTeamLeadService scope and calculations', () => {
       });
     }
 
-    const historicalId = mockStore.entriesFor('emp-1001', '2026-09-01')[0]?.id;
+    const historicalId = mockStore.entriesFor('emp-1001', '2026-07-27')[0]?.id;
     expect(historicalId).toBeTruthy();
     const rejected = await mockTeamLeadService.addRemark({
       userId: IMRAN,
       employeeId: 'emp-1001',
-      date: '2026-09-01',
+      date: '2026-07-27',
       message: 'Please correct this record.',
       requestedChanges: 'Change the time.',
       workLogId: historicalId,

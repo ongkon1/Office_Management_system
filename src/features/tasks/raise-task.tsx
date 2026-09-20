@@ -31,7 +31,7 @@ interface FormError {
 }
 
 /**
- * `FE-0781` — an employee raising a task for themselves.
+ * `FE-0781` — an employee or Team Lead creating a task for themselves.
  *
  * The form names the reviewer before anything is typed. "Your Team Lead will
  * review this" is the single most important thing about this screen: a person
@@ -82,8 +82,10 @@ export function RaiseTaskButton({ onCreated }: { onCreated: () => void }) {
       onCreated();
       toast.show({
         tone: 'success',
-        title: 'Task raised',
-        description: `${options.reviewerName ?? 'Your Team Lead'} reviews it before you can record time against it.`,
+        title: options.requiresReview ? 'Task raised' : 'Task created',
+        description: options.requiresReview
+          ? `${options.reviewerName ?? 'Your Team Lead'} reviews it before you can record time against it.`
+          : 'This task needs no approval. Move it to In Progress when you begin work.',
       });
       return;
     }
@@ -112,14 +114,18 @@ export function RaiseTaskButton({ onCreated }: { onCreated: () => void }) {
         onClick={() => setOpen(true)}
         iconLeading={<Plus aria-hidden className="size-4" />}
       >
-        Raise a task
+        {options.requiresReview ? 'Raise a task' : 'Create my task'}
       </Button>
 
       <Dialog
         open={open}
         onClose={() => setOpen(false)}
-        title="Raise a task"
-        description="Propose work for yourself. Your Team Lead reviews it before it can receive time."
+        title={options.requiresReview ? 'Raise a task' : 'Create my task'}
+        description={
+          options.requiresReview
+            ? 'Propose work for yourself. Your Team Lead reviews it before it can receive time.'
+            : 'Create work for yourself. No approval is required.'
+        }
         size="lg"
       >
         {/*
@@ -128,7 +134,7 @@ export function RaiseTaskButton({ onCreated }: { onCreated: () => void }) {
           `REQ-TIME-025` requires.
         */}
         <form onSubmit={submit} noValidate className="space-y-4">
-          {options.reviewerName && (
+          {options.requiresReview && options.reviewerName && (
             <Callout tone="info">
               {options.reviewerName} will review this. You can record time against it once
               it is approved.
@@ -218,7 +224,7 @@ export function RaiseTaskButton({ onCreated }: { onCreated: () => void }) {
               Cancel
             </Button>
             <Button type="submit" variant="primary" loading={busy}>
-              Send for review
+              {options.requiresReview ? 'Send for review' : 'Create task'}
             </Button>
           </div>
         </form>

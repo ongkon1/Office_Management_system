@@ -26,6 +26,7 @@
     "db:status": "node --env-file-if-exists=.env.local scripts/db-status.mjs",
     "db:rollback": "node --env-file-if-exists=.env.local scripts/db-rollback.mjs",
     "db:seed": "node --env-file-if-exists=.env.local scripts/db-seed.mjs",
+    "db:harden-task-work": "node --env-file-if-exists=.env.local scripts/db-harden-task-work-grants.mjs",
     "db:validate": "node scripts/validate-migrations.mjs",
     "audit:security": "npm audit --audit-level=high",
     "audit:contrast": "node scripts/contrast-audit.mjs",
@@ -43,6 +44,7 @@
     "audit:requisition": "node scripts/requisition-flows.mjs",
     "audit:conveyance": "node scripts/conveyance-flows.mjs",
     "audit:task-review": "node scripts/task-review-flows.mjs",
+    "audit:task-work": "node scripts/task-work-audit.mjs",
     "audit:role-merge": "node scripts/role-merge-flows.mjs",
     "verify": "npm run typecheck && npm run lint && npm run audit:contrast && npm run test && npm run build",
     "verify:backend": "npm run typecheck && npm run lint && npm run db:validate && npm run test:backend && npm run audit:security && npm run build"

@@ -48,7 +48,8 @@ await page.goto(`${baseUrl}/team/timesheets/emp-1002/2026-08-26`, { waitUntil: '
 body = await page.locator('main').innerText();
 record(body.includes('Calculation breakdown') && body.includes('Time entries and completed work') && body.includes('Record history'), 'FE-0406', 'timesheet detail contains calculation, work, anomaly and history context');
 await page.getByLabel('General remark').fill('Please confirm the corrected break and task split.');
-await page.getByLabel('Request a correction to this record').check();
+await page.getByLabel('Request a correction to a work log').check();
+await page.getByLabel('Work log to correct').selectOption({ index: 1 });
 await page.getByLabel('Requested changes').fill('Split the time across the two completed tasks.');
 await page.getByRole('button', { name: 'Preview and send' }).click();
 record((await page.getByRole('dialog').innerText()).includes('Notification preview'), 'FE-0410/11', 'general remark and correction notification preview render');
@@ -78,7 +79,11 @@ body = await page.locator('main').innerText();
 record(body.includes('Pending') && body.includes('In Progress') && body.includes('Completed'), 'FE-0423', 'task board uses exactly the three approved statuses');
 await page.goto(`${baseUrl}/tasks/tsk-1`, { waitUntil: 'networkidle' });
 body = await page.locator('main').innerText();
-record(body.includes('Actual-time work history') && body.includes('Comments placeholder'), 'FE-0424/25', 'task detail shows actual history, checklist and deferred comments');
+record(
+  body.includes('Task history') && body.includes('Checklist') && body.includes('Comments'),
+  'FE-0424/25',
+  'task detail shows checklist and task-based actual history',
+);
 
 await page.goto(`${baseUrl}/requests`, { waitUntil: 'networkidle' });
 body = await page.locator('main').innerText();

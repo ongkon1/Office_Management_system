@@ -255,6 +255,27 @@ describe('exports', () => {
 });
 
 describe('report preview', () => {
+  it('shows task-duration rows while limiting clock values to historical entries', async () => {
+    const result = await mockFinanceService.previewReport(FINANCE_FULL, {
+      reportKey: 'timesheet-detail',
+      periodId: VERIFIED_PERIOD,
+      groupBy: 'employee',
+    });
+    expect(result.status).toBe('success');
+    if (result.status !== 'success') return;
+
+    expect(result.data.columns.map((column) => column.field)).toEqual(
+      expect.arrayContaining(['task', 'duration', 'recordType', 'start', 'end']),
+    );
+    const workLogs = result.data.rows.filter((row) => row.recordType === 'Work log');
+    const historical = result.data.rows.filter((row) => row.recordType === 'Historical clock entry');
+    expect(workLogs.length).toBeGreaterThan(0);
+    expect(historical.length).toBeGreaterThan(0);
+    expect(workLogs.every((row) => row.start === '—' && row.end === '—')).toBe(true);
+    expect(historical.every((row) => row.start !== '—' && row.end !== '—')).toBe(true);
+    expect(result.data.totals?.duration).toBeDefined();
+  });
+
   it('keeps a restricted column and marks its cells', async () => {
     const result = await mockFinanceService.previewReport(FINANCE_LIMITED, {
       periodId: VERIFIED_PERIOD,

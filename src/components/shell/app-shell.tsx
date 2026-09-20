@@ -3,11 +3,11 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Bell, LogOut, Menu, Play, Search, Settings, User, X } from 'lucide-react';
+import { Bell, LogOut, Menu, Search, Settings, User, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import type { AppShellView, NavGroupView, NavItemView } from '@/contracts/view-models';
 import { Avatar } from '@/components/ui/avatar';
-import { Button, IconButton } from '@/components/ui/button';
+import { IconButton } from '@/components/ui/button';
 import { CountBadge } from '@/components/ui/badge';
 import { BrandLogo } from '@/components/ui/brand-logo';
 import { DropdownMenu } from '@/components/feedback/overlay';
@@ -94,29 +94,6 @@ function NavLink({
 /* Top bar                                                                    */
 /* -------------------------------------------------------------------------- */
 
-function RunningTimerPill({ view }: { view: NonNullable<AppShellView['runningTimer']> }) {
-  return (
-    <Link
-      href="/timesheets"
-      className={cn(
-        'inline-flex min-h-9 items-center gap-2 rounded-full border border-accent-border',
-        'bg-accent-subtle px-3 text-caption font-medium text-accent transition-colors',
-        'hover:bg-accent-subtle/70',
-      )}
-    >
-      <span aria-hidden className="relative flex size-2">
-        <span className="absolute inline-flex size-full animate-ping rounded-full bg-accent opacity-60" />
-        <span className="relative inline-flex size-2 rounded-full bg-accent" />
-      </span>
-      <span className="hidden sm:inline">{view.division.code}</span>
-      <span className="tabular">{view.elapsed.display}</span>
-      <span className="sr-only">
-        Timer running for {view.division.name}, {view.elapsed.accessibleLabel} elapsed
-      </span>
-    </Link>
-  );
-}
-
 function TopBar({
   view,
   onOpenDrawer,
@@ -146,13 +123,11 @@ function TopBar({
         className="md:hidden"
       />
 
-      <Link href="/dashboard" className="flex items-center rounded-xs md:hidden">
+      <Link href="/dashboard" className="flex items-center rounded-xs transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus md:hidden">
         <BrandLogo size="sm" />
       </Link>
 
       <div className="flex-1" />
-
-      {view.runningTimer && <RunningTimerPill view={view.runningTimer} />}
 
       <IconButton
         label="Search"
@@ -329,7 +304,7 @@ export function AppShell({ view, children, onOpenSearch, onSignOut }: AppShellPr
           <div className="flex h-[var(--shell-topbar-height)] shrink-0 items-center justify-center border-b border-border px-4">
             <Link
               href="/dashboard"
-              className="flex min-h-11 items-center justify-center rounded-xs"
+              className="flex min-h-11 items-center justify-center rounded-xs transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
               aria-label="Go to dashboard"
             >
               <BrandLogo size="sm" />
@@ -398,23 +373,5 @@ export function AppShell({ view, children, onOpenSearch, onSignOut }: AppShellPr
 
       <BottomNav groups={view.navigation} pathname={pathname} />
     </div>
-  );
-}
-
-/** A floating start-timer action for mobile, above the bottom navigation. */
-export function TimerFab({ onStart }: { onStart: () => void }) {
-  return (
-    <Button
-      variant="accent"
-      onClick={onStart}
-      data-print="hide"
-      iconLeading={<Play aria-hidden className="size-4" />}
-      className={cn(
-        'fixed right-4 z-20 shadow-lg md:hidden',
-        'bottom-[calc(var(--shell-bottom-nav-height)+1rem)]',
-      )}
-    >
-      Start timer
-    </Button>
   );
 }

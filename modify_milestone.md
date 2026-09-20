@@ -235,16 +235,16 @@ This phase is shared. Neither milestone may start building until it is complete.
 - [x] `MFE-0304` Rework the day view into task rows — task, division, duration, location, description — with active total, recognized break, daily total, remaining and classification, and no time-of-day column. **Evidence: `DayView` now presents each work log as a task-first row with dedicated task, division, duration, location and description fields; desktop uses a six-column work layout while widths below `xl` use labeled stacked rows without page overflow. The engine-produced summary remains the only source for active, break, total, remaining and classification, and the recognized break stays one separate daily value. Historical ranges remain metadata inside their task row rather than becoming a time-of-day column. Covered by `day-view.test.tsx`; the changed route passes all four responsive widths, and complete verification passes with 490 tests and a 60-route production build.**
 - [x] `MFE-0309` Render historical clock entries read-only with their original ranges, labelled as recorded before the change. **Evidence: `TimeEntryView.recordKind` explicitly distinguishes duration work logs from historical clock entries; both mock and backend frontend adapters force historical rows to `canEdit: false` and `canDelete: false`. `DayView` renders a text-and-icon “Recorded before task-based logging” label plus the preserved original range and a read-only explanation, with no mutation menu. `work-log.test.ts` and `day-view.test.tsx` prove the boundary and UI behaviour; the historical route passes all four responsive widths, and complete verification passes with 491 tests and a 60-route production build.**
 - [x] `MFE-0310` Keep week, month, calendar and list views and the client and division filters producing identical totals for a fixed dataset before and after the change. **Evidence: Week and List now explicitly share the same seven-day source while Month and Calendar share the same month source. `src/lib/timesheet-period.ts` builds filtered rows, headline totals and client attribution as one read model, delegates all period arithmetic and status counts to the shared calculation engine, and filters divisions by authorized IDs rather than reverse-mapping display codes. Both mock and backend row adapters carry the exact engine facts required for reconciliation. `reconciliation.test.ts` proves unfiltered week/month totals reproduce their service totals and combined client/division filters keep visible rows, headline totals and client totals on the same fixed subset. Complete verification passes with 494 tests and a 60-route production build; `/timesheets` passes responsive checks at 375, 768, 1024 and 1440 px.**
-- [ ] `MFE-0311` Keep locked and verified period behaviour for work logs identical to today's, including the amendment path.
+- [x] `MFE-0311` Keep locked and verified period behaviour for work logs identical to today's, including the amendment path. **Evidence: locked day views expose no create, copy, edit or delete action, and a task deep link cannot force the Log Work drawer open. `createWorkLog`, `updateWorkLog` and `deleteWorkLog` return a structured `PERIOD_LOCKED` conflict containing the verified period identity and `amendmentPathAvailable: true`; the existing HR amendment path still requires a reason and preserves before/after history. Covered by `work-log.test.ts`, `day-view.test.tsx`, `hr.test.ts`, the Phase 3 browser lock check, and `docs/frontend/modify/phase-f3-verification.md`.**
 
 ### Removal
 
-- [ ] `MFE-0305` Remove the start/end mode from the entry drawer, `timer-panel.tsx`, `use-timer.ts`, and the running-timer state and `localStorage` recovery in `src/services/mock/store.ts`.
-- [ ] `MFE-0306` Remove the top-bar timer indicator and the dashboard's active timer and "Start timer" action, replacing them with today's active total and a "Log work" action.
+- [x] `MFE-0305` Remove the start/end mode from the entry drawer, `timer-panel.tsx`, `use-timer.ts`, and the running-timer state and `localStorage` recovery in `src/services/mock/store.ts`. **Evidence: the legacy `entry-drawer.tsx`, `timer-panel.tsx`, and `use-timer.ts` modules were removed; `DayView` now exposes only `WorkLogDrawer`; the mock store no longer imports, stores, reads, writes, or clears timer state or `localStorage`; mock timer compatibility operations were removed. `day-view.test.tsx` proves the day has no start/end or timer UI. Type-check, lint, 21 focused tests, all 572 frontend/shared tests, and the 62-page production build pass.**
+- [x] `MFE-0306` Remove the top-bar timer indicator and the dashboard's active timer and "Start timer" action, replacing them with today's active total and a "Log work" action. **Evidence: `RunningTimerPill` and `TimerFab` were removed from `app-shell.tsx`; `AppShellView` and `EmployeeDashboardView` no longer expose running-timer state; shell hosts and the component showcase carry no timer fixture. The employee dashboard continues to render the engine-derived active total and now uses the semantic `log_work` quick action. A frontend source scan finds no timer UI outside a negative regression assertion, and the dashboard service test plus Phase 3 browser flow verify the replacement.**
 
 ### Phase F3 Exit Criteria
 
-- [ ] No screen, button or route offers a timer or a start or end time for a new record.
+- [x] No screen, button or route offers a timer or a start or end time for a new record.
 - [x] Historical clock entries still render as recorded.
 - [x] Daily totals and classifications match the engine for every view.
 
@@ -280,25 +280,25 @@ This phase is shared. Neither milestone may start building until it is complete.
 
 ### Schema
 
-- [ ] `MBE-0101` Implement decision D1. Under the recommended option, add `source` and a unique `idempotency_key` to `time_entries`, and constrain new rows so `start_at_utc` and `end_at_utc` must be null for any source other than `migrated_clock_entry`.
-- [ ] `MBE-0102` Create `task_status_transitions` (task, from, to, actor, `changed_at_utc`, note, unique idempotency key), append-only, with no update or delete grant for the runtime database user.
-- [ ] `MBE-0103` Retire `timer_sessions` for writes — revoke runtime insert and update — while keeping every existing row for audit.
-- [ ] `MBE-0108` Add indexes for task-based reads (`task_id, work_date`; `employee_id, work_date`) and stop relying on the clock columns of `ix_time_employee_date` for new rows.
+- [x] `MBE-0101` Implement decision D1. Under the recommended option, add `source` and a unique `idempotency_key` to `time_entries`, and constrain new rows so `start_at_utc` and `end_at_utc` must be null for any source other than `migrated_clock_entry`. — Migration `0011`; verified in `docs/backend/modify/phase-b1-verification.md`.
+- [x] `MBE-0102` Create `task_status_transitions` (task, from, to, actor, `changed_at_utc`, note, unique idempotency key), append-only, with no update or delete grant for the runtime database user. — Migration triggers plus the runtime grant hardener enforce append-only access.
+- [x] `MBE-0103` Retire `timer_sessions` for writes — revoke runtime insert and update — while keeping every existing row for audit. — Runtime grant hardening is implemented and integration-tested; existing rows are retained.
+- [x] `MBE-0108` Add indexes for task-based reads (`task_id, work_date`; `employee_id, work_date`) and stop relying on the clock columns of `ix_time_employee_date` for new rows. — Migration `0011` replaces the clock-oriented indexes.
 
 ### Migration
 
-- [ ] `MBE-0104` Migrate per D1. Under reuse, copy no rows: mark existing clock rows `source = migrated_clock_entry` without changing `active_minutes`, ranges or verified snapshots. Under a new table, create logs from valid durations, link each to its original, and leave the original untouched.
-- [ ] `MBE-0105` Handle in-flight state at cutover as decided in D11: timers still running and drafts produced by stopped timers.
-- [ ] `MBE-0106` Prove reproducibility by comparing every verified period's totals and every daily summary before and after migration; any difference fails the migration.
-- [ ] `MBE-0107` Make the migration reversible and audited, with a recovery script that passes `npm run db:validate`.
-- [ ] `MBE-0109` Rebuild development seeds on the task-based model while retaining historical clock rows.
-- [ ] `MBE-0110` Rehearse the migration on production-like data and obtain HR sign-off on the resulting totals.
+- [x] `MBE-0104` Migrate per D1. Under reuse, copy no rows: mark existing clock rows `source = migrated_clock_entry` without changing `active_minutes`, ranges or verified snapshots. Under a new table, create logs from valid durations, link each to its original, and leave the original untouched. — D1 reuse is implemented with retained fact fingerprints.
+- [x] `MBE-0105` Handle in-flight state at cutover as decided in D11: timers still running and drafts produced by stopped timers. — Running timers become audited, uncounted review drafts; existing stopped drafts remain unchanged.
+- [x] `MBE-0106` Prove reproducibility by comparing every verified period's totals and every daily summary before and after migration; any difference fails the migration. — Migration-level assertions cover every counted employee-day, verified/amended period, and legacy-row fingerprint.
+- [x] `MBE-0107` Make the migration reversible and audited, with a recovery script that passes `npm run db:validate`. — Guarded recovery, migration audit events, and 11/11 migration validation are verified.
+- [x] `MBE-0109` Rebuild development seeds on the task-based model while retaining historical clock rows. — Duration work logs, transition history, and a separate historical clock record seed idempotently.
+- [~] `MBE-0110` Rehearse the migration on production-like data and obtain HR sign-off on the resulting totals. — Technical rehearsal and zero-drift reconciliation are complete; external HR sign-off is pending in `docs/backend/modify/phase-b1-verification.md`.
 
 ### Phase B1 Exit Criteria
 
-- [ ] The database rejects a new record carrying a clock range or a timer session.
-- [ ] Verified-period totals and daily summaries are identical before and after migration.
-- [ ] The migration is reversible, audited and rehearsed with sign-off.
+- [x] The database rejects a new record carrying a clock range or a timer session for the runtime principal.
+- [x] Verified-period totals and daily summaries are identical before and after migration.
+- [~] The migration is reversible, audited and technically rehearsed; HR sign-off remains pending.
 
 ## Phase B2 - Backend Work-Log Use Cases, Validation and Calculation
 
@@ -437,9 +437,9 @@ Other dependencies: the Phase 7 notification service (`MBE-0307`), the existing 
 | Phase 0 - Decision and Requirements Gate | Done | 8/8 |
 | Phase F1 - Frontend Contracts, Calculation and Validation | Done | 9/9 |
 | Phase F2 - Frontend Task Board and Status Transitions | Done | 10/10 |
-| Phase F3 - Frontend Log Work and Timesheet Rework | In progress | 8/11 |
+| Phase F3 - Frontend Log Work and Timesheet Rework | Done | 11/11 |
 | Phase F4 - Frontend Downstream Surfaces, Demo Data and Gates | Pending | 0/11 |
-| Phase B1 - Backend Schema and Data Migration | Pending | 0/10 |
+| Phase B1 - Backend Schema and Data Migration | In progress — HR sign-off pending | 9/10 |
 | Phase B2 - Backend Work-Log Use Cases, Validation and Calculation | Pending | 0/11 |
 | Phase B3 - Backend Task Transitions, History and Notifications | Pending | 0/9 |
 | Phase B4 - Backend Downstream, Cutover and Verification | Pending | 0/10 |

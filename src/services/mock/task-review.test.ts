@@ -42,8 +42,20 @@ describe('who may raise a task', () => {
     expect(result.status).toBe('success');
   });
 
+  it('lets a Team Lead create a self-assigned task without approval', async () => {
+    const result = await mockTaskReviewService.create(TEAM_LEAD, FORM);
+    if (result.status !== 'success') throw new Error('expected success');
+
+    expect(mockStore.findTask(result.data.id)).toMatchObject({
+      creatorEmployeeId: 'emp-2001',
+      assigneeEmployeeId: 'emp-2001',
+      reviewState: 'not_required',
+      reviewerEmployeeId: null,
+      status: 'pending',
+    });
+  });
+
   it.each([
-    ['a Team Lead', TEAM_LEAD],
     ['HR', HR],
     ['Finance', FINANCE],
     ['the Super Administrator', ADMIN],
@@ -53,11 +65,12 @@ describe('who may raise a task', () => {
     expect(result.status).toBe('permission_denied');
   });
 
-  it('tells a Team Lead why the raise form is not for them', async () => {
+  it('offers a Team Lead the self-task form without a reviewer', async () => {
     const options = await mockTaskReviewService.options(TEAM_LEAD);
     if (options.status !== 'success') throw new Error('expected success');
-    expect(options.data.canCreate).toBe(false);
-    expect(options.data.createBlockedReason).toBeTruthy();
+    expect(options.data.canCreate).toBe(true);
+    expect(options.data.requiresReview).toBe(false);
+    expect(options.data.reviewerName).toBeNull();
   });
 
   it('names the reviewer before anything is typed', async () => {
@@ -65,6 +78,7 @@ describe('who may raise a task', () => {
     if (options.status !== 'success') throw new Error('expected success');
     expect(options.data.reviewerName).toBe('Imran Hossain');
     expect(options.data.canCreate).toBe(true);
+    expect(options.data.requiresReview).toBe(true);
   });
 
   it('offers only projects in divisions the employee is assigned to', async () => {

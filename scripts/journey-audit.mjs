@@ -83,15 +83,21 @@ journeys.employee = async () => {
     'sees all three divisions contributing to the same day',
   );
 
-  // Record a new entry end to end.
-  await page.getByRole('button', { name: /^Add time$/ }).first().click();
+  // Open duration-based Log Work end to end.
+  await page.getByRole('button', { name: /^Log work$/ }).first().click();
   await page.waitForTimeout(900);
   const dialog = page.getByRole('dialog');
-  step((await dialog.count()) > 0, 'employee', 'opens the time-entry drawer');
+  step((await dialog.count()) > 0, 'employee', 'opens the Log Work drawer');
 
+  await page.selectOption('select[name="divisionId"]', 'pia');
+  await page.selectOption('select[name="projectId"]', 'prj-vp2');
+  await page.selectOption('select[name="taskId"]', 'tsk-1');
+  await page.fill('input[name="durationMinutes"]', '0:15');
+  await page.locator('textarea[name="workDescription"]').click();
+  await page.getByRole('heading', { name: 'Daily calculation preview' }).waitFor();
   const preview = await dialog.innerText();
   step(
-    preview.includes('If you save this') &&
+    preview.includes('Daily calculation preview') &&
       preview.includes('Day active') &&
       preview.includes('Day total'),
     'employee',
@@ -99,6 +105,8 @@ journeys.employee = async () => {
   );
   await page.keyboard.press('Escape');
   await page.waitForTimeout(400);
+  const discard = page.getByRole('button', { name: 'Discard', exact: true });
+  if (await discard.isVisible().catch(() => false)) await discard.click();
 
   // Requests and remarks are part of the same day's work.
   body = await open(page, '/wfh', 1100);
@@ -165,7 +173,8 @@ journeys.teamLead = async () => {
 
   // Raise a correction request, which is the Team Lead's actual instrument.
   await page.getByLabel('General remark').fill('Please split this by task before month end.');
-  await page.getByLabel('Request a correction to this record').check();
+  await page.getByLabel('Request a correction to a work log').check();
+  await page.getByLabel('Work log to correct').selectOption({ index: 1 });
   await page.getByLabel('Requested changes').fill('Split the entry across the two tasks.');
   await page.getByRole('button', { name: 'Preview and send' }).click();
   await page.waitForTimeout(600);

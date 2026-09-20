@@ -35,6 +35,7 @@ import {
 const REPORT_OPTIONS = [
   { value: 'payroll-summary', label: 'Payroll summary' },
   { value: 'employee-hours', label: 'Employee hours' },
+  { value: 'timesheet-detail', label: 'Timesheet task detail' },
   { value: 'project-costs', label: 'Project labour cost' },
 ];
 

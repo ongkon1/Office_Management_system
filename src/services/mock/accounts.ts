@@ -128,7 +128,7 @@ export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
     employeeCode: 'EMP-2001',
     fullName: 'Imran Hossain',
     email: 'imran.hossain@demo.local',
-    designation: 'Team Lead, Engineering',
+    designation: 'Team Lead, Technical',
     roles: ['team_lead', 'employee'],
     primaryRole: 'team_lead',
     permissions: [],

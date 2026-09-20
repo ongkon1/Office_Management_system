@@ -11,7 +11,6 @@ import type {
   IsoDate,
   Task,
   TimeEntry,
-  TimerSession,
 } from '@/contracts/domain';
 import { taskAcceptsTime } from '@/contracts/domain';
 import { canTransition, transitionRequiresNote } from '@/contracts/task-transition';
@@ -24,11 +23,7 @@ import type {
 } from '@/contracts/work-log';
 import type { DateRange, ListQuery, Paginated } from '@/contracts/query';
 import { success, type Result } from '@/contracts/results';
-import type {
-  StartTimerInput,
-  TimeEntryInput,
-  TimesheetService,
-} from '@/contracts/services';
+import type { TimeEntryInput, TimesheetService } from '@/contracts/services';
 import type {
   BreakView,
   EntryCalculationPreview,
@@ -64,9 +59,10 @@ import {
   STANDARD_POLICY,
   DEMO_TODAY,
 } from '@/fixtures';
-import { DIVISIONS } from './accounts';
+import { DEMO_ACCOUNTS, DIVISIONS } from './accounts';
 import { mockStore } from './store';
 import { effectiveDivisionIds, projectById } from './organization';
+import { addMockNotification, notifyEmployee } from './notification-store';
 
 const LATENCY_MS = 220;
 
@@ -456,14 +452,73 @@ function toStoredEntry(input: TimeEntryInput, id: string): TimeEntry {
 const appliedKeys = new Map<string, string>();
 const workLogMetadata = new Map<string, Pick<WorkLogInput, 'source' | 'idempotencyKey'>>();
 const workLogRevisions: WorkLogRevision[] = [];
-const taskTransitions: TaskStatusTransition[] = [];
+const SEEDED_TASK_TRANSITIONS: readonly TaskStatusTransition[] = [
+  {
+    id: 'trn-seed-1', taskId: 'tsk-14', fromStatus: 'pending', toStatus: 'in_progress',
+    actor: { userId: 'usr-1001', displayName: 'Nadia Rahman' }, actorRole: 'employee',
+    changedAt: '2026-08-21T09:00:00+06:00', note: 'Started the variance demonstration.', idempotencyKey: 'seed:tsk-14:start',
+  },
+  {
+    id: 'trn-seed-2', taskId: 'tsk-14', fromStatus: 'in_progress', toStatus: 'completed',
+    actor: { userId: 'usr-1001', displayName: 'Nadia Rahman' }, actorRole: 'employee',
+    changedAt: '2026-08-21T17:00:00+06:00', note: 'Completed with 1:15 more actual work than estimated.', idempotencyKey: 'seed:tsk-14:complete',
+  },
+  {
+    id: 'trn-seed-3', taskId: 'tsk-6', fromStatus: 'pending', toStatus: 'in_progress',
+    actor: { userId: 'usr-1001', displayName: 'Nadia Rahman' }, actorRole: 'employee',
+    changedAt: '2026-08-20T09:00:00+06:00', note: 'Started accessibility review.', idempotencyKey: 'seed:tsk-6:start',
+  },
+  {
+    id: 'trn-seed-4', taskId: 'tsk-6', fromStatus: 'in_progress', toStatus: 'completed',
+    actor: { userId: 'usr-1001', displayName: 'Nadia Rahman' }, actorRole: 'employee',
+    changedAt: '2026-08-25T17:00:00+06:00', note: 'Initial audit completed.', idempotencyKey: 'seed:tsk-6:complete',
+  },
+  {
+    id: 'trn-seed-5', taskId: 'tsk-6', fromStatus: 'completed', toStatus: 'in_progress',
+    actor: { userId: 'usr-1001', displayName: 'Nadia Rahman' }, actorRole: 'employee',
+    changedAt: '2026-08-26T09:30:00+06:00', note: 'Reopened to verify three remediated issues.', idempotencyKey: 'seed:tsk-6:reopen',
+  },
+];
+const taskTransitions: TaskStatusTransition[] = [...SEEDED_TASK_TRANSITIONS];
 const transitionKeys = new Map<string, string>();
 
 /** Test/demo reset for the append-only in-memory workflow adapter. */
 export function resetTaskWorkflowState(): void {
   workLogRevisions.splice(0, workLogRevisions.length);
-  taskTransitions.splice(0, taskTransitions.length);
+  taskTransitions.splice(0, taskTransitions.length, ...SEEDED_TASK_TRANSITIONS);
   transitionKeys.clear();
+}
+
+function lockedPeriodConflict(workDate: string, action: 'save' | 'edit' | 'delete') {
+  const period = mockStore.periods().find(
+    (item) =>
+      (item.status === 'verified' || item.status === 'amended') &&
+      workDate >= item.startDate &&
+      workDate <= item.endDate,
+  );
+  const actionGuidance =
+    action === 'save'
+      ? 'Request an amendment with a reason instead of saving work directly.'
+      : action === 'edit'
+        ? 'Request an amendment with a reason instead of editing directly.'
+        : 'Request an amendment with a reason instead of deleting.';
+
+  return {
+    status: 'conflict' as const,
+    code: 'PERIOD_LOCKED' as const,
+    message: 'This period has been verified and is locked.',
+    guidance: actionGuidance,
+    ...(period
+      ? {
+          lockedPeriod: {
+            periodId: period.id,
+            label: period.label,
+            verifiedAt: period.verifiedAt ?? period.updatedAt,
+            amendmentPathAvailable: true,
+          },
+        }
+      : {}),
+  };
 }
 
 /** Temporary concrete-method compatibility for the pre-F3 screens. */
@@ -474,10 +529,6 @@ interface LegacyTimesheetCompatibility {
   deleteEntry(id: string): Promise<Result<void>>;
   copyEntry(input: { readonly sourceEntryId: string; readonly targetDate: IsoDate }): Promise<Result<TimeEntryInput>>;
   previewCalculation(input: TimeEntryInput): Promise<Result<EntryCalculationPreview>>;
-  getRunningTimer(): Promise<Result<TimerSession | null>>;
-  startTimer(input: StartTimerInput & { readonly idempotencyKey: string }): Promise<Result<TimerSession>>;
-  stopTimer(input: { readonly sessionId: string; readonly idempotencyKey: string }): Promise<Result<TimeEntryInput>>;
-  cancelTimer(input: { readonly sessionId: string }): Promise<Result<void>>;
 }
 
 function entryAsWorkLog(entry: TimeEntry): WorkLog | null {
@@ -653,6 +704,11 @@ const mockTimesheetServiceImpl = {
       if (workLog) return success(workLog);
     }
 
+    if (mockStore.isDateLocked(input.workDate)) {
+      return lockedPeriodConflict(input.workDate, 'save');
+    }
+
+    const beforeStatus = summaryFor(input.employeeId, input.workDate).status;
     const errors = validateWorkLog(input, workLogValidationContext(input));
     if (errors.length) {
       return {
@@ -674,6 +730,23 @@ const mockTimesheetServiceImpl = {
         overtimeReason: input.overtimeReason ?? undefined,
         criticalExplanation: input.criticalExplanation ?? undefined,
       });
+    }
+    const afterStatus = summaryFor(input.employeeId, input.workDate).status;
+    if ((afterStatus === 'overtime' || afterStatus === 'critical') && afterStatus !== beforeStatus) {
+      const recipients = DEMO_ACCOUNTS.filter(
+        (account) => account.primaryRole === 'hr_manager' ||
+          (account.primaryRole === 'team_lead' && account.scopedEmployeeIds.includes(input.employeeId)),
+      );
+      for (const recipient of recipients) {
+        addMockNotification({
+          recipientUserId: recipient.userId,
+          type: afterStatus === 'critical' ? 'critical_time' : 'overtime',
+          title: afterStatus === 'critical' ? 'Critical daily total recorded' : 'Overtime daily total recorded',
+          body: `A daily total on ${formatDate(input.workDate)} needs review. Open the timesheet for authorized details.`,
+          href: `/team/timesheets/${input.employeeId}/${input.workDate}`,
+          relatedLabel: `Timesheet, ${formatDate(input.workDate)}`,
+        });
+      }
     }
     return success(entryAsWorkLog(entry)!);
   },
@@ -708,12 +781,7 @@ const mockTimesheetServiceImpl = {
       return { status: 'not_found' as const, code: 'NOT_FOUND' as const, message: 'That work log no longer exists.' };
     }
     if (mockStore.isDateLocked(existing.workDate)) {
-      return {
-        status: 'conflict' as const,
-        code: 'PERIOD_LOCKED' as const,
-        message: 'This period has been verified and is locked.',
-        guidance: 'Request an amendment with a reason instead of editing directly.',
-      };
+      return lockedPeriodConflict(existing.workDate, 'edit');
     }
     if (
       existing.version !== undefined &&
@@ -785,12 +853,7 @@ const mockTimesheetServiceImpl = {
       return { status: 'not_found' as const, code: 'NOT_FOUND' as const, message: 'That work log no longer exists.' };
     }
     if (mockStore.isDateLocked(entry.workDate)) {
-      return {
-        status: 'conflict' as const,
-        code: 'PERIOD_LOCKED' as const,
-        message: 'This period has been verified and is locked.',
-        guidance: 'Request an amendment with a reason instead of deleting.',
-      };
+      return lockedPeriodConflict(entry.workDate, 'delete');
     }
     mockStore.removeEntry(id);
     workLogMetadata.delete(id);
@@ -988,6 +1051,32 @@ const mockTimesheetServiceImpl = {
       updatedAt: stamp,
       updatedBy: transition.actor,
     } as Task & typeof task);
+    const transitionType = input.toStatus === 'completed'
+      ? 'task_completed'
+      : input.fromStatus === 'completed'
+        ? 'task_reopened'
+        : 'task_started';
+    notifyEmployee(task.assigneeEmployeeId, {
+      type: transitionType,
+      title: transitionType === 'task_completed' ? 'Task completed' : transitionType === 'task_reopened' ? 'Task reopened' : 'Task started',
+      body: 'The task status changed. Open the task to see the authorized details.',
+      href: `/tasks/${task.id}`,
+      relatedLabel: 'Task',
+    });
+    if (input.toStatus === 'completed') {
+      const actualMinutes = mockStore.entriesForTask(task.id)
+        .filter((entry) => entry.state !== 'draft')
+        .reduce((total, entry) => total + entry.activeMinutes, 0);
+      if (actualMinutes > task.estimatedMinutes) {
+        notifyEmployee(task.assigneeEmployeeId, {
+          type: 'significant_variance',
+          title: 'Task estimate exceeded',
+          body: 'Actual work exceeded the estimate. Open the task to review the variance and optional completion note.',
+          href: `/tasks/${task.id}`,
+          relatedLabel: 'Task variance',
+        });
+      }
+    }
     return success(transition);
   },
 
@@ -1255,91 +1344,9 @@ const mockTimesheetServiceImpl = {
     return success(summaryFor(employeeId, workDate));
   },
 
-  async getRunningTimer() {
-    await delay(60);
-    return success(mockStore.getTimer());
-  },
-
-  async startTimer(input) {
-    await delay();
-
-    // One running timer per employee (`REQ-TIME-008`). A second start is
-    // refused rather than silently replacing the first.
-    const running = mockStore.getTimer();
-    if (running?.isRunning) {
-      return {
-        status: 'conflict',
-        code: 'CONFLICT',
-        message: 'A timer is already running.',
-        guidance: 'Stop the running timer before starting another one.',
-      };
-    }
-
-    const timer: TimerSession = {
-      id: nextId('tmr'),
-      employeeId: 'emp-1001',
-      startedAt: new Date().toISOString(),
-      divisionId: input.divisionId,
-      projectId: input.projectId,
-      taskId: input.taskId,
-      workLocation: input.workLocation,
-      isRunning: true,
-      draftTimeEntryId: null,
-    };
-    mockStore.setTimer(timer);
-    return success(timer);
-  },
-
-  async stopTimer({ sessionId }) {
-    await delay();
-    const timer = mockStore.getTimer();
-
-    if (!timer || timer.id !== sessionId) {
-      return {
-        status: 'not_found',
-        code: 'NOT_FOUND',
-        message: 'That timer is no longer running.',
-      };
-    }
-
-    const elapsed = Math.max(
-      1,
-      Math.round((Date.now() - new Date(timer.startedAt).getTime()) / 60000),
-    );
-
-    mockStore.setTimer(null);
-
-    // Stopping produces a draft the employee reviews and saves
-    // (`REQ-TIME-009`); it does not create time on its own.
-    const draft: TimeEntryInput = {
-      employeeId: timer.employeeId,
-      workDate: DEMO_TODAY,
-      divisionId: timer.divisionId,
-      projectId: timer.projectId,
-      taskId: timer.taskId,
-      entryMethod: 'manual_duration',
-      workLocation: timer.workLocation,
-      startTime: null,
-      endTime: null,
-      activeMinutes: elapsed,
-      workDescription: '',
-      completedWork: '',
-      supportingLink: null,
-      attachmentIds: [],
-      overtimeReason: null,
-      criticalExplanation: null,
-    };
-    return success(draft);
-  },
-
-  async cancelTimer() {
-    await delay();
-    mockStore.setTimer(null);
-    return success(undefined);
-  },
 } satisfies TimesheetService & LegacyTimesheetCompatibility;
 
 export const mockTimesheetService: TimesheetService & LegacyTimesheetCompatibility =
   mockTimesheetServiceImpl;
 
-export type { DateRange, StartTimerInput };
+export type { DateRange };
