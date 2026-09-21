@@ -4,6 +4,7 @@ import { AuthenticationService } from '@/server/authentication/service';
 import { MysqlAuthenticationStore } from '@/server/authentication/mysql-store';
 import { loadActorPolicyContext } from '@/server/authorization/mysql-context';
 import { BackendTeamTimesheetService } from './team-adapter';
+import { TaskWorkApplication } from '@/server/task-work/application';
 import { TimeApplication } from './application';
 import { MysqlTimeRepository } from './mysql-repository';
 import { BackendPeriodService, BackendRemarkService, BackendTimesheetService } from './adapters';
@@ -14,7 +15,8 @@ export function createTimeServices(pool: Pool, sessionToken: string) {
         const session = await authentication.validateSession(sessionToken);
         return session.status === 'success' ? loadActorPolicyContext(pool, session.data.userId, date) : null;
     });
-    return { application: app, teamTimesheets: guardService(new BackendTeamTimesheetService(app)), timesheets: guardService(new BackendTimesheetService(app)), periods: guardService(new BackendPeriodService(app)), remarks: guardService(new BackendRemarkService(app)) };
+    const tasks = new TaskWorkApplication(pool, app.resolveActor, app.now);
+    return { tasks: guardService(tasks), application: app, teamTimesheets: guardService(new BackendTeamTimesheetService(app)), timesheets: guardService(new BackendTimesheetService(app, tasks)), periods: guardService(new BackendPeriodService(app)), remarks: guardService(new BackendRemarkService(app)) };
 }
 
 /** Keep infrastructure failures inside Result at every public service method. */

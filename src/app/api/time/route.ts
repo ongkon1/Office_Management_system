@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { createDatabaseClient } from '@/server/database/client';
 import { createTimeServices } from '@/server/time/composition';
-import { handleTimeMutation, resultResponse } from '@/server/time/http';
+import { handleTimeMutation, resultResponse, retiredTimeResponse } from '@/server/time/http';
 import { invalid } from '@/server/time/validation';
 export const runtime = 'nodejs';
 let database: ReturnType<typeof createDatabaseClient> | undefined;
@@ -15,17 +15,21 @@ export async function GET(request: NextRequest) {
         return noSession();
     try {
         const query = request.nextUrl.searchParams;
+        if (query.get('view') === 'timer') return retiredTimeResponse();
         const s = services(request);
         const employeeId = query.get('employeeId') ?? '';
         switch (query.get('view') ?? 'day') {
             case 'day': return resultResponse(await s.timesheets.getDay({ employeeId, date: query.get('date') ?? '' }));
             case 'week': return resultResponse(await s.timesheets.getWeek({ employeeId, weekStartDate: query.get('date') ?? '' }));
             case 'month': return resultResponse(await s.timesheets.getMonth({ employeeId, month: query.get('month') ?? '' }));
-            case 'timer': return resultResponse(await s.timesheets.getRunningTimer());
+            case 'task-history': return resultResponse(await s.timesheets.getTaskHistory(query.get('id') ?? ''));
+            case 'work-log-history': return resultResponse(await s.timesheets.getWorkLogHistory(query.get('id') ?? ''));
+            case 'work-log': return resultResponse(await s.timesheets.getWorkLog(query.get('id') ?? ''));
+            case 'work-logs': return resultResponse(await s.timesheets.listWorkLogs({ pagination: { page: Number(query.get('page') ?? 1), pageSize: 25 }, filters: { employeeIds: [employeeId], dateRange: { from: query.get('from') ?? '', to: query.get('to') ?? '' } } }));
             case 'period': return resultResponse(await s.periods.getVerificationSummary(query.get('id') ?? ''));
             case 'remarks': return resultResponse(await s.remarks.list({ pagination: { page: Number(query.get('page') ?? 1), pageSize: 25 }, filters: { employeeIds: [employeeId] } }));
             case 'entries': return resultResponse(await s.timesheets.listEntries({ pagination: { page: Number(query.get('page') ?? 1), pageSize: 25 }, filters: { employeeIds: [employeeId], dateRange: { from: query.get('from') ?? '', to: query.get('to') ?? '' } } }));
-            default: return resultResponse(invalid('view', 'Choose day, week, month, entries, timer, period or remarks.'));
+            default: return resultResponse(invalid('view', 'Choose day, week, month, entries, work-log, work-logs, period or remarks.'));
         }
     }
     catch {

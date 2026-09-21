@@ -2,16 +2,18 @@ import type { DailySummary, TimeEntry } from '@/contracts/domain';
 import type { ListQuery, Paginated } from '@/contracts/query';
 import type { Result } from '@/contracts/results';
 import { success } from '@/contracts/results';
-import type { PeriodService, RemarkService, TimeEntryInput } from '@/contracts/services';
+import type { PeriodService, RemarkService, TimesheetService } from '@/contracts/services';
 import type { TimesheetDayView, TimesheetDayRowView, PeriodTotalsView } from '@/contracts/view-models';
 import { aggregateSummaries, requiresCriticalExplanation, requiresOvertimeReason } from '@/lib/calculation/engine';
 import { localParts } from '@/lib/calculation/instants';
-import { draftMinutes } from '@/lib/calculation/validation';
+import type { WorkLog, WorkLogInput, WorkLogUpdateInput } from '@/contracts/work-log';
 import { toClientContributions } from '@/lib/client-time';
 import { addDays, formatDate, formatDateWithWeekday, formatMonth, formatTimeRange } from '@/lib/format';
 import { toDayStatusView, toDurationView, WORK_LOCATION_LABEL } from '@/lib/status';
 import { hasPermission } from '@/server/authorization/policy';
-import { TimeApplication } from './application';
+import type { TaskWorkApplication } from '@/server/task-work/application';
+import type { TaskTransitionInput } from '@/contracts/task-transition';
+import { TimeApplication, toWorkLog, isHistorical } from './application';
 import { conflict, dateSchema, invalid } from './validation';
 import type { DayContext } from './ports';
 export function paginate<T>(items: readonly T[], query: ListQuery): Result<Paginated<T>> {
@@ -23,9 +25,11 @@ export function paginate<T>(items: readonly T[], query: ListQuery): Result<Pagin
 }
 function totals(label: string, days: readonly DailySummary[]): PeriodTotalsView { const t = aggregateSummaries(days); return { label, active: toDurationView(t.activeMinutes), break: toDurationView(t.breakMinutes), total: toDurationView(t.totalMinutes), overtime: toDurationView(t.overtimeMinutes), requiredActive: toDurationView(t.requiredActiveMinutes), completeDayCount: t.completeDayCount, underTimeDayCount: t.underTimeDayCount, overtimeDayCount: t.overtimeDayCount, criticalDayCount: t.criticalDayCount, missingDayCount: t.missingDayCount }; }
 function row(s: DailySummary, c: DayContext): TimesheetDayRowView { return { date: s.workDate, dateLabel: formatDate(s.workDate), weekdayLabel: formatDateWithWeekday(s.workDate).slice(0, 3), active: toDurationView(s.activeMinutes), break: toDurationView(s.breakMinutes), total: toDurationView(s.totalMinutes), requiredActive: toDurationView(s.requiredActiveMinutes), status: toDayStatusView(s.status), isRequiredWorkingDay: s.isRequiredWorkingDay, attendance: s.attendance, attendanceLabel: s.attendance, divisionIds: s.divisionContributions.map((d) => d.divisionId), divisionCodes: s.divisionContributions.map((d) => c.divisions.find((v) => v.id === d.divisionId)?.code ?? 'Restricted'), clientContributions: toClientContributions(s.activeMinutes, s.projectContributions.map((p) => ({ clientId: c.projects.find((v) => v.id === p.projectId)?.client ?? null, activeMinutes: p.activeMinutes }))), isLocked: s.isLocked, href: `/timesheets/${s.workDate}` }; }
-/** Legacy backend adapter retained until Modify Phase B2 implements WorkLog services. */
-export class BackendTimesheetService {
-    constructor(readonly application: TimeApplication) { }
+/** Duration-only write boundary; historical entries remain available through day reads. */
+export class BackendTimesheetService implements TimesheetService {
+    constructor(readonly application: TimeApplication, private readonly tasks?: TaskWorkApplication) { }
+    transitionTask(input: TaskTransitionInput) { return this.tasks ? this.tasks.transition(input) : Promise.resolve(conflict('Task workflow service is not configured.')); }
+    getTaskHistory(id: string) { return this.tasks ? this.tasks.history(id) : Promise.resolve(conflict('Task workflow service is not configured.')); }
     async getDay(input: {
         employeeId: string;
         date: string;
@@ -50,7 +54,7 @@ export class BackendTimesheetService {
                 const d = c.divisions.find((division) => division.id === e.divisionId)!;
                 const p = c.projects.find((project) => project.id === e.projectId);
                 const t = c.tasks.find((task) => task.id === e.taskId);
-                const isHistoricalClockEntry = Boolean(e.startTime && e.endTime);
+                const isHistoricalClockEntry = isHistorical(e);
                 return {
                     id: e.id,
                     version: e.version,
@@ -97,7 +101,7 @@ export class BackendTimesheetService {
         month: string;
     }) { if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(input.month))
         return invalid('month', 'Choose a valid month.'); const from = `${input.month}-01`; const to = addDays(`${input.month}-28`, new Date(Date.UTC(Number(input.month.slice(0, 4)), Number(input.month.slice(5)), 0)).getUTCDate() - 28); const r = await this.periodRows(input.employeeId, from, to); return r.status === 'success' ? success({ month: input.month, label: formatMonth(input.month), days: r.data.rows, totals: totals(formatMonth(input.month), r.data.summaries), isVerified: r.data.summaries.length > 0 && r.data.summaries.every((s) => s.isLocked) }) : r; }
-    async listEntries(query: ListQuery): Promise<Result<Paginated<TimeEntry>>> {
+    async listEntries(query: ListQuery, workLogsOnly = false): Promise<Result<Paginated<TimeEntry>>> {
         const range = query.filters?.dateRange;
         if (!range)
             return invalid('dateRange', 'Select a date range.');
@@ -105,7 +109,7 @@ export class BackendTimesheetService {
         if (!actor)
             return { status: 'unauthenticated', code: 'UNAUTHENTICATED', message: 'Sign in to continue.', reason: 'no_session' };
         const employees = query.filters?.employeeIds ?? (actor.employeeId ? [actor.employeeId] : []);
-        const entries: TimeEntry[] = [];
+        const entries: (TimeEntry & { readonly source?: string; readonly idempotencyKey?: string })[] = [];
         for (const employeeId of employees) {
             const summaries = await this.application.summaries(employeeId, range.from, range.to);
             if (summaries.status !== 'success')
@@ -117,7 +121,7 @@ export class BackendTimesheetService {
                 const f = query.filters;
                 if (f?.dayStatuses && !f.dayStatuses.includes(s.status) || f?.overtimeOnly && !['overtime', 'critical'].includes(s.status) || f?.verifiedOnly && !s.isLocked)
                     continue;
-                entries.push(...r.data.context.entries.filter((e) => (!f?.divisionIds || f.divisionIds.includes(e.divisionId)) && (!f?.projectIds || (e.projectId !== null && f.projectIds.includes(e.projectId))) && (!f?.taskIds || (e.taskId !== null && f.taskIds.includes(e.taskId))) && (!f?.workLocations || f.workLocations.includes(e.workLocation)) && (!f?.recordStatuses || f.recordStatuses.includes(e.state)) && (f?.wfhOnly === undefined || (e.workLocation === 'wfh') === f.wfhOnly) && (!query.search?.term || `${e.workDescription} ${e.completedWork}`.toLowerCase().includes(query.search.term.trim().toLowerCase()))).map((e) => ({ ...e, attachmentIds: hasPermission(r.data.actor, 'file.protected.view') ? e.attachmentIds : 'restricted' as const })));
+                entries.push(...r.data.context.entries.filter((e) => (!workLogsOnly || !isHistorical(e)) && (!f?.divisionIds || f.divisionIds.includes(e.divisionId)) && (!f?.projectIds || (e.projectId !== null && f.projectIds.includes(e.projectId))) && (!f?.taskIds || (e.taskId !== null && f.taskIds.includes(e.taskId))) && (!f?.workLocations || f.workLocations.includes(e.workLocation)) && (!f?.recordStatuses || f.recordStatuses.includes(e.state)) && (f?.wfhOnly === undefined || (e.workLocation === 'wfh') === f.wfhOnly) && (!query.search?.term || `${e.workDescription} ${e.completedWork}`.toLowerCase().includes(query.search.term.trim().toLowerCase()))).map((e) => ({ ...e, attachmentIds: hasPermission(r.data.actor, 'file.protected.view') ? e.attachmentIds : 'restricted' as const })));
             }
         }
         const field = query.sort?.field ?? 'workDate';
@@ -133,27 +137,46 @@ export class BackendTimesheetService {
             to: string;
         };
     }) { return this.application.summaries(input.employeeId, input.range.from, input.range.to); }
-    createEntry(input: TimeEntryInput & {
-        idempotencyKey: string;
-    }) { return this.application.save(input); }
-    updateEntry(id: string, input: TimeEntryInput & {
-        expectedVersion?: number;
-    }) { return this.application.save(input, id, input.expectedVersion); }
-    deleteEntry(id: string, expectedVersion?: number) { return expectedVersion === undefined ? Promise.resolve(conflict('Reload the entry to obtain its version.')) : this.application.remove(id, expectedVersion); }
-    copyEntry(input: {
-        sourceEntryId: string;
-        targetDate: string;
-    }) { return this.application.copy(input.sourceEntryId, input.targetDate); }
-    async previewCalculation(input: TimeEntryInput) { const result = await this.application.preview(input); if (result.status !== 'success')
-        return result; const day = await this.application.day(input.employeeId, input.workDate); if (day.status !== 'success')
-        return day; const s = result.data; return success({ entryDuration: toDurationView(draftMinutes(input, day.data.context.policy.businessTimezone)), dayActive: toDurationView(s.activeMinutes), dayBreak: toDurationView(s.breakMinutes), dayTotal: toDurationView(s.totalMinutes), remainingActive: toDurationView(s.remainingActiveMinutes), resultingStatus: toDayStatusView(s.status), requiresOvertimeReason: requiresOvertimeReason(s.totalMinutes, day.data.context.policy), requiresCriticalExplanation: requiresCriticalExplanation(s.totalMinutes, day.data.context.policy) }); }
+    getWorkLogHistory(id: string) { return this.application.history(id); }
+    async convertDraft(id: string, expectedVersion: number, input: WorkLogInput) {
+        const result = await this.application.save(input, undefined, undefined, undefined, { id, version: expectedVersion });
+        return result.status === 'success' ? success(toWorkLog(result.data)) : result;
+    }
+    async createWorkLog(input: WorkLogInput) { const result = await this.application.save(input); return result.status === 'success' ? success(toWorkLog(result.data)) : result; }
+    async updateWorkLog(id: string, input: WorkLogUpdateInput) {
+        const { expectedVersion, changeReason, ...log } = input;
+        const result = await this.application.save(log, id, expectedVersion, changeReason);
+        return result.status === 'success' ? success(toWorkLog(result.data)) : result;
+    }
+    deleteWorkLog(id: string, expectedVersion?: number) { return expectedVersion === undefined ? Promise.resolve(conflict('Reload the work log to obtain its version.')) : this.application.remove(id, expectedVersion); }
+    copyWorkLog(input: { sourceWorkLogId: string; targetDate: string }) { return this.application.copy(input.sourceWorkLogId, input.targetDate); }
+    async getWorkLog(id: string) {
+        const entry = await this.application.repository.entry(id);
+        const missing = { status: 'not_found' as const, code: 'NOT_FOUND' as const, message: 'record was not found.', resource: 'record' };
+        if (!entry || isHistorical(entry)) return missing;
+        const day = await this.application.day(entry.employeeId, entry.workDate);
+        if (day.status !== 'success') return day;
+        if (!day.data.context.entries.some(e => e.id === id)) return missing;
+        if (entry.attachmentIds.length && !hasPermission(day.data.actor, 'file.protected.view')) return { status: 'permission_denied' as const, code: 'FORBIDDEN' as const, message: 'Attachment access is required to load this work log for editing.' };
+        return success(toWorkLog(entry));
+    }
+    async listWorkLogs(query: ListQuery) {
+        // Filter before pagination so historical rows cannot distort work-log counts.
+        const result = await this.listEntries(query, true);
+        if (result.status !== 'success') return result;
+        const items: WorkLog[] = [];
+        for (const entry of result.data.items) {
+            const log = await this.getWorkLog(entry.id);
+            if (log.status !== 'success') return log;
+            items.push(log.data);
+        }
+        return success({ ...result.data, items });
+    }
+    async previewWorkLog(input: WorkLogInput, options?: { readonly excludeWorkLogId?: string }) { const result = await this.application.preview(input, options?.excludeWorkLogId); if (result.status !== 'success') return result;
+        const day = await this.application.day(input.employeeId, input.workDate); if (day.status !== 'success') return day;
+        const s = result.data; return success({ entryDuration: toDurationView(input.durationMinutes), taskDayActive: toDurationView(s.taskContributions?.find(t => t.taskId === input.taskId)?.activeMinutes ?? 0), dayActive: toDurationView(s.activeMinutes), dayBreak: toDurationView(s.breakMinutes), dayTotal: toDurationView(s.totalMinutes), remainingActive: toDurationView(s.remainingActiveMinutes), resultingStatus: toDayStatusView(s.status), requiresOvertimeReason: requiresOvertimeReason(s.totalMinutes, day.data.context.policy), requiresCriticalExplanation: requiresCriticalExplanation(s.totalMinutes, day.data.context.policy) }); }
     setBreakOverride(input: Parameters<TimeApplication['overrideBreak']>[0]) { return this.application.overrideBreak(input); }
-    getRunningTimer() { return this.application.runningTimer(); }
-    startTimer(input: Parameters<TimeApplication['startTimer']>[0]) { return this.application.startTimer(input); }
-    stopTimer(input: Parameters<TimeApplication['stopTimer']>[0]) { return this.application.stopTimer(input); }
-    cancelTimer(input: {
-        sessionId: string;
-    }) { return this.application.cancelTimer(input.sessionId); }
+
 }
 export class BackendRemarkService implements RemarkService {
     constructor(private readonly app: TimeApplication) { }

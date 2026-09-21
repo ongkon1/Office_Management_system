@@ -107,9 +107,12 @@ export class OrganizationWorkService {
     else if(actor.roles.includes('team_lead')&&actor.employeeId===row.assigneeEmployeeId){
       candidate={...row,creatorEmployeeId:actor.employeeId,assigneeEmployeeId:actor.employeeId,reviewState:'not_required',reviewerEmployeeId:null,reviewedAt:null,reviewNote:null};
     }
+    const before=await this.repository.getTask(candidate.id);
+    if ((!before && candidate.status!=='pending') || (before && (candidate.status!==before.status || candidate.assigneeEmployeeId!==before.assigneeEmployeeId))) return conflict('Use the task workflow operation to change status or assignment.','Submit the current version and a retry key through the task workflow service.');
     const saved=await this.repository.saveTask(candidate,expectedVersion); if(!saved) return conflict('The task changed before this update was saved.','Reload and review the latest version.');
-    await this.effects.audit({actorUserId:actor.userId,action:'task.save',resourceType:'task',resourceId:candidate.id,before:null,after:candidate});
+    await this.effects.audit({actorUserId:actor.userId,action:'task.save',resourceType:'task',resourceId:candidate.id,before,after:candidate});
     if(employeeRaised&&candidate.reviewerEmployeeId) await this.effects.notify({employeeId:candidate.reviewerEmployeeId,type:'task_review_requested',resourceId:candidate.id});
+    if(!before && candidate.assigneeEmployeeId!==actor.employeeId && !employeeRaised) await this.effects.notify({employeeId:candidate.assigneeEmployeeId,type:'task_assigned',resourceId:candidate.id});
     const actualMinutes=await this.repository.taskActualMinutes(candidate.id);
     return success({...candidate,actualMinutes,overdue:candidate.status!=='completed'&&Boolean(candidate.dueDate&&candidate.dueDate<new Date().toISOString().slice(0,10))});
   }

@@ -1,8 +1,10 @@
-import type { DailySummary, GeneralRemark, TimeEntry, TimerSession, TimesheetPeriod, WorkPolicy, Project, Task, Division } from '@/contracts/domain';
+import type { DailySummary, GeneralRemark, TimeEntry, TimesheetPeriod, WorkPolicy, Project, Task, Division } from '@/contracts/domain';
 import type { Result } from '@/contracts/results';
 import type { LeaveContext } from '@/lib/calculation/engine';
 import type { ActorPolicyContext } from '@/server/authorization/policy';
 export interface StoredEntry extends TimeEntry {
+    readonly source?: import('@/contracts/work-log').WorkLogSource;
+    readonly idempotencyKey?: string;
     readonly attachmentIds: readonly string[];
     readonly version: number;
     readonly policyId: string;
@@ -27,18 +29,12 @@ export interface DayContext {
     readonly period: StoredPeriod | null;
     readonly snapshot: DailySummary | null;
 }
-export interface StoredTimer extends TimerSession {
-    readonly timezone: string;
-    readonly policyId: string;
-    readonly stoppedAt: string | null;
-    readonly cancelledAt: string | null;
-    readonly draft: import('@/contracts/services').TimeEntryInput | null;
-}
 export interface StoredPeriod extends TimesheetPeriod {
     readonly version: number;
     readonly policyId: string;
 }
 export interface TimeAudit {
+    readonly resourceType?: 'time' | 'task' | 'task_transition';
     readonly actorUserId: string;
     readonly action: string;
     readonly resourceId: string;
@@ -54,14 +50,13 @@ export interface TimeRepository {
     lockEmployee(id: string): Promise<boolean>;
     lockPeriods(): Promise<void>;
     context(employeeId: string, date: string, policyId?: string): Promise<DayContext | null>;
-    overlapsClock(employeeId: string, start: string, end: string, excludeId?: string): Promise<boolean>;
+    keyUsed(key: string): Promise<boolean>;
+    lockTask(id: string): Promise<void>;
+    revisions(id: string): Promise<readonly { id: string; reason: string; changedAt: string; before: StoredEntry; after: StoredEntry }[]>;
     entry(id: string): Promise<StoredEntry | null>;
     saveEntry(entry: StoredEntry, expectedVersion?: number): Promise<boolean>;
     saveSummary(summary: DailySummary, policyId: string, context: DayContext): Promise<void>;
     saveBreak(employeeId: string, date: string, minutes: number, reason: string, policyId: string): Promise<void>;
-    timer(id: string): Promise<StoredTimer | null>;
-    runningTimer(employeeId: string): Promise<StoredTimer | null>;
-    saveTimer(timer: StoredTimer, actorUserId: string): Promise<void>;
     replay(actorId: string, operation: string, key: string): Promise<{
         hash: string;
         result: Result<unknown>;
