@@ -23,6 +23,7 @@ The backend supports a single modern enterprise SaaS product: a role-based emplo
 | 0–7 | Done | Contracts, routes, workflows, and supporting screens are available for service implementation. |
 | 8 | Done (17/18; FE-0825 awaiting visual review) | Accessibility, responsive, stress, journey, and performance evidence is available; retain these states in API responses. |
 | 9 | Next (0/14) | Demo packaging and final mock-to-service cutover define the integration handoff. |
+| 10–12 | 10 done; 11 in progress (9/26); 12 pending (0/25) | Role consolidation, Meeting Minutes and Client Panel are mirrored by Backend Phases 12–14; Frontend Phase 12 and Backend Phase 14 must cut over together. |
 
 ### SaaS experience principles (non-functional design contract)
 
@@ -112,6 +113,7 @@ A backend task may be marked `[x]` only when all applicable conditions are true:
 | 11 | Conveyance | Travel claims with optional receipts travel the same review chain, with attachment access bound to the claim's own visibility. |
 | 12 | Role consolidation: Finance into HR | The Finance Manager role is retired without rewriting history or widening anyone's access to cost data. |
 | 13 | Meeting Minutes and AI task generation | Every active role can access authorized minutes; queued AI processing produces validated, traceable tasks without losing the original minute. |
+| 14 | Client Panel reporting | HR and Super Administrators read authorized employee hours and internal labour cost by client for a verified period, and export the same result. |
 
 ## 4. Detailed Phase Tasks
 
@@ -663,6 +665,8 @@ A travel-expense claim. The approval chain is **identical to Phase 10's**, which
 
 ## Phase 12 - Role Consolidation: Finance into HR
 
+> **Partly superseded, 20 September 2026.** This phase is still required and still pending. Its cost-permission stance — `finance.cost.view` stays per-user (`BE-1203`) — is superseded by the amended `REQ-RBAC-017`, which grants the permission through the HR Manager and Super Administrator roles. Phase 14 delivers that grant with a reversible, audited migration. Phase 12 keeps the narrower stance so the role consolidation itself widens nobody's access.
+
 The server half of the frontend Phase 10 change. HR absorbs the Finance Manager role and the role is retired.
 
 **Depends on** Phase 2 (authorization and audit) and Phase 6 (Finance and reporting). It touches `src/server/authorization/policy.ts`, which already names `finance_manager`.
@@ -675,13 +679,13 @@ A role that has been used cannot simply be deleted. `finance_manager` is recorde
 
 - [ ] `BE-1201` Retire `finance_manager` as an assignable role while keeping it a legal stored value, so historical rows stay readable and no migration rewrites recorded history.
 - [ ] `BE-1202` Write a reversible migration that grants every current Finance Manager the HR role, and record for each user whether they held `finance.cost.view`, so the grant can be reproduced and audited.
-- [ ] `BE-1203` **Do not grant `finance.cost.view` to the HR role.** It stays a per-user permission, exactly as `REQ-RBAC-017` requires. The migration carries it across only for users who already had it.
+- [ ] `BE-1203` **Do not grant `finance.cost.view` to the HR role in this phase.** The consolidation migration carries the permission across only for users who already had it. The amended `REQ-RBAC-017` does grant it through the HR Manager and Super Administrator roles, but that is a separate, wider data-access change delivered by Phase 14 with its own reversible migration and its own frontend cutover; doing it here would widen access during a migration whose purpose is to change nothing but the role.
 - [ ] `BE-1204` Update `src/server/authorization/policy.ts` so every rule that admitted a Finance Manager now admits HR, and confirm no rule silently widens beyond that.
 - [ ] `BE-1205` Update the approval chain's parallel reviewer set to match the frontend decision in `FE-1001`, and define what happens to a requisition or conveyance that is **mid-chain at migration time** and still waiting on a Finance decision.
-- [ ] `BE-1206` Keep every cost, rate, budget, payroll and export endpoint gated on the permission rather than the role, and re-verify each returns the redacted shape without it.
+- [ ] `BE-1206` Keep every cost, rate, budget, payroll and export endpoint gated on `finance.cost.view` itself rather than on a role name, and re-verify each returns the redacted shape without it. This holds after Phase 14 too: the role changes who *holds* the permission, never how an endpoint checks it.
 - [ ] `BE-1207` Preserve audit history: a decision recorded by a Finance Manager keeps its actor role, and the migration itself is audited with actor, reason and before/after.
 - [ ] `BE-1208` Update seed data so the demo has an HR account with the financial permission and an HR account without it.
-- [ ] `BE-1209` Add authorization tests proving an HR user without `finance.cost.view` is refused every cost, rate, budget and protected-export endpoint — the regression that would otherwise ship silently.
+- [ ] `BE-1209` Add authorization tests proving an account without `finance.cost.view` is refused every cost, rate, budget and protected-export endpoint — the regression that would otherwise ship silently. Use an HR account without the permission while this phase's policy stands; once Phase 14 grants it by role, the same tests must be re-pointed at an active role that still lacks it, because an HR account can no longer be that subject.
 - [ ] `BE-1210` Add a migration test proving a Finance-era requisition, conveyance and audit row still reads correctly after the role is retired.
 - [ ] `BE-1211` Add a rehearsal migration against production-like data with owner sign-off on the resulting role and permission assignments.
 
@@ -756,6 +760,64 @@ This phase adds the Meeting Minutes module and optional AI-assisted task generat
 - [ ] Generated tasks are assigned only to eligible people or left unassigned, and every task links back to its source minute and attempt.
 - [ ] Retries, worker restarts, permissions, sensitive content, notifications, and diagnostics are idempotent, auditable, and tested.
 - [ ] Provider, retention, privacy, and automatic-assignment decisions are approved before production enablement.
+
+## Phase 14 - Client Panel Reporting
+
+The server half of Frontend Phase 12. It answers one authorized question — active hours and internal labour cost per employee per client for a verified payroll period — and it answers it from data the system already calculated (`REQ-CLIENT-001`-`REQ-CLIENT-010`, `AC-CLIENT-001`-`AC-CLIENT-006`).
+
+**Depends on** Phase 6 (reporting, finance, protected exports), Phase 12 (the Finance-into-HR role consolidation this phase amends), and Phase 13 (the first-class `Client` model and the project-to-client relationship). It must ship together with Frontend Phase 12.
+
+### The Two Rules That Shape Everything
+
+**1. This endpoint measures nothing.** Active minutes come from the authoritative work-log calculation, with the applied policy version, exactly as the timesheet and reports read them. A `SUM(...)` over raw rows in report SQL is a second implementation of the calculation engine: it will drift from the verified figures, and the drift will be discovered in a payroll dispute rather than in a test. The reconciliation tests exist to make that drift fail loudly.
+
+**2. The permission change is wider than this feature.** Granting `finance.cost.view` through the HR Manager and Super Administrator roles opens every existing cost, rate, budget, salary and protected-export endpoint to every account holding those roles — that is the amended `REQ-RBAC-017`, and it reverses the decision `BE-1203` recorded in Phase 12. It is a data-access change to the whole product, delivered through a reversible, audited migration, cut over atomically with the frontend.
+
+### Role Capability and Migration
+
+- [ ] `BE-1401` Update role capabilities so active HR Manager and Super Administrator roles carry `finance.cost.view`, leaving every other active role to an explicit per-user grant (amended `REQ-RBAC-017`, `REQ-RBAC-023`, `REQ-RBAC-024`).
+- [ ] `BE-1402` Write a reversible, audited migration for the role grant, recording each account's prior permission state so the change can be reproduced, reconciled and rolled back without guessing.
+- [ ] `BE-1403` Document the rollback procedure and the cutover order with Frontend Phase 12, so there is no window in which the client and the server disagree about who may see money.
+- [ ] `BE-1404` Re-verify every existing cost, rate, budget, payroll and protected-export endpoint under the new grant, and record which surfaces each role gains — the widened access is approved, but it must be enumerated rather than discovered.
+
+### Contracts and Endpoint
+
+- [ ] `BE-1405` Define `ClientPanelQuery` with payroll period, client, employee, sorting and pagination, plus the summary, employee-client row, applied-filter and export contracts, matching the frontend types from `FE-1203`.
+- [ ] `BE-1406` Plan `/api/v1/client-costs` as an authorized read: period-scoped, filterable, paginated, sortable, and returning the same `Result` shapes as the rest of the API.
+- [ ] `BE-1407` Default to the latest HR-verified payroll period and return an explicit empty state when none exists, never falling back to unverified data (`REQ-CLIENT-002`).
+
+### Calculation and Attribution
+
+- [ ] `BE-1408` Source active minutes from the authoritative work-log calculation results rather than recomputing time in SQL, carrying the applied policy version so verified history stays reproducible (`REQ-CLIENT-004`).
+- [ ] `BE-1409` Exclude the recognized daily break and every task-transition timestamp from hours and cost.
+- [ ] `BE-1410` Calculate internal labour cost from effective-dated cost rates using exact decimal arithmetic in BDT, with one final rounding step per reported aggregate and no rounding per row (`REQ-CLIENT-005`, `REQ-DATA-005`).
+- [ ] `BE-1411` Group by the first-class `Client` through the project relationship, and report work whose project has no mapped client under **Not assigned to a client** rather than dropping or reattributing it (`REQ-CLIENT-006`).
+- [ ] `BE-1412` Keep unresolved legacy project client labels readable and reconcilable, so a report grouped by the old label can still be matched to the new records.
+
+### Authorization and Exports
+
+- [ ] `BE-1413` Apply role, record, government-project and field authorization **before** rows, counts, totals, pages, filter options or empty groups are computed (`REQ-CLIENT-008`, `AC-CLIENT-006`).
+- [ ] `BE-1414` Return the same safe refusal for an unauthorized role, an unauthorized period and a nonexistent one, with no difference in message, filename or response timing.
+- [ ] `BE-1415` Plan durable Excel, CSV and PDF exports through the existing protected export workflow, carrying period, filters, timezone, generation timestamp, currency and policy version.
+- [ ] `BE-1416` Record export history and audit every generation and download with actor, filters, correlation id and result, rechecking authorization at download time.
+
+### Tests and Verification
+
+- [ ] `BE-1417` Add authorization tests for role access, record scope, government-project restriction, export refusal and aggregation-before-authorization leaks.
+- [ ] `BE-1418` Add reconciliation tests proving hours and labour cost match the authoritative hour and labour-cost reports for identical filters (`AC-CLIENT-002`, `AC-CLIENT-005`).
+- [ ] `BE-1419` Add cost-precision tests covering rate changes inside a period, multi-rate employees, rounding once per aggregate, and a rate carrying more precision than BDT holds.
+- [ ] `BE-1420` Add legacy-client and unmapped-work tests proving totals stay complete and **Not assigned to a client** is never silently merged into a named client.
+- [ ] `BE-1421` Add export and export-history tests proving screen, Excel, CSV and PDF outputs agree for identical filters and carry the required provenance metadata.
+- [ ] `BE-1422` Add performance tests for a full verified period at production-like volume, covering pagination, sorting and export generation.
+- [ ] `BE-1423` Add integration tests against the Frontend Phase 12 screen, including the permission cutover in both directions.
+
+### Phase 14 Exit Criteria
+
+- [ ] HR Managers and Super Administrators read authorized client hours and cost; every other role is refused identically across screen, API and export.
+- [ ] Reported hours and internal labour cost reconcile with the authoritative reports, and unmapped work remains visible in totals.
+- [ ] The role-based `finance.cost.view` grant is migrated, audited, reversible, and cut over together with Frontend Phase 12.
+- [ ] Exports are durable, authorization-rechecked, audited, and identical in content to the screen.
+- [ ] No hour or money figure in this phase is computed anywhere but the authoritative calculation and money helpers.
 
 ## 5. Backend Acceptance Scenarios
 
@@ -866,9 +928,6 @@ This phase adds the Meeting Minutes module and optional AI-assisted task generat
 | Phase 1 - MySQL Schema and Data Foundation | Done | 26/26 |
 | Phase 2 - Authentication, Authorization, and Audit | Done | 23/23 |
 | Phase 3 - Organization, Projects, and Tasks | Done | 27/27 |
-=======
-| Phase 3 - Organization, Projects, and Tasks | In progress | 20/27 |
->>>>>>> 00d146afb1dc2296921b692b63fc9173664225e3
 | Phase 4 - Timesheet Calculation and Correction | Pending | 0/32 |
 | Phase 5 - HR, Attendance, WFH, Leave, Workload, and Evaluation | Pending | 0/26 |
 | Phase 6 - Reporting, Finance, and Exports | Pending | 0/19 |
@@ -879,5 +938,6 @@ This phase adds the Meeting Minutes module and optional AI-assisted task generat
 | Phase 11 - Conveyance | Pending | 0/22 |
 | Phase 12 - Role Consolidation: Finance into HR | Pending | 0/11 |
 | Phase 13 - Meeting Minutes and AI Task Generation | Pending | 0/34 |
+| Phase 14 - Client Panel Reporting | Pending | 0/23 |
 
 Update this table whenever numbered tasks change status. Acceptance scenarios and phase exit criteria are tracked as gates and are not included in the numbered task totals.

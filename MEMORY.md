@@ -158,7 +158,9 @@ Environment: Windows + WAMP, PowerShell. **Not currently a git repository.**
 
 **Feature flags are runtime state.** `src/features/settings/flag-store.ts` is what the layout guard and shell read, not `DEMO_FEATURE_FLAGS`. Documents, messages, global search and integrations ship **off** — a screen that looks missing is usually a flag, and `/settings` toggles it.
 
-**Client time is regrouped, never recalculated.** A client is a free-text label on a project (`Project.client`), not an entity — there is no Client record in `project_requirement.md` §7.1. `src/lib/client-time.ts` re-buckets the minutes the calculation engine already assigned to each project, so a client total cannot disagree with the day it came from. Time on a project with no client, and time on no project at all, land in one reported `null` bucket rather than being dropped, so the parts still sum to the day.
+**Client time is regrouped, never recalculated.** `src/lib/client-time.ts` re-buckets the minutes the calculation engine already assigned to each project, so a client total cannot disagree with the day it came from. Time on a project with no client, and time on no project at all, land in one reported `null` bucket rather than being dropped, so the parts still sum to the day — that bucket is what the Client Panel reports as **Not assigned to a client**.
+
+> A client is now a **first-class record** (`Client`, `project_requirement.md` §7.1), introduced for Meeting Minutes (`FE-1103`, `BE-1301`). The free-text `Project.client` label stays readable until every label is mapped, so historical reports reconcile; new work attributes time through the project-to-Client relationship. Client Panel (Frontend Phase 12, Backend Phase 14) reads the same regrouped minutes — it must never recompute hours of its own.
 
 **Formatting is centralised.** `src/lib/format.ts` is the single implementation of every date, time, duration, money, and percentage rule. No component builds one of those strings by hand — a duration rendered two ways is a defect, and a rounded one is a calculation defect.
 
@@ -180,6 +182,9 @@ Environment: Windows + WAMP, PowerShell. **Not currently a git repository.**
 | Frontend | 7 — Shared reporting and supporting modules | Done (52/52 · requisition, conveyance and employee-raised tasks included) |
 | Frontend | 8 — Responsive, accessibility and quality hardening | Done (17/18 · `FE-0825` awaiting visual review) |
 | Frontend | 9 — Demo packaging and backend handoff | In progress (13/14; stakeholder sign-off pending) |
+| Frontend | 10 — Role consolidation: Finance into HR | Done (14/14); its per-user cost decision is superseded by Phase 12 |
+| Frontend | 11 — Meeting Minutes and AI task generation | In progress (9/26) |
+| Frontend | 12 — Client Panel | Pending (0/25) — new milestone; cuts over with Backend Phase 14 |
 | Backend | 0 — Architecture and delivery foundation | Done (25/25) |
 | Backend | 1 — MySQL schema and data foundation | Done (26/26) |
 | Backend | 2 — Authentication, authorization, and audit | Done (23/23) |
@@ -190,6 +195,9 @@ Environment: Windows + WAMP, PowerShell. **Not currently a git repository.**
 | Backend | 7–9 | Pending |
 | Backend | 10 — Requisition | Pending (0/20) — new milestone |
 | Backend | 11 — Conveyance | Pending (0/22) — new milestone, depends on 10 |
+| Backend | 12 — Role consolidation: Finance into HR | Pending (0/11); `BE-1203` keeps cost access per-user, superseded by Phase 14 |
+| Backend | 13 — Meeting Minutes and AI task generation | Pending (0/34) |
+| Backend | 14 — Client Panel reporting | Pending (0/23) — new milestone; cuts over with Frontend Phase 12 |
 | Modify | B1 — Backend schema and data migration | In progress (9/10); technical delivery complete, HR sign-off pending |
 | Modify | B2 — Backend work-log use cases, validation and calculation | Done (11/11); browser/production cutover remains B4 |
 | Modify | B3 — Backend task transitions, history and notifications | Done (9/9); browser/production cutover remains B4 |
@@ -259,7 +267,9 @@ Later phases harden screens and fixtures around these assumptions, so the cost o
 | Phase 7 | Feature flags moved to a runtime store | Four Phase 7 modules ship off; without a way to switch them on they would be unreachable, and a settings screen whose switches changed nothing would be worse than none. It is also how `FE-0006` is demonstrated rather than asserted |
 | Phase 7 | A report the viewer cannot run is absent, and `getReport` returns not-found | A disabled catalogue entry turns the catalogue into a directory of what other roles can see, which is the same disclosure as the data |
 | Post-8 | Finance merged into HR; the role is retired, not deleted | `RoleKey` is what can be assigned and `RetiredRoleKey` what can be stored, so the compiler separates the two. `PARALLEL_REVIEWER_ROLES` shrank to two, which is the only change the approval chain needed |
-| Post-8 | Finance to be merged into HR as its own milestone pair, not a find-and-replace | Two traps make it a permission change first: the HR *role* must not imply `finance.cost.view` (`REQ-RBAC-017` already grants it per user), and `finance_manager` must stay a legal *stored* value or every historical review row and audit event becomes unreadable |
+| Post-8 | ~~HR must not inherit `finance.cost.view`; the role merges, the permission does not~~ — **superseded 20 Sep 2026** | Recorded as the Phase 10 decision and still the behaviour of the running code. The amended `REQ-RBAC-017` now grants the permission through the HR Manager and Super Administrator roles, so this constraint applies only until Frontend Phase 12 and Backend Phase 14 cut over together. The second half of the original decision stands unchanged: `finance_manager` remains a legal *stored* value, or every historical review row and audit event becomes unreadable |
+| 20 Sep 2026 | Client Panel at `/clients`, for HR Managers and Super Administrators only | Approved by the user. One flat table — Client, Employee, Active Hours, Internal Labour Cost — defaulting to the latest HR-verified payroll period, with Excel, CSV, PDF and print output. Cost means active minutes × effective internal rate, never billing, revenue, invoices or margin; breaks and task transitions contribute nothing. Work on a project with no mapped Client stays in the totals as **Not assigned to a client** rather than being dropped. Hours come from the authoritative calculation results, never a second SQL sum. Tracked as Frontend Phase 12 and Backend Phase 14; documentation only so far, no code |
+| 20 Sep 2026 | `REQ-RBAC-017` amended: HR Manager and Super Administrator hold `finance.cost.view` by role | Approved by the user, and deliberately wider than Client Panel — it opens every existing cost, rate, budget, salary and protected-export surface to those roles. Other roles still need an explicit grant. It reverses the Phase 10 decision above, needs a reversible audited migration (`BE-1402`), and must land atomically on both sides or the client and server disagree about who may see money. It also removes the with/without-permission HR pair that `AC-AUTH-003` relies on (`FE-1204`) |
 | Post-8 | An employee-raised task accepts no time until endorsed, enforced in three places | The dropdown, the entry validation and the review service each leave a gap the others cover; without the validation rule someone could raise a task, log a full day and be reviewed afterwards |
 | Post-8 | Task review deliberately does *not* use the shared approval chain | One endorser, and the record stops being a request afterwards. Forcing it in would add a reviewer stage and three roles to a shape with neither, plus a branch in four transition functions for one workflow |
 | 20 Sep 2026 | Team Leads retain personal tasks and their own timesheet | Leadership adds team scope rather than replacing employee self-service. The Team Lead `New task` form has a `Self (me)` assignee option. A self-task is forced to the creator, has no supporting members, starts Pending with no review required, sends no approval or self-assignment notification, and accepts work only after moving to In Progress. |
