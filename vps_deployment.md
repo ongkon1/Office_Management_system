@@ -42,7 +42,7 @@ The repository already provides the requested commands, so no new package script
 | `npm run db:harden-task-work` | Apply the approved post-migration runtime grants for task-based work logging | Only during the approved migration `0011` cutover |
 | `npm run db:rollback -- --to VERSION` | Guarded destructive recovery for an approved empty schema | Not a normal production rollback |
 
-`npm run db:seed` intentionally stops when `NODE_ENV=production`. It inserts demo accounts with the shared demo password and must never run against the production database. Production employees, divisions, departments, assignments, and policy data must be imported through an approved production-data process or created through authorized administration screens.
+`npm run db:seed` intentionally stops when `NODE_ENV=production`. It uses the privileged `DATABASE_MIGRATION_URL`, inserts demo accounts with the shared demo password, and must never run against the production database. Production employees, divisions, departments, assignments, and policy data must be imported through an approved production-data process or created through authorized administration screens.
 
 ## 3. Prepare the VPS (without installing MySQL)
 
