@@ -275,7 +275,7 @@ React Compiler lint errors (`set-state-in-effect`, render-phase mutation) are re
 | Frontend | 8 — Responsive, accessibility and quality hardening | Done (17/18 · `FE-0825` awaiting visual review) |
 | Frontend | 9 — Demo packaging and backend handoff | **Next** (0/14) |
 | Frontend | 10 — Role consolidation: Finance into HR | Done (14/14 · requirements amendment now made; its per-user cost decision superseded by Phase 12) |
-| Frontend | 11 — Meeting Minutes and AI task generation | In progress (9/26) |
+| Frontend | 11 — Meeting Minutes and AI task generation | In progress (23/26) |
 | Frontend | 12 — Client Panel | Pending (0/25) — new milestone; cuts over with backend Phase 14 |
 | Backend | 0 — Architecture and delivery foundation | Done (25/25) |
 | Backend | 1 — MySQL schema and data foundation | Done (26/26) |

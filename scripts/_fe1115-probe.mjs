@@ -10,7 +10,7 @@
  */
 import { chromium } from 'playwright';
 
-const BASE = 'http://localhost:3000';
+const BASE = process.env.PROBE_BASE ?? 'http://localhost:3000';
 const PASSWORD = 'Demo1234!';
 const TEAM_LEAD = 'imran.hossain@demo.local';
 const FAULT_KEY = 'oms.mock-fault.meeting-minutes-create';

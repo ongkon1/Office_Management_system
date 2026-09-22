@@ -371,9 +371,12 @@ export type TaskReviewState = 'not_required' | 'pending_review' | 'approved' | '
  * must be reopened before more work can be recorded (`REQ-WORK-016`).
  */
 export function taskAcceptsTime(
-  task: Pick<Task, 'reviewState' | 'status'>,
+  task: Pick<Task, 'reviewState' | 'status' | 'assigneeEmployeeId'>,
 ): boolean {
   return (
+    // An unassigned task has no one whose timesheet it could belong to
+    // (`REQ-MTG-014`); it waits for a Team Lead to assign it.
+    task.assigneeEmployeeId !== null &&
     task.status === 'in_progress' &&
     (task.reviewState === 'not_required' || task.reviewState === 'approved')
   );
@@ -384,7 +387,14 @@ export interface Task extends AuditableRecord {
   readonly title: string;
   readonly divisionId: string;
   readonly projectId: string;
-  readonly assigneeEmployeeId: string;
+  /**
+   * Null means **unassigned** (`REQ-MTG-014`): task generation found nobody
+   * eligible, and a person must be chosen before anyone can work on it. An
+   * unassigned task accepts no time — there is no one whose timesheet it
+   * could belong to — and appears to no employee as "my task"; a Team Lead
+   * sees it on the team board and assigns it through the ordinary edit.
+   */
+  readonly assigneeEmployeeId: string | null;
   readonly supportingMemberIds: readonly string[];
   readonly creatorEmployeeId: string;
   readonly priority: Priority;
@@ -946,6 +956,9 @@ export type NotificationType =
   | 'correction_requested'
   | 'wfh_decision'
   | 'leave_decision'
+  /** `REQ-MTG-022`: a run the recipient's minute started has finished or failed. */
+  | 'meeting_minute_processed'
+  | 'meeting_minute_failed'
   | 'request_submitted'
   | 'workload_warning'
   | 'evaluation_due'

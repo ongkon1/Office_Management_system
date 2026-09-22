@@ -343,7 +343,8 @@ function task(
   title: string,
   projectId: string,
   divisionId: string,
-  assigneeEmployeeId: string,
+  /** Null only for a task task generation left unassigned (`REQ-MTG-014`). */
+  assigneeEmployeeId: string | null,
   status: Task['status'],
   estimatedHours: number,
   dueDate: string | null,
@@ -425,6 +426,46 @@ export const TASKS: readonly Task[] = [
   task('tsk-14', 'Publish benchmark variance note', 'prj-vp2', 'pia', 'emp-1001', 'completed', 5.75, '2026-08-21', {
     completed: '2026-08-21',
   }),
+  // `FE-1123` — the two tasks task generation created from meeting minute
+  // `min-1001` (the Vision Platform v2 sprint review). The core record is
+  // ordinary work under the ordinary rules (`REQ-MTG-021`): it starts Pending,
+  // is created in the minute creator's name, and needs no review because its
+  // creator is a Team Lead. Its origin lives in the immutable link in
+  // `src/fixtures/meeting-minutes.ts`, not here.
+  {
+    ...task('tsk-15', 'Add export to PDF to the search results', 'prj-vp2', 'pia', 'emp-1001', 'pending', 16, '2026-09-24', {
+      priority: 'high',
+    }),
+    description: 'Meghna Group asked for export to PDF before the October release.',
+  },
+  {
+    ...task('tsk-16', 'Confirm the October release date with Meghna Group', 'prj-vp2', 'pia', 'emp-1002', 'pending', 2, '2026-09-10'),
+    description: 'Agree the release date with the client now that the search redesign is accepted.',
+  },
+  // `FE-1130` — created from `min-1008` (Vision Platform v2 support rota).
+  // Two were left **unassigned** (`REQ-MTG-014`): nobody eligible matched the
+  // first, and the person the minute names for the second is not someone
+  // matching may assign. They wait on the team board for a Team Lead.
+  {
+    ...task('tsk-17', 'Set up the weekend support rota for the October launch', 'prj-vp2', 'pia', null, 'pending', 6, '2026-09-20'),
+    description: 'Meghna Group asked for weekend cover during the October launch.',
+  },
+  {
+    ...task('tsk-18', 'Add the client\'s contact to the support rota', 'prj-vp2', 'pia', null, 'pending', 1, '2026-09-18'),
+    description: 'The client named their own contact for the rota.',
+  },
+  {
+    ...task('tsk-19', 'Own the on-call runbook', 'prj-vp2', 'pia', 'emp-1003', 'pending', 4, '2026-09-25'),
+    description: 'Keep the on-call runbook current for the launch weekend.',
+  },
+  // `FE-1130` — created from `min-1009`, a government-project minute. Nadia
+  // can open her own task, but not the minute it came from.
+  {
+    ...task('tsk-20', 'Draft the intake quality checklist', 'prj-nrd', 'gov', 'emp-1001', 'pending', 8, '2026-09-28', {
+      createdBy: 'emp-2002',
+    }),
+    description: 'A checklist for scanning-vendor intake batches.',
+  },
 ];
 
 export const CHECKLIST_ITEMS: readonly TaskChecklistItem[] = [

@@ -3,7 +3,7 @@
  */
 import { chromium } from 'playwright';
 
-const BASE = 'http://localhost:3000';
+const BASE = process.env.PROBE_BASE ?? 'http://localhost:3000';
 const PASSWORD = 'Demo1234!';
 const USERS = {
   team_lead: 'imran.hossain@demo.local', // owns min-1001

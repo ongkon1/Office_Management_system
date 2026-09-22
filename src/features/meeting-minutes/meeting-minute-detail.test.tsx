@@ -1,10 +1,15 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ToastProvider } from '@/components/feedback/toast';
+import type { MeetingMinuteDetailView, MinuteProcessingStatus } from '@/contracts/meeting-minutes';
+import { success } from '@/contracts/results';
 import {
   mockMeetingMinutesService,
   resetMeetingMinutesState,
 } from '@/services/mock/meeting-minutes';
+import { mockStore } from '@/services/mock/store';
+import { describeMinuteProcessingStatus } from '@/lib/status';
 import { MeetingMinuteDetail } from './meeting-minute-detail';
 
 /**
@@ -33,7 +38,11 @@ const EMPLOYEE = 'usr-1001';
 const ADMIN = 'usr-9001';
 
 function renderDetail(minuteId = 'min-1001') {
-  return render(<MeetingMinuteDetail minuteId={minuteId} />);
+  return render(
+    <ToastProvider>
+      <MeetingMinuteDetail minuteId={minuteId} />
+    </ToastProvider>,
+  );
 }
 
 beforeEach(() => {
@@ -68,7 +77,9 @@ describe('Meeting minute detail (FE-1120)', () => {
 
   it('announces that it is loading before the service answers', async () => {
     renderDetail();
-    expect(screen.getByRole('status')).toHaveTextContent('Loading the meeting minute');
+    // Two status regions exist now: the loading notice and the processing
+    // announcer (`FE-1121`), so the loading one is found by its words.
+    expect(screen.getByText('Loading the meeting minute.')).toHaveAttribute('role', 'status');
     await screen.findByRole('heading', { level: 1, name: 'Vision Platform v2 sprint review' });
   });
 
@@ -156,5 +167,83 @@ describe('Meeting minute detail (FE-1120)', () => {
       ).toBeInTheDocument(),
     );
     get.mockRestore();
+  });
+});
+
+/**
+ * `FE-1121` — the five states on the page, and a change announced through it.
+ */
+describe('Processing status on the detail page (FE-1121)', () => {
+  it.each([
+    ['min-1002', 'not_processed', HR],
+    ['min-1003', 'pending', ADMIN],
+    ['min-1005', 'processing', ADMIN],
+    ['min-1001', 'processed', TEAM_LEAD],
+    ['min-1004', 'failed', HR],
+  ] as const)('%s shows %s with its label and what it means', async (minuteId, status, userId) => {
+    nav.userId = userId;
+    renderDetail(minuteId);
+    const descriptor = describeMinuteProcessingStatus(status);
+
+    expect(await screen.findByText(descriptor.meaning)).toBeInTheDocument();
+    expect(screen.getAllByText(descriptor.label).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(descriptor.accessibleLabel).length).toBeGreaterThan(0);
+  });
+
+  function announcer(): HTMLElement {
+    const regions = screen.getAllByRole('status');
+    const live = regions.find((region) => region.getAttribute('aria-atomic') === 'true');
+    if (!live) throw new Error('no processing announcer on the page');
+    return live;
+  }
+
+  it('says nothing on arrival, because the badge already shows the status', async () => {
+    renderDetail();
+    await screen.findByRole('heading', { level: 1, name: 'Vision Platform v2 sprint review' });
+    expect(announcer()).toHaveTextContent('');
+  });
+
+  it('announces a change that arrives through a refresh, across the loading state', async () => {
+    const real = await mockMeetingMinutesService.get(ADMIN, 'min-1003');
+    if (real.status !== 'success') throw new Error('expected success');
+    const withStatus = (status: MinuteProcessingStatus): MeetingMinuteDetailView => ({
+      ...real.data,
+      processing: { ...real.data.processing, status, label: describeMinuteProcessingStatus(status).label },
+    });
+
+    let current: MinuteProcessingStatus = 'pending';
+    const get = vi.spyOn(mockMeetingMinutesService, 'get').mockImplementation(async () => success(withStatus(current)));
+
+    nav.userId = ADMIN;
+    renderDetail('min-1003');
+    await screen.findByText(describeMinuteProcessingStatus('pending').meaning);
+    expect(announcer()).toHaveTextContent('');
+
+    /*
+     * `useAsync` refetches whenever the mock store notifies, and passes
+     * through `loading` on the way. A no-op mutation is the test's way of
+     * asking for that refresh; the refresh itself is `FE-1126`'s to schedule.
+     */
+    current = 'processing';
+    mockStore.removeEntry('no-such-entry');
+
+    await waitFor(() => expect(announcer()).toHaveTextContent('Task generation has started.'));
+    expect(await screen.findByText(describeMinuteProcessingStatus('processing').meaning)).toBeInTheDocument();
+
+    current = 'failed';
+    mockStore.removeEntry('no-such-entry');
+    await waitFor(() =>
+      expect(announcer()).toHaveTextContent('Task generation failed. Your meeting minute is saved.'),
+    );
+    get.mockRestore();
+  });
+
+  it('does not announce a refresh that changes nothing', async () => {
+    renderDetail();
+    await screen.findByRole('heading', { level: 1, name: 'Vision Platform v2 sprint review' });
+
+    mockStore.removeEntry('no-such-entry');
+    await screen.findByRole('heading', { level: 1, name: 'Vision Platform v2 sprint review' });
+    expect(announcer()).toHaveTextContent('');
   });
 });

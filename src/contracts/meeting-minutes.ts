@@ -481,16 +481,42 @@ export interface MeetingMinuteDetailView {
     readonly error: SafeProcessingErrorView | null;
     /** How many runs there have been; 0 when AI was never requested. */
     readonly attemptCount: number;
+    /**
+     * The latest run's id, or null when there has never been one (`FE-1125`).
+     * A retry names the failed attempt it retries, so a stale page retrying an
+     * attempt that has already been retried gets a conflict rather than a
+     * second run (`REQ-MTG-023`).
+     */
+    readonly latestAttemptId: string | null;
   };
   /**
    * The AI interpretation from the latest successful attempt. Null when there
    * is none, and shown apart from the human content (`FE-1122`).
+   *
+   * It is plain text, never markup: it is model output, which `REQ-MTG-012`
+   * treats as untrusted, so it is rendered as text and never through the path
+   * that renders the sanitized minute.
    */
   readonly interpretation: {
     readonly summary: string;
     readonly decisions: readonly ExtractedDecisionView[];
+    /**
+     * The minute's content has changed since the run that produced this.
+     *
+     * Editing never starts or repeats AI (`FE-1116`), so an edit made after
+     * processing leaves an interpretation of text that is no longer there.
+     * The reader has to be told, or the summary silently contradicts the
+     * minute printed above it.
+     */
+    readonly basedOnEarlierContent: boolean;
   } | null;
   readonly generatedTasks: readonly GeneratedTaskView[];
+  /**
+   * Proposals the latest successful run dropped because they repeated a task
+   * already created (`REQ-MTG-011`). Said on the page so a reader who
+   * remembers two mentions of the same work knows why only one task exists.
+   */
+  readonly duplicateProposalCount: number;
   readonly archived: { readonly archivedAtLabel: string; readonly archivedByName: string } | null;
   readonly version: number;
   readonly actions: MinuteActionsView;
@@ -860,7 +886,8 @@ export const PROTECTED_FIELD_PATTERNS = {
  * computed after authorization:
  *
  * - `totalItems`, `totalPages`: the viewer's own filtered list (`Paginated`).
- * - `attemptCount`, `generatedTaskCount`: about a minute the viewer can read.
+ * - `attemptCount`, `generatedTaskCount`, `duplicateProposalCount`: about a
+ *   minute the viewer can read.
  *
  * Any other `…Count` or `total…` field is treated as a potential leak until it
  * is reviewed and added here.
@@ -870,6 +897,9 @@ export const AUTHORIZED_COUNT_FIELDS = [
   'totalPages',
   'attemptCount',
   'generatedTaskCount',
+  // `FE-1130`: about a minute the viewer can read, and counts proposals that
+  // never became tasks, so it reveals nothing about any record.
+  'duplicateProposalCount',
 ] as const;
 
 /*

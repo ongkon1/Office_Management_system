@@ -986,6 +986,22 @@ const mockTimesheetServiceImpl = {
         guidance: 'Choose an action available for your role, or ask the assigned Team Lead.',
       };
     }
+    // An unassigned task (`REQ-MTG-014`) waits for a person before any work:
+    // said plainly, rather than falling through to the review message below.
+    if (input.fromStatus === 'pending' && input.toStatus === 'in_progress' && task.assigneeEmployeeId === null) {
+      return {
+        status: 'validation_failure' as const,
+        code: 'VALIDATION_FAILED' as const,
+        message: 'This task has no assignee yet.',
+        fieldErrors: [{
+          field: 'taskId',
+          code: 'TASK_UNASSIGNED',
+          message: 'This task has no assignee yet.',
+          guidance: 'Assign it to a team member before starting it.',
+        }],
+        focusField: 'taskId',
+      };
+    }
     if (
       input.fromStatus === 'pending' &&
       input.toStatus === 'in_progress' &&
@@ -1056,7 +1072,7 @@ const mockTimesheetServiceImpl = {
       : input.fromStatus === 'completed'
         ? 'task_reopened'
         : 'task_started';
-    notifyEmployee(task.assigneeEmployeeId, {
+    if (task.assigneeEmployeeId) notifyEmployee(task.assigneeEmployeeId, {
       type: transitionType,
       title: transitionType === 'task_completed' ? 'Task completed' : transitionType === 'task_reopened' ? 'Task reopened' : 'Task started',
       body: 'The task status changed. Open the task to see the authorized details.',
@@ -1067,7 +1083,7 @@ const mockTimesheetServiceImpl = {
       const actualMinutes = mockStore.entriesForTask(task.id)
         .filter((entry) => entry.state !== 'draft')
         .reduce((total, entry) => total + entry.activeMinutes, 0);
-      if (actualMinutes > task.estimatedMinutes) {
+      if (actualMinutes > task.estimatedMinutes && task.assigneeEmployeeId) {
         notifyEmployee(task.assigneeEmployeeId, {
           type: 'significant_variance',
           title: 'Task estimate exceeded',

@@ -55,7 +55,8 @@ export interface TeamTaskView {
   readonly projectId: string;
   readonly projectLabel: string;
   readonly division: DivisionRef;
-  readonly assignee: EmployeeRef;
+  /** Null when the task is unassigned (`REQ-MTG-014`); shown as "Unassigned". */
+  readonly assignee: EmployeeRef | null;
   readonly supportingMembers: readonly EmployeeRef[];
   readonly status: TaskStatus;
   readonly priority: Priority;

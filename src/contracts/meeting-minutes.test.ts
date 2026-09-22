@@ -265,11 +265,14 @@ describe('protected data never enters ordinary models (FE-1105)', () => {
       processedAtLabel: '2 Sep 2026, 10:02',
       error: null,
       attemptCount: 1,
+      latestAttemptId: 'att-1',
     },
     interpretation: {
       summary: 'Release scope agreed.',
       decisions: [{ id: 'dec-1', position: 1, text: 'Ship in October.' }],
+      basedOnEarlierContent: false,
     },
+    duplicateProposalCount: 0,
     generatedTasks: [
       {
         access: 'visible',

@@ -308,7 +308,8 @@ export interface TaskSummaryView {
   readonly title: string;
   readonly project: ProjectRef;
   readonly division: DivisionRef;
-  readonly assignee: EmployeeRef;
+  /** Null when the task is unassigned (`REQ-MTG-014`); shown as "Unassigned". */
+  readonly assignee: EmployeeRef | null;
   readonly status: TaskStatus;
   readonly statusLabel: string;
   readonly priority: Priority;

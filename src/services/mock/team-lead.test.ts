@@ -50,7 +50,7 @@ describe('mockTeamLeadService scope and calculations', () => {
 
     expect(result.status).toBe('success');
     if (result.status !== 'success') return;
-    expect(result.data.assignee.id).toBe('emp-2001');
+    expect(result.data.assignee?.id).toBe('emp-2001');
     expect(result.data.supportingMembers).toEqual([]);
     expect(result.data.review.state).toBe('not_required');
     expect(allMockNotifications().some((item) => item.recipientUserId === IMRAN && item.href === `/tasks/${result.data.id}`)).toBe(false);

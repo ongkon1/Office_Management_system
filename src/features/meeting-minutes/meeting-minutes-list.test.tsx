@@ -5,6 +5,7 @@ import {
   resetMeetingMinutesState,
   setMeetingMinutesListFault,
 } from '@/services/mock/meeting-minutes';
+import { ToastProvider } from '@/components/feedback/toast';
 import { MeetingMinutesList } from './meeting-minutes-list';
 
 /**
@@ -45,16 +46,16 @@ beforeEach(() => {
 
 describe('Meeting Minutes list states (FE-1112)', () => {
   it('announces loading, then shows the populated list with a result count', async () => {
-    render(<MeetingMinutesList />);
+    render(<ToastProvider><MeetingMinutesList /></ToastProvider>);
     expect(screen.getByRole('status')).toHaveTextContent('Loading meeting minutes');
 
     expect((await screen.findAllByText('Westbridge portal go-live readiness')).length).toBeGreaterThan(0);
-    expect(screen.getByText('4 meeting minutes')).toBeInTheDocument();
+    expect(screen.getByText('6 meeting minutes')).toBeInTheDocument();
   });
 
   it('shows the empty state, with no options, when nothing is readable', async () => {
     nav.userId = NO_MINUTES;
-    render(<MeetingMinutesList />);
+    render(<ToastProvider><MeetingMinutesList /></ToastProvider>);
     expect(await screen.findByText('No meeting minutes yet')).toBeInTheDocument();
     expect(screen.queryByText('No meeting minutes match')).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /^Client:/ }));
@@ -63,7 +64,7 @@ describe('Meeting Minutes list states (FE-1112)', () => {
 
   it('distinguishes no results from empty, and clears from there', async () => {
     nav.search = 'q=zzzz';
-    render(<MeetingMinutesList />);
+    render(<ToastProvider><MeetingMinutesList /></ToastProvider>);
     expect(await screen.findByText('No meeting minutes match')).toBeInTheDocument();
     expect(screen.queryByText('No meeting minutes yet')).not.toBeInTheDocument();
 
@@ -73,7 +74,7 @@ describe('Meeting Minutes list states (FE-1112)', () => {
 
   it('shows denied without any count, option, name or control', async () => {
     setMeetingMinutesListFault('denied');
-    render(<MeetingMinutesList />);
+    render(<ToastProvider><MeetingMinutesList /></ToastProvider>);
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('You don’t have access to meeting minutes');
     expect(document.body.textContent).not.toMatch(LEAKS);
@@ -85,7 +86,7 @@ describe('Meeting Minutes list states (FE-1112)', () => {
   it('shows signed-out with a sign-in link that returns to the same filtered list', async () => {
     setMeetingMinutesListFault('signed-out');
     nav.search = 'client=cli-bit&q=boot';
-    render(<MeetingMinutesList />);
+    render(<ToastProvider><MeetingMinutesList /></ToastProvider>);
     expect(await screen.findByText('Sign in to see meeting minutes')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute(
       'href',
@@ -96,7 +97,7 @@ describe('Meeting Minutes list states (FE-1112)', () => {
 
   it('recovers from a temporary error with Try again, showing only the safe reference', async () => {
     setMeetingMinutesListFault('error-once');
-    render(<MeetingMinutesList />);
+    render(<ToastProvider><MeetingMinutesList /></ToastProvider>);
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('Meeting minutes couldn’t be loaded');
     expect(alert).toHaveTextContent('Reference: MM-DEMO-503');
@@ -110,7 +111,7 @@ describe('Meeting Minutes list states (FE-1112)', () => {
 
   it('offers no retry for an error a retry cannot fix', async () => {
     setMeetingMinutesListFault('fatal');
-    render(<MeetingMinutesList />);
+    render(<ToastProvider><MeetingMinutesList /></ToastProvider>);
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('Reference: MM-DEMO-500');
     expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
@@ -118,20 +119,20 @@ describe('Meeting Minutes list states (FE-1112)', () => {
 
   it('resets rejected list settings', async () => {
     setMeetingMinutesListFault('invalid');
-    render(<MeetingMinutesList />);
+    render(<ToastProvider><MeetingMinutesList /></ToastProvider>);
     expect(await screen.findByText('This list link isn’t valid')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Reset the list' }));
     expect(nav.replace).toHaveBeenLastCalledWith('/meeting-minutes', { scroll: false });
   });
 
   it('keeps the viewer’s own filters usable when a later request fails', async () => {
-    const { rerender } = render(<MeetingMinutesList />);
-    expect(await screen.findByText('4 meeting minutes')).toBeInTheDocument();
+    const { rerender } = render(<ToastProvider><MeetingMinutesList /></ToastProvider>);
+    expect(await screen.findByText('6 meeting minutes')).toBeInTheDocument();
 
     setMeetingMinutesListFault('error');
     nav.search = 'processing=failed';
     await act(async () => {
-      rerender(<MeetingMinutesList />);
+      rerender(<ToastProvider><MeetingMinutesList /></ToastProvider>);
     });
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Meeting minutes couldn’t be loaded');

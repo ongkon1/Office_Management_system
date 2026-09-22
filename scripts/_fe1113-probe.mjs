@@ -5,7 +5,7 @@
  */
 import { chromium } from 'playwright';
 
-const BASE = 'http://localhost:3000';
+const BASE = process.env.PROBE_BASE ?? 'http://localhost:3000';
 const PASSWORD = 'Demo1234!';
 const USERS = {
   team_lead: 'imran.hossain@demo.local',
@@ -112,7 +112,9 @@ async function run() {
       await page.waitForSelector(`text=Probe minute ${role}`, { timeout: 20000 }).catch(() => {});
       const list = await page.textContent('body');
       check(`${role}: saved minute is listed`, list.includes(`Probe minute ${role}`));
-      check(`${role}: shows Pending`, /Pending/.test(list));
+      // Since `FE-1126` a run started by a save really progresses, so by the
+      // time the list is open it may be Pending, Processing or Processed.
+      check(`${role}: shows the run's status`, /Pending|Processing|Processed/.test(list));
 
       // Mobile: no horizontal scroll, action bar reachable.
       await page.setViewportSize({ width: 375, height: 720 });

@@ -11,7 +11,10 @@ import {
   mockMeetingMinutesService,
   resetMeetingMinutesState,
   setMeetingMinutesCreateFault,
+  setMeetingMinutesWorkerOutcome,
+  setMeetingMinutesWorkerTiming,
 } from './meeting-minutes';
+import { allMockNotifications, resetMockNotifications } from './notification-store';
 
 /**
  * `FE-1110` — the Meeting Minutes list.
@@ -54,11 +57,12 @@ beforeEach(() => {
 
 describe('who sees which minutes', () => {
   it.each([
-    ['an Employee', EMPLOYEE, ['min-1005', 'min-1001', 'min-1004']],
-    ['a Team Lead', TEAM_LEAD, ['min-1005', 'min-1001', 'min-1002']],
-    ['HR without the government permission', HR, ['min-1005', 'min-1001', 'min-1002', 'min-1004']],
-    ['Management', MANAGEMENT, ['min-1005', 'min-1001', 'min-1002', 'min-1004']],
-    ['the Super Administrator', ADMIN, ['min-1003', 'min-1005', 'min-1001', 'min-1002', 'min-1004']],
+    // `FE-1130` added `min-1007` (pit), `min-1008` (pia) and `min-1009` (gov).
+    ['an Employee', EMPLOYEE, ['min-1005', 'min-1008', 'min-1001', 'min-1004']],
+    ['a Team Lead', TEAM_LEAD, ['min-1005', 'min-1008', 'min-1001', 'min-1002', 'min-1007']],
+    ['HR without the government permission', HR, ['min-1005', 'min-1008', 'min-1001', 'min-1002', 'min-1004', 'min-1007']],
+    ['Management', MANAGEMENT, ['min-1005', 'min-1008', 'min-1001', 'min-1002', 'min-1004', 'min-1007']],
+    ['the Super Administrator', ADMIN, ['min-1003', 'min-1005', 'min-1008', 'min-1001', 'min-1002', 'min-1009', 'min-1004', 'min-1007']],
   ])('%s sees only minutes in scope, newest first', async (_label, userId, expected) => {
     const result = await listFor(userId);
     expect(ids(result)).toEqual(expected);
@@ -223,7 +227,7 @@ describe('filter options (FE-1111)', () => {
   it('drops a hidden client from the applied filters', async () => {
     const result = view(await listFor(HR, { filters: { clientIds: ['cli-mopa', 'cli-bit'] } }));
     expect(result.appliedFilters.clientIds).toEqual(['cli-bit']);
-    expect(result.page.items.map((item) => item.id)).toEqual(['min-1002']);
+    expect(result.page.items.map((item) => item.id)).toEqual(['min-1002', 'min-1007']);
   });
 });
 
@@ -237,7 +241,7 @@ describe('query handling', () => {
 
   it('searches title, client and project names', async () => {
     expect(ids(await listFor(HR, { search: { term: 'westbridge' } }))).toEqual(['min-1004']);
-    expect(ids(await listFor(HR, { search: { term: 'bootcamp' } }))).toEqual(['min-1002']);
+    expect(ids(await listFor(HR, { search: { term: 'bootcamp' } }))).toEqual(['min-1002', 'min-1007']);
   });
 
   it('never searches minute content', async () => {
@@ -249,11 +253,20 @@ describe('query handling', () => {
       sort: { field: 'title', direction: 'asc' },
       pagination: { page: 1, pageSize: 10 },
     });
-    expect(ids(result)).toEqual(['min-1002', 'min-1003', 'min-1005', 'min-1001', 'min-1004']);
+    expect(ids(result)).toEqual([
+      'min-1007', // Bootcamp cohort…
+      'min-1002', // Bootcamp curriculum…
+      'min-1003', // Records digitisation steering…
+      'min-1009', // Records digitisation vendor…
+      'min-1005', // Vision Platform v2 client…
+      'min-1001', // Vision Platform v2 sprint…
+      'min-1008', // Vision Platform v2 support…
+      'min-1004', // Westbridge…
+    ]);
     expect(view(result).page.pageInfo).toEqual({
       page: 1,
       pageSize: 10,
-      totalItems: 5,
+      totalItems: 8,
       totalPages: 1,
       hasPreviousPage: false,
       hasNextPage: false,
@@ -461,7 +474,7 @@ describe('creating a minute (FE-1113)', () => {
   it('forgets created minutes on reset', async () => {
     await create(TEAM_LEAD);
     resetMeetingMinutesState();
-    expect(ids(await listFor(TEAM_LEAD))).toEqual(['min-1005', 'min-1001', 'min-1002']);
+    expect(ids(await listFor(TEAM_LEAD))).toEqual(['min-1005', 'min-1008', 'min-1001', 'min-1002', 'min-1007']);
   });
 });
 
@@ -956,5 +969,398 @@ describe('reading a minute (FE-1120)', () => {
     if (owner.status !== 'success' || reader.status !== 'success') throw new Error('expected success');
     expect(owner.data.actions.canEdit).toBe(true);
     expect(reader.data.actions.canEdit).toBe(false);
+  });
+});
+
+/**
+ * `FE-1122` — the AI interpretation attached to a minute.
+ */
+describe('AI interpretation (FE-1122)', () => {
+  it('attaches the summary and ordered decisions from a successful run', async () => {
+    const result = await mockMeetingMinutesService.get(TEAM_LEAD, 'min-1001');
+    if (result.status !== 'success') throw new Error('expected success');
+
+    const interpretation = result.data.interpretation;
+    expect(interpretation?.summary).toMatch(/accepted the search redesign/);
+    expect(interpretation?.decisions.map((decision) => decision.position)).toEqual([1, 2]);
+    expect(interpretation?.basedOnEarlierContent).toBe(false);
+  });
+
+  it.each([
+    ['not processed', 'min-1002', HR],
+    ['pending', 'min-1003', ADMIN],
+    ['processing', 'min-1005', ADMIN],
+    ['failed', 'min-1004', HR],
+  ])('has none while %s', async (_label, minuteId, userId) => {
+    const result = await mockMeetingMinutesService.get(userId, minuteId);
+    if (result.status !== 'success') throw new Error('expected success');
+    expect(result.data.interpretation).toBeNull();
+  });
+
+  it('is the same for every viewer who can read the minute', async () => {
+    const owner = await mockMeetingMinutesService.get(TEAM_LEAD, 'min-1001');
+    const reader = await mockMeetingMinutesService.get(EMPLOYEE, 'min-1001');
+    if (owner.status !== 'success' || reader.status !== 'success') throw new Error('expected success');
+    expect(reader.data.interpretation).toEqual(owner.data.interpretation);
+  });
+
+  it('is never reachable by a viewer who cannot read the minute', async () => {
+    // `min-1003` is a government minute; its outcome is not found, so nothing
+    // of an interpretation could reach this viewer either.
+    const hidden = await mockMeetingMinutesService.get(HR, 'min-1003');
+    expect(hidden.status).toBe('not_found');
+  });
+
+  it('says so once the minute has been edited since the run', async () => {
+    const loaded = await mockMeetingMinutesService.editContext(TEAM_LEAD, 'min-1001');
+    if (loaded.status !== 'success') throw new Error('expected success');
+
+    await mockMeetingMinutesService.update(TEAM_LEAD, {
+      ...loaded.data.values,
+      content: `${loaded.data.values.content}\n\nAdded after the meeting: the October date is provisional.`,
+      minuteId: 'min-1001',
+      expectedVersion: loaded.data.version,
+    });
+
+    const after = await mockMeetingMinutesService.get(TEAM_LEAD, 'min-1001');
+    if (after.status !== 'success') throw new Error('expected success');
+    expect(after.data.interpretation?.basedOnEarlierContent).toBe(true);
+    // The interpretation itself is kept; it is labelled, not discarded.
+    expect(after.data.interpretation?.summary).toMatch(/accepted the search redesign/);
+  });
+
+  it('does not treat a title-only edit, or an unchanged round trip, as drift', async () => {
+    const loaded = await mockMeetingMinutesService.editContext(TEAM_LEAD, 'min-1001');
+    if (loaded.status !== 'success') throw new Error('expected success');
+
+    await mockMeetingMinutesService.update(TEAM_LEAD, {
+      ...loaded.data.values,
+      title: 'Sprint 14 review (renamed)',
+      minuteId: 'min-1001',
+      expectedVersion: loaded.data.version,
+    });
+
+    const after = await mockMeetingMinutesService.get(TEAM_LEAD, 'min-1001');
+    if (after.status !== 'success') throw new Error('expected success');
+    expect(after.data.interpretation?.basedOnEarlierContent).toBe(false);
+  });
+
+  it('carries no protected field', async () => {
+    const result = await mockMeetingMinutesService.get(ADMIN, 'min-1001');
+    if (result.status !== 'success') throw new Error('expected success');
+    expect(findProtectedMeetingMinuteFields(result.data.interpretation)).toEqual([]);
+  });
+});
+
+/* ------------------------------------------------------------------------- */
+/* FE-1123 – FE-1126                                                         */
+/* ------------------------------------------------------------------------- */
+
+const TANVIR = 'usr-1002'; // assignee of tsk-16; `cjg` only, so cannot read pia minutes
+
+async function detail(userId: string, minuteId: string) {
+  const result = await mockMeetingMinutesService.get(userId, minuteId);
+  if (result.status !== 'success') throw new Error(`expected success, got ${result.status}`);
+  return result.data;
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+describe('generated tasks on a minute (FE-1123)', () => {
+  it('lists both tasks, in order, for a Team Lead whose division they are in', async () => {
+    const tasks = (await detail(TEAM_LEAD, 'min-1001')).generatedTasks;
+    expect(tasks.map((task) => task.position)).toEqual([1, 2]);
+
+    const [first, second] = tasks;
+    if (first.access !== 'visible' || second.access !== 'visible') throw new Error('expected visible');
+    expect(first).toMatchObject({
+      taskId: 'tsk-15',
+      title: 'Add export to PDF to the search results',
+      assigneeName: 'Nadia Rahman',
+      priorityLabel: 'High',
+      statusLabel: 'Pending',
+      href: '/tasks/tsk-15',
+      matchOutcome: { kind: 'mentioned_assignee', label: 'Named in the minute' },
+      reassignedSinceGeneration: false,
+    });
+    expect(first.dueDateLabel).not.toBe('—');
+    expect(second).toMatchObject({
+      taskId: 'tsk-16',
+      assigneeName: 'Tanvir Ahmed',
+      matchOutcome: { kind: 'matched', label: 'Matched on project membership and workload' },
+    });
+  });
+
+  it('shows an employee only the task they can open, and keeps the other in place', async () => {
+    const tasks = (await detail(EMPLOYEE, 'min-1001')).generatedTasks;
+    expect(tasks.map((task) => task.access)).toEqual(['visible', 'restricted']);
+    // The restricted row names nothing: no title, assignee, date or link.
+    expect(tasks[1]).toEqual({ access: 'restricted', linkId: 'lnk-1001-2', position: 2 });
+  });
+
+  it('follows the task pages, not the minute, for who may open a task', async () => {
+    // The Super Administrator can read the minute, but the task page does not
+    // open other people's tasks for them, so neither does this list.
+    const tasks = (await detail(ADMIN, 'min-1001')).generatedTasks;
+    expect(tasks.every((task) => task.access === 'restricted')).toBe(true);
+  });
+
+  it('has none for a minute whose run produced none', async () => {
+    expect((await detail(HR, 'min-1004')).generatedTasks).toEqual([]);
+    expect((await detail(HR, 'min-1002')).generatedTasks).toEqual([]);
+  });
+
+  it('opens a task only when the task page would', async () => {
+    const opened = await mockMeetingMinutesService.openGeneratedTask(TEAM_LEAD, 'min-1001', 'lnk-1001-1');
+    expect(opened).toEqual({ status: 'success', data: { taskId: 'tsk-15', href: '/tasks/tsk-15' } });
+
+    const restricted = await mockMeetingMinutesService.openGeneratedTask(EMPLOYEE, 'min-1001', 'lnk-1001-2');
+    const wrongMinute = await mockMeetingMinutesService.openGeneratedTask(TEAM_LEAD, 'min-1002', 'lnk-1001-1');
+    const hiddenMinute = await mockMeetingMinutesService.openGeneratedTask(HR, 'min-1003', 'lnk-1001-1');
+    for (const result of [restricted, wrongMinute, hiddenMinute]) expect(result.status).toBe('not_found');
+    // All three refusals are the same answer.
+    expect(restricted).toEqual(wrongMinute);
+    expect(wrongMinute).toEqual(hiddenMinute);
+  });
+
+  it('carries no protected field in any viewer’s task list', async () => {
+    for (const userId of [TEAM_LEAD, EMPLOYEE, ADMIN]) {
+      expect(findProtectedMeetingMinuteFields((await detail(userId, 'min-1001')).generatedTasks)).toEqual([]);
+    }
+  });
+});
+
+describe('source-minute traceability (FE-1124)', () => {
+  it('links a generated task back to a minute the viewer can read', async () => {
+    const result = await mockMeetingMinutesService.getTaskSourceMinute(TEAM_LEAD, 'tsk-15');
+    expect(result).toEqual({
+      status: 'success',
+      data: {
+        access: 'visible',
+        minuteId: 'min-1001',
+        title: 'Vision Platform v2 sprint review',
+        isArchived: false,
+        href: '/meeting-minutes/min-1001',
+      },
+    });
+  });
+
+  it('says only that a minute exists when the viewer cannot read it', async () => {
+    // Tanvir can open his own task, but not a pia minute.
+    const result = await mockMeetingMinutesService.getTaskSourceMinute(TANVIR, 'tsk-16');
+    expect(result).toEqual({ status: 'success', data: { access: 'restricted' } });
+  });
+
+  it('answers not found for a task the viewer cannot open, and for an ordinary task', async () => {
+    const otherPersons = await mockMeetingMinutesService.getTaskSourceMinute(EMPLOYEE, 'tsk-16');
+    const ordinary = await mockMeetingMinutesService.getTaskSourceMinute(EMPLOYEE, 'tsk-1');
+    const missing = await mockMeetingMinutesService.getTaskSourceMinute(EMPLOYEE, 'tsk-nope');
+    expect(otherPersons.status).toBe('not_found');
+    // Indistinguishable, so a task's origin is not news about a task one cannot see.
+    expect(otherPersons).toEqual(ordinary);
+    expect(ordinary).toEqual(missing);
+  });
+
+  it('keeps working after the minute is archived', async () => {
+    await mockMeetingMinutesService.archive(TEAM_LEAD, {
+      minuteId: 'min-1001',
+      expectedVersion: 2,
+      idempotencyKey: 'key-archive-source',
+    });
+    const result = await mockMeetingMinutesService.getTaskSourceMinute(TEAM_LEAD, 'tsk-15');
+    if (result.status !== 'success' || result.data.access !== 'visible') throw new Error('expected visible');
+    expect(result.data.isArchived).toBe(true);
+  });
+});
+
+describe('retrying a failed run (FE-1125)', () => {
+  async function retry(userId: string, failedAttemptId = 'att-1004-1', key = `key-${Math.random()}`) {
+    return mockMeetingMinutesService.retryProcessing(userId, {
+      minuteId: 'min-1004',
+      failedAttemptId,
+      idempotencyKey: key,
+    });
+  }
+
+  it('starts a new run, Pending, with the failure cleared and the run counted', async () => {
+    const before = await detail(HR, 'min-1004');
+    expect(before.processing).toMatchObject({ status: 'failed', attemptCount: 1, latestAttemptId: 'att-1004-1' });
+
+    const result = await retry(HR);
+    if (result.status !== 'success') throw new Error(`expected success, got ${result.status}`);
+    expect(result.data.processing).toMatchObject({
+      status: 'pending',
+      error: null,
+      attemptCount: 2,
+      latestAttemptId: 'att-1004-2',
+    });
+    // The minute itself is untouched by a retry.
+    expect(result.data.content).toBe(before.content);
+    expect(result.data.title).toBe(before.title);
+  });
+
+  it('returns the first outcome for a repeated request, starting one run', async () => {
+    const first = await retry(HR, 'att-1004-1', 'key-retry-once');
+    const second = await retry(HR, 'att-1004-1', 'key-retry-once');
+    if (first.status !== 'success' || second.status !== 'success') throw new Error('expected success');
+    expect(second.data.processing.latestAttemptId).toBe('att-1004-2');
+  });
+
+  it('refuses a stale page retrying an attempt that was already retried', async () => {
+    await retry(HR, 'att-1004-1', 'key-a');
+    const stale = await retry(HR, 'att-1004-1', 'key-b');
+    // Not failed any more, so the state check refuses it first.
+    expect(stale.status).toBe('conflict');
+  });
+
+  it('refuses a minute that is not failed', async () => {
+    const result = await mockMeetingMinutesService.retryProcessing(TEAM_LEAD, {
+      minuteId: 'min-1001',
+      failedAttemptId: 'att-1001-1',
+      idempotencyKey: 'key-not-failed',
+    });
+    expect(result.status).toBe('conflict');
+  });
+
+  it.each([
+    ['an Employee', EMPLOYEE, 'permission_denied'],
+    ['Management', MANAGEMENT, 'permission_denied'],
+    ['another creator', TEAM_LEAD, 'not_found'], // min-1004 is wcf, outside Imran's scope
+  ])('refuses %s', async (_label, userId, expected) => {
+    const result = await retry(userId);
+    expect(result.status).toBe(expected);
+    expect((await detail(HR, 'min-1004')).processing.status).toBe('failed');
+  });
+
+  it('lets the Super Administrator retry any readable minute', async () => {
+    expect((await retry(ADMIN)).status).toBe('success');
+  });
+});
+
+describe('background runs (FE-1126)', () => {
+  const VALID = {
+    title: 'Retro with Meghna Group',
+    clientId: 'cli-meghna',
+    projectId: 'prj-vp2',
+    content: 'The team agreed to ship the redesign. Everyone else will review the backlog.',
+  };
+
+  beforeEach(() => {
+    resetMockNotifications();
+    setMeetingMinutesWorkerTiming({ startAfterMs: 10, finishAfterMs: 30 });
+  });
+
+  afterEach(() => {
+    setMeetingMinutesWorkerOutcome(null);
+    setMeetingMinutesWorkerTiming(null);
+  });
+
+  async function saveWithAi() {
+    const result = await mockMeetingMinutesService.create(TEAM_LEAD, {
+      ...VALID,
+      processWithAi: true,
+      idempotencyKey: `key-${Math.random()}`,
+    });
+    if (result.status !== 'success') throw new Error('expected success');
+    return result.data.minute.id;
+  }
+
+  it('moves a queued run through Processing to Processed, and tells the creator', async () => {
+    // The save answers Pending; the read after it is slower than this test's
+    // worker, so the starting state is taken from the save itself.
+    const saved = await mockMeetingMinutesService.create(TEAM_LEAD, {
+      ...VALID,
+      processWithAi: true,
+      idempotencyKey: 'key-live-run',
+    });
+    if (saved.status !== 'success') throw new Error('expected success');
+    expect(saved.data.minute.processing.status).toBe('pending');
+    const id = saved.data.minute.id;
+
+    await sleep(80);
+    const after = await detail(TEAM_LEAD, id);
+    expect(after.processing.status).toBe('processed');
+    expect(after.processing.processedAtLabel).not.toBeNull();
+    // A live run's summary is the minute's opening sentence; no decisions or tasks.
+    expect(after.interpretation?.summary).toBe('The team agreed to ship the redesign.');
+    expect(after.interpretation?.decisions).toEqual([]);
+    expect(after.generatedTasks).toEqual([]);
+
+    const notice = allMockNotifications().find((item) => item.href === `/meeting-minutes/${id}`);
+    expect(notice).toMatchObject({
+      recipientUserId: TEAM_LEAD,
+      type: 'meeting_minute_processed',
+      relatedLabel: 'Retro with Meghna Group',
+    });
+    // The notice names the minute and carries none of its content (`REQ-MTG-022`).
+    expect(notice?.body).not.toContain('redesign');
+  });
+
+  it('can fail instead, keeping the minute and offering a retry', async () => {
+    setMeetingMinutesWorkerOutcome('fail');
+    const id = await saveWithAi();
+    await sleep(80);
+
+    const after = await detail(TEAM_LEAD, id);
+    expect(after.processing.status).toBe('failed');
+    expect(after.processing.error?.retryable).toBe(true);
+    expect(after.actions.canRetry).toBe(true);
+    expect(after.content).toContain('ship the redesign');
+    expect(
+      allMockNotifications().some((item) => item.href === `/meeting-minutes/${id}` && item.type === 'meeting_minute_failed'),
+    ).toBe(true);
+
+    // And the retry runs to completion.
+    setMeetingMinutesWorkerOutcome('succeed');
+    const retried = await mockMeetingMinutesService.retryProcessing(TEAM_LEAD, {
+      minuteId: id,
+      failedAttemptId: after.processing.latestAttemptId ?? '',
+      idempotencyKey: 'key-retry-live',
+    });
+    expect(retried.status).toBe('success');
+    await sleep(80);
+    expect((await detail(TEAM_LEAD, id)).processing.status).toBe('processed');
+  });
+
+  it('never moves the seeded Pending and Processing minutes', async () => {
+    await saveWithAi();
+    await sleep(80);
+    expect((await detail(ADMIN, 'min-1003')).processing.status).toBe('pending');
+    expect((await detail(ADMIN, 'min-1005')).processing.status).toBe('processing');
+  });
+
+  it('does not advance a run once the minute is archived', async () => {
+    // Slower than the archive request, so the minute is archived first.
+    setMeetingMinutesWorkerTiming({ startAfterMs: 600, finishAfterMs: 900 });
+    const id = await saveWithAi();
+    await mockMeetingMinutesService.archive(TEAM_LEAD, {
+      minuteId: id,
+      expectedVersion: 1,
+      idempotencyKey: 'key-archive-live',
+    });
+    await sleep(1000);
+    expect((await detail(TEAM_LEAD, id)).processing.status).toBe('pending');
+  });
+
+  it('stops every scheduled run on reset', async () => {
+    const id = await saveWithAi();
+    resetMeetingMinutesState();
+    await sleep(80);
+    // The minute is gone with the reset, and nothing fired against the new state.
+    expect((await mockMeetingMinutesService.get(TEAM_LEAD, id)).status).toBe('not_found');
+    expect(allMockNotifications().some((item) => item.href === `/meeting-minutes/${id}`)).toBe(false);
+  });
+
+  it('reports where processing stands in a light snapshot, for viewers who can read it', async () => {
+    const snapshot = await mockMeetingMinutesService.getProcessingSnapshot(TEAM_LEAD, 'min-1001');
+    if (snapshot.status !== 'success') throw new Error('expected success');
+    expect(snapshot.data.processing.status).toBe('processed');
+    expect(snapshot.data.generatedTaskCount).toBe(2);
+    expect(findProtectedMeetingMinuteFields(snapshot.data)).toEqual([]);
+
+    const hidden = await mockMeetingMinutesService.getProcessingSnapshot(HR, 'min-1003');
+    const missing = await mockMeetingMinutesService.getProcessingSnapshot(HR, 'min-nope');
+    expect(hidden.status).toBe('not_found');
+    expect(hidden).toEqual(missing);
   });
 });

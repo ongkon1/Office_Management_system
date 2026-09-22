@@ -13,6 +13,14 @@ import { LinkButton } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ProcessingStatusIndicator } from '@/components/ui/status-indicator';
+import { ProcessingStatusAnnouncer } from '@/components/ui/processing-status-announcer';
+import { describeMinuteProcessingStatus } from '@/lib/status';
+import { AiInterpretation } from './ai-interpretation';
+import { GeneratedTasks } from './generated-tasks';
+import { ProcessingFailure } from './processing-failure';
+import { RequestProcessing } from './request-processing';
+import { useProcessingWatch } from './use-processing-watch';
+import { useToast } from '@/components/feedback/toast';
 
 const CRUMB_ROOT = { label: 'Meeting Minutes', href: '/meeting-minutes' };
 
@@ -41,7 +49,9 @@ function MinuteContent({ content }: { content: string }) {
   return (
     <div
       className={[
-        'mt-4 max-w-2xl text-body text-ink',
+        // `break-words`: a pasted link or reference with no spaces must wrap
+        // inside the card, not widen the page on a phone (`FE-1133`).
+        'mt-4 max-w-2xl text-body text-ink break-words',
         '[&>*:first-child]:mt-0',
         '[&_p]:mt-3',
         '[&_ul]:mt-3 [&_ul]:list-disc [&_ul]:pl-5',
@@ -82,19 +92,86 @@ function DetailSkeleton() {
  *   archived minute stays readable so links from generated tasks keep working,
  *   and says what archiving kept (`REQ-MTG-018`).
  *
- * The AI summary and decisions (`FE-1122`), the generated tasks
- * (`FE-1123`), the retry affordance (`FE-1125`) and live status refresh
- * (`FE-1126`) attach to this frame.
+ * Around the minute: the AI summary and decisions (`FE-1122`), the tasks
+ * created from the meeting (`FE-1123`), a failed run and its retry
+ * (`FE-1125`), and a watch that refreshes the page when a run moves on
+ * (`FE-1126`).
  */
 export function MeetingMinuteDetail({ minuteId }: { minuteId: string }) {
   const { user } = useSession();
   const userId = user?.userId ?? '';
 
+  const toast = useToast();
+
+  /*
+   * `keepPrevious`: a refresh of *this* minute keeps it on screen instead of
+   * dropping to a skeleton, so a background update or a retry never resets the
+   * reader's scroll position (`FE-1126`). It is safe only because the page
+   * mounts this component with `key={id}` — another minute is a fresh
+   * instance, so one minute's data can never stand in for another's.
+   */
   const request = useAsync(
     () => mockMeetingMinutesService.get(userId, minuteId),
     [userId, minuteId],
+    { keepPrevious: true },
   );
 
+  /*
+   * `FE-1121`. The announcer sits outside the loading, failure and success
+   * branches so it is never unmounted by them: a refresh passes through
+   * `loading` on its way to a new status, and an announcer inside the success
+   * branch would remount there and mistake the change for first sight.
+   */
+  const status = request.state.status === 'success' ? request.state.data.processing.status : null;
+  const title = request.state.status === 'success' ? request.state.data.title : '';
+
+  /*
+   * `FE-1126`. While a run is queued or running, watch it; when it moves on,
+   * reload. A finished or failed run also raises a visible notice. That
+   * notice is visual only — the announcer above already speaks the change,
+   * and two live regions would read it out twice.
+   */
+  useProcessingWatch(
+    userId,
+    status === null ? [] : [{ id: minuteId, status }],
+    (changes) => {
+      const to = changes[0]?.to;
+      if (to === 'processed') {
+        toast.show({
+          tone: 'success',
+          title: 'Task generation finished',
+          description: `${title}: the summary and any tasks are below.`,
+          announce: false,
+        });
+      } else if (to === 'failed') {
+        toast.show({
+          tone: 'warning',
+          title: 'Task generation failed',
+          description: `${title}: your meeting minute is saved, and you can retry.`,
+          announce: false,
+        });
+      }
+      request.reload();
+    },
+  );
+
+  return (
+    <>
+      <ProcessingStatusAnnouncer recordId={minuteId} status={status} />
+      <DetailBody minuteId={minuteId} userId={userId} request={request} />
+    </>
+  );
+}
+
+function DetailBody({
+  minuteId,
+  userId,
+  request,
+}: {
+  minuteId: string;
+  userId: string;
+  request: ReturnType<typeof useAsync<MeetingMinuteDetailView>>;
+}) {
   if (request.state.status === 'loading') {
     return (
       <PageContainer>
@@ -189,6 +266,10 @@ export function MeetingMinuteDetail({ minuteId }: { minuteId: string }) {
         </Callout>
       )}
 
+      {/* First, when it applies: a failure is the one thing here that may
+          need the reader to act (`FE-1125`). */}
+      <ProcessingFailure minute={minute} userId={userId} onChanged={request.reload} />
+
       <Card className="mt-5">
         <CardHeader
           title="Minute"
@@ -196,6 +277,14 @@ export function MeetingMinuteDetail({ minuteId }: { minuteId: string }) {
         />
         <MinuteContent content={minute.content} />
       </Card>
+
+      {/* Directly after the minute, so the reading sits next to what it reads,
+          and in its own section so it is never mistaken for part of it. */}
+      <AiInterpretation minute={minute} />
+
+      {/* Work created from the meeting — a third thing, neither the minute nor
+          a description of it (`FE-1123`). */}
+      <GeneratedTasks minute={minute} />
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <Card>
@@ -225,11 +314,15 @@ export function MeetingMinuteDetail({ minuteId }: { minuteId: string }) {
             <Fact label="Runs">{minute.processing.attemptCount}</Fact>
           </dl>
 
-          {minute.processing.error && (
-            <Callout tone="warning" className="mt-4">
-              {minute.processing.error.message}
-            </Callout>
-          )}
+          {/* The label names the state; this says what it means (`FE-1121`). */}
+          <p className="mt-4 text-body-sm text-ink-muted">
+            {describeMinuteProcessingStatus(minute.processing.status).meaning}
+          </p>
+
+          {/* Only when the service allows it: Not Processed, and the viewer may
+              change the minute (`FE-1131`). */}
+          <RequestProcessing minute={minute} userId={userId} onChanged={request.reload} />
+
         </Card>
       </div>
     </PageContainer>

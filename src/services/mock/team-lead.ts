@@ -101,6 +101,17 @@ function hasLeadScope(userId: string): boolean {
   ));
 }
 
+/**
+ * Whether a Team Lead's task page opens a task, as a plain predicate.
+ *
+ * Exported so another module can ask the same question without a second copy
+ * of the rule — Meeting Minutes uses it to decide which generated tasks a
+ * viewer may open (`FE-1123`). `getTask` below answers from it too.
+ */
+export function teamLeadCanOpenTask(userId: string, task: { readonly divisionId: string }): boolean {
+  return inDivisionScope(userId, task.divisionId);
+}
+
 function inDivisionScope(userId: string, divisionId: string) {
   const viewer = account(userId);
   const divisionIds = viewer ? [
@@ -152,7 +163,12 @@ let projects: Project[] = [...PROJECTS];
 const projectMembers = new Map<string, readonly string[]>(
   PROJECTS.map((project) => [
     project.id,
-    [...new Set(mockStore.tasks().filter((task) => task.projectId === project.id).map((task) => task.assigneeEmployeeId))],
+    [...new Set(
+      mockStore
+        .tasks()
+        .filter((task) => task.projectId === project.id)
+        .flatMap((task) => (task.assigneeEmployeeId ? [task.assigneeEmployeeId] : [])),
+    )],
   ]),
 );
 
@@ -197,7 +213,7 @@ function taskView(task: Task): TeamTaskView {
     projectId: task.projectId,
     projectLabel: project ? `${project.code} · ${project.name}` : task.projectId,
     division: divisionRef(task.divisionId),
-    assignee: employeeRef(task.assigneeEmployeeId),
+    assignee: task.assigneeEmployeeId ? employeeRef(task.assigneeEmployeeId) : null,
     supportingMembers: task.supportingMemberIds.map(employeeRef),
     status: task.status,
     priority: task.priority,
@@ -564,7 +580,7 @@ export const mockTeamLeadService: TeamLeadService = {
   async getTask(userId, id) {
     await delay();
     const task = mockStore.findTask(id);
-    if (!task || !inDivisionScope(userId, task.divisionId)) return notFound('Task not found.');
+    if (!task || !teamLeadCanOpenTask(userId, task)) return notFound('Task not found.');
     return success(taskView(task));
   },
 
@@ -575,6 +591,13 @@ export const mockTeamLeadService: TeamLeadService = {
     if (!input.title.trim()) return {
       status: 'validation_failure', code: 'VALIDATION_FAILED', message: 'Enter a task title.', focusField: 'title',
       fieldErrors: [{ field: 'title', code: 'REQUIRED', message: 'Task title is required.', guidance: 'Enter a short, specific title.' }],
+    };
+    // Only task generation creates an unassigned task (`REQ-MTG-014`). A Team
+    // Lead saving a task — including assigning one that arrived unassigned —
+    // always names the person who will do it.
+    if (!input.assigneeEmployeeId) return {
+      status: 'validation_failure', code: 'VALIDATION_FAILED', message: 'Choose who will do this task.', focusField: 'assigneeEmployeeId',
+      fieldErrors: [{ field: 'assigneeEmployeeId', code: 'REQUIRED', message: 'This task has no assignee yet.', guidance: 'Choose an eligible team member to assign it to.' }],
     };
     const existing = id ? mockStore.findTask(id) : undefined;
     const creatorEmployeeId = account(userId)?.employeeId ?? userId;
@@ -596,7 +619,7 @@ export const mockTeamLeadService: TeamLeadService = {
     if (existing) mockStore.updateTask(task.id, task as ReturnType<typeof mockStore.tasks>[number]);
     else mockStore.addTask(task as ReturnType<typeof mockStore.tasks>[number]);
     mockStore.replaceChecklist(task.id, input.checklist);
-    if ((!existing || existing.assigneeEmployeeId !== task.assigneeEmployeeId) && !isSelfAssigned) {
+    if (task.assigneeEmployeeId && (!existing || existing.assigneeEmployeeId !== task.assigneeEmployeeId) && !isSelfAssigned) {
       notifyEmployee(task.assigneeEmployeeId, {
         type: existing ? 'task_reassigned' : 'task_assigned',
         title: existing ? 'Task reassigned to you' : 'Task assigned to you',

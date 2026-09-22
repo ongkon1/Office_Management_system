@@ -48,22 +48,44 @@ import type {
   MinuteActionsView,
   UpdateMeetingMinuteInput,
   ArchiveMeetingMinuteInput,
+  GeneratedTaskView,
+  MinuteProcessingSnapshotView,
+  MinuteProcessingStatus,
+  OpenTaskTargetView,
+  RequestProcessingInput,
+  RetryProcessingInput,
+  TaskSourceMinuteView,
+  TeamMatchBasis,
+  TeamMatchOutcome,
 } from '@/contracts/meeting-minutes';
 import {
   DEFAULT_MEETING_MINUTE_SORT,
   MEETING_MINUTE_LIMITS,
   MINUTE_PROCESSING_STATUSES,
   SAFE_PROCESSING_ERROR_MESSAGE,
+  canChangeProcessingStatus,
 } from '@/contracts/meeting-minutes';
 import { PAGE_SIZE_OPTIONS } from '@/contracts/query';
 import type { FieldError, Result, ResultWarning } from '@/contracts/results';
 import { success } from '@/contracts/results';
 import { DEMO_TODAY, PROJECTS } from '@/fixtures';
-import { CLIENTS, MEETING_MINUTES, PROJECT_CLIENT_LINKS } from '@/fixtures/meeting-minutes';
-import { formatTimestamp } from '@/lib/format';
+import {
+  CLIENTS,
+  DUPLICATE_PROPOSALS,
+  EXTRACTED_DECISIONS,
+  GENERATED_TASK_LINKS,
+  MEETING_MINUTES,
+  MEETING_SUMMARIES,
+  PROJECT_CLIENT_LINKS,
+} from '@/fixtures/meeting-minutes';
+import { formatDate, formatTimestamp } from '@/lib/format';
 import { minuteContentToPlainText, sanitizeMinuteContent } from '@/lib/minute-content';
-import { describeMinuteProcessingStatus } from '@/lib/status';
-import { DEMO_TIMEZONE, findAccountByUserId } from './accounts';
+import { PRIORITY_LABEL, TASK_STATUS_LABEL, describeMinuteProcessingStatus } from '@/lib/status';
+import { DEMO_ACCOUNTS, DEMO_TIMEZONE, findAccountByUserId } from './accounts';
+import { addMockNotification } from './notification-store';
+import { mockStore } from './store';
+import { teamLeadCanOpenTask } from './team-lead';
+import { employeeCanOpenTask } from './work';
 
 const LATENCY_MS = 140;
 const delay = () => new Promise((resolve) => setTimeout(resolve, LATENCY_MS));
@@ -74,6 +96,24 @@ const CREATOR_ROLES: readonly RoleKey[] = ['team_lead', 'hr_manager', 'super_adm
 type Account = NonNullable<ReturnType<typeof findAccountByUserId>>;
 
 let minutes: MeetingMinute[] = [...MEETING_MINUTES];
+
+/**
+ * `FE-1122` — the minute content each successful run read, by attempt id.
+ *
+ * Held so an interpretation can say when the minute has been edited since:
+ * editing never re-runs AI, so without this a summary would silently describe
+ * text that is no longer on the page. Seeded runs read the seeded content.
+ */
+function seededRunSources(): Map<string, string> {
+  return new Map(
+    MEETING_SUMMARIES.flatMap((summary) => {
+      const source = MEETING_MINUTES.find((minute) => minute.id === summary.minuteId);
+      return source ? [[summary.attemptId, source.content] as const] : [];
+    }),
+  );
+}
+
+let runSources = seededRunSources();
 
 /* ------------------------------------------------------------------------- */
 /* Failure simulation (demo and tests only)                                  */
@@ -226,6 +266,10 @@ function currentCreateFault(): MeetingMinutesCreateFault | null {
 
 export function resetMeetingMinutesState(): void {
   minutes = [...MEETING_MINUTES];
+  runSources = seededRunSources();
+  clearWorker();
+  retriedByKey.clear();
+  requestedByKey.clear();
   createdByKey.clear();
   archivedByKey.clear();
   nextMinuteNumber = 2001;
@@ -613,6 +657,263 @@ let nextMinuteNumber = 2001;
 /** First outcome per idempotency key, so a repeated save creates no second minute. */
 const createdByKey = new Map<string, string>();
 
+/* ------------------------------------------------------------------------- */
+/* Generated tasks and traceability (`FE-1123`, `FE-1124`)                   */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * Whether the viewer may open a task — by the **same** rule the task page uses.
+ *
+ * `/tasks/[id]` shows a Team Lead the team-lead view, scoped by division, and
+ * everyone else their own tasks only. Both rules are imported from the task
+ * services that apply them (`teamLeadCanOpenTask`, `employeeCanOpenTask`), so
+ * this list and the task page cannot disagree: re-deriving either here would
+ * be a second copy of task authorization, and the day the copies drifted this
+ * list would offer an Open task link that lands on "not found".
+ *
+ * They are called as predicates rather than through the services, so a minute
+ * with generated tasks costs no extra round trips to load.
+ *
+ * It is also why a Super Administrator or an HR Manager sees generated tasks
+ * here as restricted rows: the task pages do not open other people's tasks
+ * for them either. Widening that belongs to the task module, not to this one.
+ */
+function canOpenTask(viewer: Account, taskId: string): boolean {
+  const task = mockStore.findTask(taskId);
+  if (!task) return false;
+  return viewer.primaryRole === 'team_lead'
+    ? teamLeadCanOpenTask(viewer.userId, task)
+    : employeeCanOpenTask(task, viewer.employeeId);
+}
+
+const BASIS_LABEL: Readonly<Record<TeamMatchBasis, string>> = {
+  project_membership: 'project membership',
+  department: 'department',
+  role: 'role',
+  availability: 'availability',
+  workload: 'workload',
+  active_status: 'active status',
+};
+
+/**
+ * How the first assignee was chosen, in words (`REQ-MTG-013`).
+ *
+ * Worded as matching, never as permission: the outcome says who the task was
+ * *proposed for* and on what grounds. Whether anyone may see or work on the
+ * task is decided by the task's project and assignment, like any other task
+ * (`FE-1124`).
+ */
+function matchOutcomeLabel(outcome: TeamMatchOutcome): string {
+  switch (outcome.kind) {
+    case 'mentioned_assignee':
+      return 'Named in the minute';
+    case 'matched': {
+      const words = outcome.basis.map((basis) => BASIS_LABEL[basis]);
+      const joined =
+        words.length <= 1 ? (words[0] ?? 'team data') : `${words.slice(0, -1).join(', ')} and ${words.at(-1)}`;
+      return `Matched on ${joined}`;
+    }
+    case 'unassigned':
+      return outcome.reason === 'mentioned_person_ineligible'
+        ? 'Named person not eligible, so left unassigned'
+        : 'No eligible team member, so left unassigned';
+  }
+}
+
+function employeeName(employeeId: string): string {
+  return DEMO_ACCOUNTS.find((account) => account.employeeId === employeeId)?.fullName ?? 'Unknown employee';
+}
+
+/**
+ * The tasks a minute's run created, as this viewer may see them.
+ *
+ * A task the viewer cannot open keeps its place and position — its existence
+ * follows from the minute they can already read — but the restricted variant
+ * carries no title, assignee, dates or link (`REQ-MTG-016`).
+ */
+async function generatedTasksFor(
+  viewer: Account,
+  minute: MeetingMinute,
+): Promise<readonly GeneratedTaskView[]> {
+  const links = GENERATED_TASK_LINKS.filter((link) => link.minuteId === minute.id).sort(
+    (a, b) => a.position - b.position,
+  );
+
+  return Promise.all(
+    links.map(async (link): Promise<GeneratedTaskView> => {
+      const task = mockStore.findTask(link.taskId);
+      if (!task || !canOpenTask(viewer, link.taskId)) {
+        return { access: 'restricted', linkId: link.id, position: link.position };
+      }
+
+      const generatedFor =
+        link.matchOutcome.kind === 'unassigned' ? null : link.matchOutcome.employeeId;
+      return {
+        access: 'visible',
+        linkId: link.id,
+        taskId: task.id,
+        position: link.position,
+        title: task.title,
+        assigneeName: task.assigneeEmployeeId ? employeeName(task.assigneeEmployeeId) : null,
+        priority: task.priority,
+        priorityLabel: PRIORITY_LABEL[task.priority],
+        dueDate: task.dueDate,
+        dueDateLabel: task.dueDate ? formatDate(task.dueDate) : '—',
+        status: task.status,
+        statusLabel: TASK_STATUS_LABEL[task.status],
+        matchOutcome: { kind: link.matchOutcome.kind, label: matchOutcomeLabel(link.matchOutcome) },
+        // Any change from the generated assignee counts, including a task that
+        // arrived unassigned and was given to someone afterwards.
+        reassignedSinceGeneration: task.assigneeEmployeeId !== generatedFor,
+        href: `/tasks/${task.id}`,
+      };
+    }),
+  );
+}
+
+/* ------------------------------------------------------------------------- */
+/* Background processing (`FE-1126`)                                         */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * A stand-in for the durable worker `BE-1322` builds.
+ *
+ * Only a run **started in this session** — a save with AI, or a retry — is
+ * driven: it moves Pending → Processing → Processed or Failed on timers, the
+ * way a queue would, and notifies the minute's creator when it ends
+ * (`REQ-MTG-022`). The seeded Pending and Processing minutes are deliberately
+ * left where they are, so every state stays on show for demos and gates.
+ *
+ * A live run cannot read a minute the way a model does, so a successful one
+ * produces a short summary taken from the minute's own opening sentence, no
+ * decisions and no tasks — "finished, nothing to create" is a real outcome
+ * (`REQ-MTG-011`). The full case, with decisions and generated tasks, is the
+ * seeded `min-1001`.
+ *
+ * This lives only in the mock adapter. The MySQL adapter has no equivalent.
+ */
+export type MeetingMinutesWorkerOutcome = 'succeed' | 'fail';
+
+const WORKER_OUTCOMES: readonly MeetingMinutesWorkerOutcome[] = ['succeed', 'fail'];
+
+export const MEETING_MINUTES_WORKER_OUTCOME_STORAGE_KEY = 'oms.mock-outcome.meeting-minutes-worker';
+
+const DEFAULT_WORKER_TIMING = { startAfterMs: 2500, finishAfterMs: 6500 } as const;
+
+let workerTiming: { startAfterMs: number; finishAfterMs: number } = { ...DEFAULT_WORKER_TIMING };
+let workerOutcome: MeetingMinutesWorkerOutcome | null = null;
+const workerTimers = new Set<ReturnType<typeof setTimeout>>();
+
+/** Summaries produced by live runs, by attempt id. */
+const liveSummaries = new Map<string, string>();
+
+/** Test seam: how long a live run waits before starting and before ending. */
+export function setMeetingMinutesWorkerTiming(
+  timing: { startAfterMs: number; finishAfterMs: number } | null,
+): void {
+  workerTiming = timing ? { ...timing } : { ...DEFAULT_WORKER_TIMING };
+}
+
+/** Demo and test seam: make live runs fail instead of succeed. */
+export function setMeetingMinutesWorkerOutcome(outcome: MeetingMinutesWorkerOutcome | null): void {
+  workerOutcome = outcome;
+}
+
+function currentWorkerOutcome(): MeetingMinutesWorkerOutcome {
+  if (workerOutcome) return workerOutcome;
+  if (typeof window === 'undefined') return 'succeed';
+  try {
+    const stored = window.localStorage.getItem(MEETING_MINUTES_WORKER_OUTCOME_STORAGE_KEY);
+    return stored && (WORKER_OUTCOMES as readonly string[]).includes(stored)
+      ? (stored as MeetingMinutesWorkerOutcome)
+      : 'succeed';
+  } catch {
+    return 'succeed';
+  }
+}
+
+function clearWorker(): void {
+  for (const timer of workerTimers) clearTimeout(timer);
+  workerTimers.clear();
+  liveSummaries.clear();
+  workerTiming = { ...DEFAULT_WORKER_TIMING };
+  workerOutcome = null;
+}
+
+/** 1 for a first run; each retry adds one. Parsed from `att-<minute>-<n>`. */
+function attemptNumberOf(attemptId: string | null): number {
+  if (attemptId === null) return 0;
+  const match = /-(\d+)$/.exec(attemptId);
+  return match ? Number(match[1]) : 1;
+}
+
+/**
+ * Moves one run on, only if it is still the minute's current run and the move
+ * is legal. A retried, archived or reset minute simply stops being advanced,
+ * which is what makes a timer firing late harmless (`REQ-MTG-023`).
+ */
+function advanceRun(minuteId: string, attemptId: string, to: MinuteProcessingStatus): void {
+  const minute = minutes.find((item) => item.id === minuteId);
+  if (!minute || minute.latestAttemptId !== attemptId || minute.archivedAt !== null) return;
+  if (!canChangeProcessingStatus(minute.processingStatus, to)) return;
+
+  const now = nowTimestamp();
+  let next: MeetingMinute = { ...minute, processingStatus: to, updatedAt: now };
+
+  if (to === 'processed') {
+    const opening = minuteContentToPlainText(minute.content).split(/(?<=[.!?])\s/)[0] ?? '';
+    liveSummaries.set(attemptId, opening);
+    runSources.set(attemptId, minute.content);
+    next = { ...next, processedAt: now, processingError: null };
+  }
+  if (to === 'failed') {
+    next = {
+      ...next,
+      processingError: { code: 'provider_unavailable', occurredAt: now, retryable: true },
+    };
+  }
+
+  minutes = minutes.map((item) => (item.id === minuteId ? next : item));
+
+  if (to === 'processed' || to === 'failed') {
+    // `REQ-MTG-022`: the creator is told, wherever they are in the product.
+    // The notice names the minute, which they wrote, and carries none of its
+    // content.
+    addMockNotification({
+      recipientUserId: minute.createdBy.userId,
+      type: to === 'processed' ? 'meeting_minute_processed' : 'meeting_minute_failed',
+      title:
+        to === 'processed' ? 'Task generation finished' : 'Task generation failed',
+      body:
+        to === 'processed'
+          ? 'Open the meeting minute to see what task generation produced.'
+          : 'Your meeting minute is saved. You can retry task generation from the minute.',
+      href: `/meeting-minutes/${minuteId}`,
+      relatedLabel: minute.title,
+    });
+  }
+}
+
+function scheduleRun(minuteId: string, attemptId: string): void {
+  const outcome = currentWorkerOutcome();
+  const start = setTimeout(() => {
+    workerTimers.delete(start);
+    advanceRun(minuteId, attemptId, 'processing');
+  }, workerTiming.startAfterMs);
+  const finish = setTimeout(() => {
+    workerTimers.delete(finish);
+    advanceRun(minuteId, attemptId, outcome === 'fail' ? 'failed' : 'processed');
+  }, workerTiming.finishAfterMs);
+  workerTimers.add(start);
+  workerTimers.add(finish);
+}
+
+/** Retry outcomes, so repeating the same request returns the first one. */
+const retriedByKey = new Map<string, string>();
+
+/** Later requests to start processing, by idempotency key (`FE-1131`). */
+const requestedByKey = new Map<string, string>();
+
 /**
  * The outcome of a save, as the form reads it (`REQ-MTG-007`-`REQ-MTG-009`).
  *
@@ -622,13 +923,13 @@ const createdByKey = new Map<string, string>();
  * as started. The warning rides along so a repeat of the same idempotent save
  * tells the same story as the first one.
  */
-function savedView(
+async function savedView(
   viewer: Account,
   minute: MeetingMinute,
-): { readonly data: MeetingMinuteSavedView; readonly warnings: readonly ResultWarning[] } {
+): Promise<{ readonly data: MeetingMinuteSavedView; readonly warnings: readonly ResultWarning[] }> {
   const processingStarted = minute.processWithAi && minute.processingStatus === 'pending';
   return {
-    data: { minute: toDetailView(viewer, minute), processingStarted },
+    data: { minute: await toDetailView(viewer, minute), processingStarted },
     warnings:
       minute.processWithAi && !processingStarted
         ? [
@@ -641,7 +942,59 @@ function savedView(
   };
 }
 
-function toDetailView(viewer: Account, minute: MeetingMinute): MeetingMinuteDetailView {
+/**
+ * The AI interpretation for a minute, if a successful run produced one
+ * (`FE-1122`, `REQ-MTG-016`).
+ *
+ * Only a `processed` minute has one, and only from its **latest** attempt: a
+ * summary from an earlier run describes a reading that was superseded. It
+ * needs no authorization of its own, because it is derived from nothing but
+ * the minute content the viewer has already been allowed to read; that is
+ * also why it is a plain value and has no restricted variant.
+ */
+function interpretationFor(minute: MeetingMinute): MeetingMinuteDetailView['interpretation'] {
+  if (minute.processingStatus !== 'processed' || minute.latestAttemptId === null) return null;
+  const attemptId = minute.latestAttemptId;
+
+  const seeded = MEETING_SUMMARIES.find((item) => item.attemptId === attemptId)?.text;
+  const summary = seeded ?? liveSummaries.get(attemptId);
+  if (summary === undefined) return null;
+
+  const decisions = EXTRACTED_DECISIONS.filter((item) => item.attemptId === attemptId)
+    .sort((a, b) => a.position - b.position)
+    .map((item) => ({ id: item.id, position: item.position, text: item.text }));
+
+  // Compared as text, so a formatting-only round trip through the editor is
+  // not mistaken for a change of substance.
+  const source = runSources.get(attemptId);
+  const basedOnEarlierContent =
+    source !== undefined &&
+    minuteContentToPlainText(source) !== minuteContentToPlainText(minute.content);
+
+  return { summary, decisions, basedOnEarlierContent };
+}
+
+function processingView(minute: MeetingMinute): MeetingMinuteDetailView['processing'] {
+  return {
+    status: minute.processingStatus,
+    label: describeMinuteProcessingStatus(minute.processingStatus).label,
+    processedAtLabel:
+      minute.processedAt === null ? null : formatTimestamp(minute.processedAt, DEMO_TIMEZONE),
+    error:
+      minute.processingError === null
+        ? null
+        : {
+            code: minute.processingError.code,
+            message: SAFE_PROCESSING_ERROR_MESSAGE[minute.processingError.code],
+            occurredAtLabel: formatTimestamp(minute.processingError.occurredAt, DEMO_TIMEZONE),
+            retryable: minute.processingError.retryable,
+          },
+    attemptCount: attemptNumberOf(minute.latestAttemptId),
+    latestAttemptId: minute.latestAttemptId,
+  };
+}
+
+async function toDetailView(viewer: Account, minute: MeetingMinute): Promise<MeetingMinuteDetailView> {
   return {
     id: minute.id,
     title: minute.title,
@@ -654,29 +1007,15 @@ function toDetailView(viewer: Account, minute: MeetingMinute): MeetingMinuteDeta
     updatedAtLabel: formatTimestamp(minute.updatedAt, DEMO_TIMEZONE),
     aiRequested: minute.processWithAi,
     aiRequestedLabel: minute.processWithAi ? 'Yes' : 'No',
-    processing: {
-      status: minute.processingStatus,
-      label: describeMinuteProcessingStatus(minute.processingStatus).label,
-      processedAtLabel:
-        minute.processedAt === null ? null : formatTimestamp(minute.processedAt, DEMO_TIMEZONE),
-      error:
-        minute.processingError === null
-          ? null
-          : {
-              code: minute.processingError.code,
-              message: SAFE_PROCESSING_ERROR_MESSAGE[minute.processingError.code],
-              occurredAtLabel: formatTimestamp(minute.processingError.occurredAt, DEMO_TIMEZONE),
-              retryable: minute.processingError.retryable,
-            },
-      attemptCount: minute.latestAttemptId === null ? 0 : 1,
-    },
-    /*
-     * A minute this operation returns has just been created, so it carries no
-     * AI interpretation and no generated tasks yet. `FE-1120` reads stored
-     * attempts, summaries and links for the detail page.
-     */
-    interpretation: null,
-    generatedTasks: [],
+    processing: processingView(minute),
+    interpretation: interpretationFor(minute),
+    generatedTasks: await generatedTasksFor(viewer, minute),
+    // Only for the run whose tasks are shown; a run that has not finished has
+    // dropped nothing yet.
+    duplicateProposalCount:
+      minute.processingStatus === 'processed' && minute.latestAttemptId
+        ? (DUPLICATE_PROPOSALS[minute.latestAttemptId] ?? 0)
+        : 0,
     archived:
       minute.archivedAt === null || minute.archivedBy === null
         ? null
@@ -799,6 +1138,11 @@ export const mockMeetingMinutesService: Pick<
   | 'editContext'
   | 'update'
   | 'archive'
+  | 'requestProcessing'
+  | 'retryProcessing'
+  | 'getProcessingSnapshot'
+  | 'openGeneratedTask'
+  | 'getTaskSourceMinute'
 > = {
   async list(userId, query: MeetingMinuteListQuery): Promise<Result<MeetingMinuteListView>> {
     // Taken before the simulated latency, so both calls of a development
@@ -928,7 +1272,7 @@ export const mockMeetingMinutesService: Pick<
     if (alreadyCreated) {
       const existing = minutes.find((minute) => minute.id === alreadyCreated);
       if (existing) {
-        const repeat = savedView(viewer, existing);
+        const repeat = await savedView(viewer, existing);
         return success(repeat.data, repeat.warnings);
       }
     }
@@ -1011,8 +1355,10 @@ export const mockMeetingMinutesService: Pick<
 
     minutes = [...minutes, saved];
     createdByKey.set(input.idempotencyKey, saved.id);
+    // Queued, so the background run begins; the save does not wait for it.
+    if (queued && saved.latestAttemptId) scheduleRun(saved.id, saved.latestAttemptId);
 
-    const outcome = savedView(viewer, saved);
+    const outcome = await savedView(viewer, saved);
     return success(outcome.data, outcome.warnings);
   },
 
@@ -1036,7 +1382,7 @@ export const mockMeetingMinutesService: Pick<
     const minute = minutes.find((item) => item.id === minuteId);
     if (!minute || !canRead(viewer, minute)) return MINUTE_NOT_FOUND;
 
-    return success(toDetailView(viewer, minute));
+    return success(await toDetailView(viewer, minute));
   },
   /**
    * What the Edit form loads (`FE-1116`).
@@ -1130,7 +1476,7 @@ export const mockMeetingMinutesService: Pick<
     };
     minutes = minutes.map((item) => (item.id === updated.id ? updated : item));
 
-    return success(toDetailView(viewer, updated));
+    return success(await toDetailView(viewer, updated));
   },
 
   /**
@@ -1151,7 +1497,7 @@ export const mockMeetingMinutesService: Pick<
     const already = archivedByKey.get(input.idempotencyKey);
     if (already) {
       const archived = minutes.find((item) => item.id === already);
-      if (archived && canRead(viewer, archived)) return success(toDetailView(viewer, archived));
+      if (archived && canRead(viewer, archived)) return success(await toDetailView(viewer, archived));
     }
 
     const gate = gateChange(viewer, input.minuteId);
@@ -1175,6 +1521,211 @@ export const mockMeetingMinutesService: Pick<
     minutes = minutes.map((item) => (item.id === archived.id ? archived : item));
     archivedByKey.set(input.idempotencyKey, archived.id);
 
-    return success(toDetailView(viewer, archived));
+    return success(await toDetailView(viewer, archived));
+  },
+
+
+  /**
+   * Starts task generation for a minute saved without it (`FE-1131`).
+   *
+   * Refused like every change to an existing minute: unreadable is not found,
+   * not allowed is denied, and — as conflicts — archived, no longer Not
+   * Processed, or a stale version. Only `not_processed → pending` is legal
+   * here (`MINUTE_PROCESSING_TRANSITIONS`); a failed run is retried instead.
+   */
+  async requestProcessing(userId, input: RequestProcessingInput): Promise<Result<MeetingMinuteDetailView>> {
+    await delay();
+    const viewer = findAccountByUserId(userId);
+    if (!viewer) return notSignedIn(`/meeting-minutes/${input.minuteId}`, 'Sign in to start task generation.');
+
+    const already = requestedByKey.get(input.idempotencyKey);
+    if (already) {
+      const requested = minutes.find((item) => item.id === already);
+      if (requested && canRead(viewer, requested)) return success(await toDetailView(viewer, requested));
+    }
+
+    const gate = gateChange(viewer, input.minuteId);
+    if (gate.kind === 'not_found') return MINUTE_NOT_FOUND;
+    if (gate.kind === 'denied') return CHANGE_DENIED;
+    if (gate.kind === 'archived') return ARCHIVED_CONFLICT;
+
+    const { minute } = gate;
+    if (minute.version !== input.expectedVersion) return STALE_VERSION_CONFLICT;
+    if (minute.processingStatus !== 'not_processed') {
+      return {
+        status: 'conflict',
+        code: 'CONFLICT',
+        message: 'Task generation has already been requested for this minute.',
+        guidance: 'Reload the minute to see where it stands. A failed run is retried, not requested again.',
+      };
+    }
+
+    const attemptId = `att-${minute.id.slice(4)}-1`;
+    const now = nowTimestamp();
+    const requested: MeetingMinute = {
+      ...minute,
+      processWithAi: true,
+      processingStatus: 'pending',
+      latestAttemptId: attemptId,
+      version: minute.version + 1,
+      updatedAt: now,
+      updatedBy: { userId: viewer.userId, displayName: viewer.fullName },
+    };
+    minutes = minutes.map((item) => (item.id === requested.id ? requested : item));
+    requestedByKey.set(input.idempotencyKey, requested.id);
+    scheduleRun(requested.id, attemptId);
+
+    return success(await toDetailView(viewer, requested));
+  },
+
+  /**
+   * Retries a failed run (`FE-1125`, `REQ-MTG-017`).
+   *
+   * Refused, in this order: a minute the viewer cannot read is not found; one
+   * they may not change is denied; and each of these is a conflict, because
+   * the minute is readable and the viewer entitled, but its state does not
+   * allow the move — archived, not currently failed, a failure a retry cannot
+   * fix, or a `failedAttemptId` that is no longer the latest run. That last
+   * one is what stops a stale page, or a second tab, starting a second run
+   * (`REQ-MTG-023`).
+   */
+  async retryProcessing(userId, input: RetryProcessingInput): Promise<Result<MeetingMinuteDetailView>> {
+    await delay();
+    const viewer = findAccountByUserId(userId);
+    if (!viewer) return notSignedIn(`/meeting-minutes/${input.minuteId}`, 'Sign in to retry task generation.');
+
+    // A repeat of the same request returns the first outcome.
+    const already = retriedByKey.get(input.idempotencyKey);
+    if (already) {
+      const retried = minutes.find((item) => item.id === already);
+      if (retried && canRead(viewer, retried)) return success(await toDetailView(viewer, retried));
+    }
+
+    const gate = gateChange(viewer, input.minuteId);
+    if (gate.kind === 'not_found') return MINUTE_NOT_FOUND;
+    if (gate.kind === 'denied') return CHANGE_DENIED;
+    if (gate.kind === 'archived') return ARCHIVED_CONFLICT;
+
+    const { minute } = gate;
+    if (minute.processingStatus !== 'failed') {
+      return {
+        status: 'conflict',
+        code: 'CONFLICT',
+        message: 'Task generation is not in a failed state.',
+        guidance: 'Reload the minute to see its current status. A run that is queued, running or finished does not need a retry.',
+      };
+    }
+    if (!minute.processingError?.retryable) {
+      return {
+        status: 'conflict',
+        code: 'CONFLICT',
+        message: 'Retrying would not fix this failure.',
+        guidance: 'The minute is saved. Ask an administrator to look into the failure before trying again.',
+      };
+    }
+    if (minute.latestAttemptId !== input.failedAttemptId) {
+      return {
+        status: 'conflict',
+        code: 'CONFLICT',
+        message: 'This run has already been retried.',
+        guidance: 'Reload the minute to see the current run.',
+      };
+    }
+
+    const attemptId = `att-${minute.id.slice(4)}-${attemptNumberOf(minute.latestAttemptId) + 1}`;
+    const now = nowTimestamp();
+    const retried: MeetingMinute = {
+      ...minute,
+      processingStatus: 'pending',
+      processingError: null,
+      latestAttemptId: attemptId,
+      version: minute.version + 1,
+      updatedAt: now,
+      updatedBy: { userId: viewer.userId, displayName: viewer.fullName },
+    };
+    minutes = minutes.map((item) => (item.id === retried.id ? retried : item));
+    retriedByKey.set(input.idempotencyKey, retried.id);
+    scheduleRun(retried.id, attemptId);
+
+    return success(await toDetailView(viewer, retried));
+  },
+
+  /**
+   * A light read of where processing stands (`FE-1126`), for polling while a
+   * run is queued or running. Same scope as `get`: not found hides existence.
+   */
+  async getProcessingSnapshot(userId, minuteId): Promise<Result<MinuteProcessingSnapshotView>> {
+    await delay();
+    const viewer = findAccountByUserId(userId);
+    if (!viewer) return notSignedIn(`/meeting-minutes/${minuteId}`, 'Sign in to see this meeting minute.');
+
+    const minute = minutes.find((item) => item.id === minuteId);
+    if (!minute || !canRead(viewer, minute)) return MINUTE_NOT_FOUND;
+
+    return success({
+      minuteId: minute.id,
+      processing: processingView(minute),
+      // About a minute the viewer can read, so an authorized count
+      // (`AUTHORIZED_COUNT_FIELDS`); restricted tasks are counted, not named.
+      generatedTaskCount: GENERATED_TASK_LINKS.filter((link) => link.minuteId === minute.id).length,
+      actions: actionsFor(viewer, minute),
+    });
+  },
+
+  /**
+   * Resolves a generated task from its minute (`FE-1123`).
+   *
+   * Not found unless the viewer can read the minute, the link belongs to it,
+   * **and** the task page would open the task for them — so following the
+   * link never lands anywhere this answer did not promise.
+   */
+  async openGeneratedTask(userId, minuteId, linkId): Promise<Result<OpenTaskTargetView>> {
+    await delay();
+    const viewer = findAccountByUserId(userId);
+    if (!viewer) return notSignedIn(`/meeting-minutes/${minuteId}`, 'Sign in to open this task.');
+
+    const minute = minutes.find((item) => item.id === minuteId);
+    const link = GENERATED_TASK_LINKS.find((item) => item.id === linkId && item.minuteId === minuteId);
+    if (!minute || !canRead(viewer, minute) || !link || !canOpenTask(viewer, link.taskId)) {
+      return { status: 'not_found', code: 'NOT_FOUND', message: 'That task could not be found.', resource: 'task' };
+    }
+    return success({ taskId: link.taskId, href: `/tasks/${link.taskId}` });
+  },
+
+  /**
+   * The reverse link, for a task's own page (`FE-1124`, `AC-MTG-010`).
+   *
+   * Not found when the viewer cannot open the task — its origin is not news
+   * about a task they cannot see — and when the task has no source minute,
+   * which is how an ordinary task is recognised. When they can open the task
+   * but not its minute, the answer is `restricted`: it says a minute exists
+   * and names nothing about it.
+   */
+  async getTaskSourceMinute(userId, taskId): Promise<Result<TaskSourceMinuteView>> {
+    await delay();
+    const viewer = findAccountByUserId(userId);
+    if (!viewer) return notSignedIn(`/tasks/${taskId}`, 'Sign in to see this task.');
+
+    const notFound = {
+      status: 'not_found',
+      code: 'NOT_FOUND',
+      message: 'This task has no source meeting minute.',
+      resource: 'task_source',
+    } as const;
+
+    if (!canOpenTask(viewer, taskId)) return notFound;
+    const link = GENERATED_TASK_LINKS.find((item) => item.taskId === taskId);
+    if (!link) return notFound;
+
+    const minute = minutes.find((item) => item.id === link.minuteId);
+    if (!minute || !canRead(viewer, minute)) return success({ access: 'restricted' });
+
+    return success({
+      access: 'visible',
+      minuteId: minute.id,
+      title: minute.title,
+      isArchived: minute.archivedAt !== null,
+      href: `/meeting-minutes/${minute.id}`,
+    });
   },
 };

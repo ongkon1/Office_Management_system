@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { TaskSourceMinute } from '@/features/meeting-minutes/task-source-minute';
 import { useRouter } from 'next/navigation';
 import { Plus, Users } from 'lucide-react';
 import type { ProjectFormInput, TaskFormInput, TeamProjectView, TeamTaskView } from '@/contracts/team-lead';
@@ -147,7 +148,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       <Tabs items={tabs} activeKey={tab} onChange={setTab} label="Project sections" className="mt-5" />
       <TabPanel tabKey="overview" activeKey={tab} className="mt-5"><div className="grid gap-5 lg:grid-cols-2"><Card><CardHeader title="Delivery overview" /><ProgressBar className="mt-4" value={project.completionPercent} label="Progress" valueText={`${project.completionPercent}%`} /><dl className="mt-5 grid grid-cols-2 gap-4"><div><dt className="text-caption text-ink-muted">Estimate</dt><dd className="text-metric text-ink"><Duration value={project.estimated} /></dd></div><div><dt className="text-caption text-ink-muted">Actual</dt><dd className="text-metric text-ink"><Duration value={project.actual} /></dd></div><div><dt className="text-caption text-ink-muted">Priority</dt><dd className="capitalize text-ink">{project.priority}</dd></div><div><dt className="text-caption text-ink-muted">Budget</dt><dd>{project.budgetRestricted ? <RestrictedValue /> : project.budgetLabel ?? 'Not recorded'}</dd></div></dl></Card><Card><CardHeader title="Project context" /><dl className="mt-4 space-y-3 text-body-sm"><div><dt className="text-ink-muted">Manager</dt><dd className="font-medium text-ink">{project.manager.fullName}</dd></div><div><dt className="text-ink-muted">Client</dt><dd className="text-ink">{project.client ?? 'Not recorded'}</dd></div><div><dt className="text-ink-muted">Dates</dt><dd className="text-ink">{project.startDateLabel} – {project.endDateLabel ?? 'Open-ended'}</dd></div><div><dt className="text-ink-muted">Notes</dt><dd className="text-ink">{project.notes ?? 'No project notes.'}</dd></div></dl></Card></div></TabPanel>
       <TabPanel tabKey="team" activeKey={tab} className="mt-5"><Card><CardHeader title="Project team" description={`${project.memberCount} assigned member${project.memberCount === 1 ? '' : 's'}.`} /><p className="mt-4 text-body-sm text-ink-muted">Project manager: {project.manager.fullName}. Team membership is maintained through the project form.</p></Card></TabPanel>
-      <TabPanel tabKey="tasks" activeKey={tab} className="mt-5"><div className="grid gap-3 md:grid-cols-2">{tasks.map((task) => <a href={`/tasks/${task.id}`} key={task.id}><Card className="h-full hover:border-highlight-hover"><CardHeader title={task.title} description={`${task.assignee.fullName} · ${TASK_STATUS_LABEL[task.status]}`} /><p className="mt-3 text-caption text-ink-muted">Actual <Duration value={task.actual} /> · Estimate <Duration value={task.estimated} /></p></Card></a>)}</div></TabPanel>
+      <TabPanel tabKey="tasks" activeKey={tab} className="mt-5"><div className="grid gap-3 md:grid-cols-2">{tasks.map((task) => <a href={`/tasks/${task.id}`} key={task.id}><Card className="h-full hover:border-highlight-hover"><CardHeader title={task.title} description={`${task.assignee?.fullName ?? 'Unassigned'} · ${TASK_STATUS_LABEL[task.status]}`} /><p className="mt-3 text-caption text-ink-muted">Actual <Duration value={task.actual} /> · Estimate <Duration value={task.estimated} /></p></Card></a>)}</div></TabPanel>
       <TabPanel tabKey="time" activeKey={tab} className="mt-5"><Card><CardHeader title="Project time" description="Actual time is derived from linked entries." /><p className="mt-4 text-metric text-ink"><Duration value={project.actual} /></p></Card></TabPanel>
       <TabPanel tabKey="files" activeKey={tab} className="mt-5"><Card><CardHeader title="Files" /><EmptyState title="No shared project files" description="Attach files from Edit project." /></Card></TabPanel>
       <TabPanel tabKey="activity" activeKey={tab} className="mt-5"><Card><CardHeader title="Activity" /><ul className="mt-3 space-y-3 text-body-sm text-ink-muted"><li>Project progress updated to {project.completionPercent}%.</li><li>Actual time recalculated from linked entries.</li><li>Project scope confirmed for {project.division.name}.</li></ul></Card></TabPanel>
@@ -160,7 +161,7 @@ const EMPTY_TASK: TaskFormInput = { title: '', projectId: 'prj-vp2', assigneeEmp
 
 function TaskForm({ initial, onCancel, onSaved }: { initial?: TeamTaskView; onCancel: () => void; onSaved: (task: TeamTaskView) => void }) {
   const { user } = useSession();
-  const [form, setForm] = React.useState<TaskFormInput>(() => initial ? { title: initial.title, projectId: initial.projectId, assigneeEmployeeId: initial.assignee.id, supportingMemberIds: initial.supportingMembers.map((item) => item.id), startDate: null, dueDate: null, priority: initial.priority, estimatedMinutes: initial.estimated.minutes, description: initial.description ?? '', checklist: initial.checklist.map((item) => item.label) } : EMPTY_TASK);
+  const [form, setForm] = React.useState<TaskFormInput>(() => initial ? { title: initial.title, projectId: initial.projectId, assigneeEmployeeId: initial.assignee?.id ?? '', supportingMemberIds: initial.supportingMembers.map((item) => item.id), startDate: null, dueDate: null, priority: initial.priority, estimatedMinutes: initial.estimated.minutes, description: initial.description ?? '', checklist: initial.checklist.map((item) => item.label) } : EMPTY_TASK);
   const [checklistText, setChecklistText] = React.useState(form.checklist.join('\n'));
   const [files, setFiles] = React.useState<readonly { id: string; name: string; size: string }[]>([]);
   const [error, setError] = React.useState('');
@@ -214,7 +215,13 @@ function TaskForm({ initial, onCancel, onSaved }: { initial?: TeamTaskView; onCa
           required
           helperText={isSelfAssigned ? 'Only you can complete and record work against this task.' : 'Choose yourself or one employee in your team scope.'}
         >
-          <Select value={form.assigneeEmployeeId} onChange={(event) => setAssignee(event.target.value)} options={assigneeOptions} />
+          <Select
+            value={form.assigneeEmployeeId}
+            onChange={(event) => setAssignee(event.target.value)}
+            options={assigneeOptions}
+            // A task task generation left unassigned opens with no one chosen.
+            placeholder={form.assigneeEmployeeId === '' ? 'Choose an assignee' : undefined}
+          />
         </Field>
         <Field label="Start date"><Input type="date" value={form.startDate ?? ''} onChange={(event) => set('startDate', event.target.value || null)} /></Field>
         <Field label="Due date"><Input type="date" value={form.dueDate ?? ''} onChange={(event) => set('dueDate', event.target.value || null)} /></Field>
@@ -328,13 +335,15 @@ export function TeamTaskDetail({ taskId }: { taskId: string }) {
         }
         actions={<Button variant="secondary" onClick={() => setEditing(true)}>Edit task</Button>}
       />
+      {/* `FE-1124`: renders nothing for an ordinary task. */}
+      <TaskSourceMinute taskId={taskId} />
       <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="space-y-5">
           <Card>
             <CardHeader title="Task overview" />
             <p className="mt-3 text-body-sm text-ink-muted">{task.description ?? 'No description.'}</p>
             <dl className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-5">
-              <div><dt className="text-caption text-ink-muted">Assignee</dt><dd className="font-medium text-ink">{task.assignee.fullName}</dd></div>
+              <div><dt className="text-caption text-ink-muted">Assignee</dt><dd className="font-medium text-ink">{task.assignee?.fullName ?? 'Unassigned'}</dd></div>
               <div><dt className="text-caption text-ink-muted">Due</dt><dd className={cn('font-medium', task.isOverdue ? 'text-danger' : 'text-ink')}>{task.dueDateLabel ?? 'Not recorded'}</dd></div>
               <div><dt className="text-caption text-ink-muted">Estimate</dt><dd className="font-medium text-ink"><Duration value={task.estimated} /></dd></div>
               <div><dt className="text-caption text-ink-muted">Actual</dt><dd className="font-medium text-ink"><Duration value={task.actual} /></dd></div>
@@ -388,7 +397,7 @@ function teamBoardTask(task: TeamTaskView, viewerEmployeeId: string): WorkflowBo
   const [projectCode, ...projectNameParts] = task.projectLabel.split(' · ');
   const canLogWorkWhenInProgress =
     !task.review.blocksTimeEntry &&
-    (task.assignee.id === viewerEmployeeId ||
+    (task.assignee?.id === viewerEmployeeId ||
       task.supportingMembers.some((member) => member.id === viewerEmployeeId));
   return {
     id: task.id,
@@ -399,7 +408,7 @@ function teamBoardTask(task: TeamTaskView, viewerEmployeeId: string): WorkflowBo
       name: projectNameParts.join(' · ') || task.projectLabel,
     },
     division: { name: task.division.name, code: task.division.code },
-    assignee: { id: task.assignee.id, fullName: task.assignee.fullName },
+    assignee: task.assignee ? { id: task.assignee.id, fullName: task.assignee.fullName } : null,
     status: task.status,
     estimated: task.estimated,
     actual: task.actual,

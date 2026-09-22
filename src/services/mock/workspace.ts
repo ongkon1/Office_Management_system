@@ -154,6 +154,10 @@ function groupOf(type: NotificationFixture['type']): NotificationGroupKey {
     case 'deadline_approaching':
     case 'task_overdue':
     case 'workload_warning':
+    // A finished or failed Meeting Minutes run is about work, and the default
+    // would file it under "Needs your attention" — which a success is not.
+    case 'meeting_minute_processed':
+    case 'meeting_minute_failed':
       return 'work';
     case 'remark_added':
     case 'correction_requested':
@@ -332,7 +336,7 @@ function searchFor(userId: string, term: string): readonly SearchResultView[] {
       kind: 'task',
       kindLabel: 'Task',
       title: task.title,
-      subtitle: `${divisionOf(task.divisionId).code} · ${employeeName(task.assigneeEmployeeId)}`,
+      subtitle: `${divisionOf(task.divisionId).code} · ${task.assigneeEmployeeId ? employeeName(task.assigneeEmployeeId) : 'Unassigned'}`,
       href: `/tasks/${task.id}`,
       snippet: snippetOf(task.description ?? '', needle),
       isRestricted: false,

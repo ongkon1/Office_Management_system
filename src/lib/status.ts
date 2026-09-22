@@ -11,6 +11,7 @@ import type {
   AttendanceState,
   DayStatus,
   DurationMinutes,
+  Priority,
   RemarkState,
   RequestWorkflowState,
   TaskStatus,
@@ -80,6 +81,19 @@ export interface ProcessingStatusDescriptor {
   readonly accessibleLabel: string;
   readonly tone: 'neutral' | 'accent' | 'success' | 'danger';
   readonly shape: 'circle-dashed' | 'clock' | 'loader' | 'circle-check' | 'circle-x';
+  /**
+   * What the state means for the person reading it (`FE-1121`). A label
+   * names the state; this says what it implies and what, if anything, happens
+   * next. Every one of them keeps the minute and its processing apart, because
+   * the minute is saved in all five.
+   */
+  readonly meaning: string;
+  /**
+   * What a live region says when a minute *moves into* this state
+   * (`FE-1121`). Worded as a change, not a state, and never announced on
+   * first load — the badge is already on screen by then.
+   */
+  readonly announcement: string;
 }
 
 const MINUTE_PROCESSING_STATUS: Readonly<Record<MinuteProcessingStatus, ProcessingStatusDescriptor>> = {
@@ -88,30 +102,40 @@ const MINUTE_PROCESSING_STATUS: Readonly<Record<MinuteProcessingStatus, Processi
     accessibleLabel: 'AI processing: not requested',
     tone: 'neutral',
     shape: 'circle-dashed',
+    meaning: 'AI was not asked to read this minute. It stays this way until someone requests processing.',
+    announcement: 'Task generation is not requested.',
   },
   pending: {
     label: 'Pending',
     accessibleLabel: 'AI processing: waiting to start',
     tone: 'accent',
     shape: 'clock',
+    meaning: 'Queued. Task generation will start shortly; the minute is already saved.',
+    announcement: 'Task generation is queued.',
   },
   processing: {
     label: 'Processing',
     accessibleLabel: 'AI processing: in progress',
     tone: 'accent',
     shape: 'loader',
+    meaning: 'AI is reading the minute and proposing tasks. Nothing on this page has to stay open for it.',
+    announcement: 'Task generation has started.',
   },
   processed: {
     label: 'Processed',
     accessibleLabel: 'AI processing: finished',
     tone: 'success',
     shape: 'circle-check',
+    meaning: 'Finished. Any summary, decisions and generated tasks on this minute come from this run.',
+    announcement: 'Task generation has finished.',
   },
   failed: {
     label: 'Failed',
     accessibleLabel: 'AI processing: failed, the minute is saved',
     tone: 'danger',
     shape: 'circle-x',
+    meaning: 'Task generation stopped before it finished. The minute itself is saved and unchanged.',
+    announcement: 'Task generation failed. Your meeting minute is saved.',
   },
 };
 
@@ -139,6 +163,14 @@ export const TASK_STATUS_LABEL: Readonly<Record<TaskStatus, string>> = {
   pending: 'Pending',
   in_progress: 'In Progress',
   completed: 'Completed',
+};
+
+/** Task priority as words (`FE-1123`); the one place it is spelled out. */
+export const PRIORITY_LABEL: Readonly<Record<Priority, string>> = {
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+  urgent: 'Urgent',
 };
 
 export const REQUEST_STATE_LABEL: Readonly<Record<RequestWorkflowState, string>> = {

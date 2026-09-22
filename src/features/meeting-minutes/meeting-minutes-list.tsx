@@ -12,6 +12,8 @@ import { formatDate, formatDateRange } from '@/lib/format';
 import { describeMinuteProcessingStatus } from '@/lib/status';
 import { useAsync } from '@/lib/use-async';
 import { useSession } from '@/features/access/session-provider';
+import { useToast } from '@/components/feedback/toast';
+import { useProcessingWatch } from './use-processing-watch';
 import { PageContainer, PageHeader } from '@/components/layout/page';
 import { Callout, EmptyState } from '@/components/feedback/alert';
 import { DataTable, type DataTableColumn } from '@/components/data/data-table';
@@ -97,6 +99,7 @@ function createdRangeLabel(from: string, to: string): string {
  */
 export function MeetingMinutesList() {
   const { user } = useSession();
+  const toast = useToast();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -176,6 +179,36 @@ export function MeetingMinutesList() {
     filtersActive: hasActiveFilters(urlState),
   });
   const frame = frameOf(listState);
+
+  /*
+   * `FE-1126`. While any row on this page is queued or running, watch it, and
+   * reload the list when one moves on. The reload asks for the same URL, so
+   * the filters, page and sort are untouched; and because the request keeps
+   * its previous answer while the same URL reloads, the rows stay mounted —
+   * nothing drops to a skeleton and the reader's scroll position holds. A run
+   * that finishes or fails also raises a notice, which on this page is the
+   * only thing that speaks the change.
+   */
+  const watchedRows = settled?.page.items ?? [];
+  useProcessingWatch(
+    user?.userId ?? '',
+    watchedRows.map((row) => ({ id: row.id, status: row.processing.status })),
+    (changes) => {
+      for (const change of changes) {
+        const title = watchedRows.find((row) => row.id === change.minuteId)?.title ?? 'A meeting minute';
+        if (change.to === 'processed') {
+          toast.show({ tone: 'success', title: 'Task generation finished', description: title });
+        } else if (change.to === 'failed') {
+          toast.show({
+            tone: 'warning',
+            title: 'Task generation failed',
+            description: `${title}: the minute is saved. Open it to retry.`,
+          });
+        }
+      }
+      reload();
+    },
+  );
 
   // Rewrite the URL to what the service applied, and pull an out-of-range page
   // back to the last one.

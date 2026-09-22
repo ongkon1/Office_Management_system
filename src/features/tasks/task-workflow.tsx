@@ -56,7 +56,8 @@ export interface WorkflowBoardTask {
   readonly href: string;
   readonly project: { readonly name: string; readonly code: string };
   readonly division: { readonly name: string; readonly code: string };
-  readonly assignee: { readonly id: string; readonly fullName: string };
+  /** Null for an unassigned task (`REQ-MTG-014`), shown as "Unassigned". */
+  readonly assignee: { readonly id: string; readonly fullName: string } | null;
   readonly status: TaskStatus;
   readonly estimated: DurationView;
   readonly actual: DurationView;
@@ -296,7 +297,7 @@ function TaskCard({
           <dt className="flex items-center gap-1 text-ink-subtle">
             <UserRound aria-hidden className="size-3.5" /> Assignee
           </dt>
-          <dd className="mt-0.5 font-medium text-ink">{task.assignee.fullName}</dd>
+          <dd className="mt-0.5 font-medium text-ink">{task.assignee?.fullName ?? 'Unassigned'}</dd>
         </div>
       </dl>
 
@@ -339,9 +340,12 @@ function TransitionPanel({
   const [idempotencyKey] = React.useState(
     () => `task-transition:${task.id}:${task.status}:${toStatus}:${crypto.randomUUID()}`,
   );
+  // The lock that matters is the assignee's. An unassigned task has none to
+  // check, and its start is refused by the service anyway.
+  const assigneeId = task.assignee?.id ?? '';
   const day = useAsync(
-    () => mockTimesheetService.getDay({ employeeId: task.assignee.id, date: DEMO_TODAY }),
-    [task.assignee.id, DEMO_TODAY],
+    () => mockTimesheetService.getDay({ employeeId: assigneeId, date: DEMO_TODAY }),
+    [assigneeId, DEMO_TODAY],
     { keepPrevious: true },
   ).state;
   const todayLocked = day.status === 'success' && day.data.summary.isLocked;

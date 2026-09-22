@@ -92,7 +92,7 @@ export function toTaskSummary(task: Task): TaskSummaryView {
       ? { id: project.id, name: project.name, code: project.code, divisionId: project.divisionId }
       : { id: task.projectId, name: task.projectId, code: '', divisionId: task.divisionId },
     division: divisionRef(task.divisionId),
-    assignee: employeeRef(task.assigneeEmployeeId),
+    assignee: task.assigneeEmployeeId ? employeeRef(task.assigneeEmployeeId) : null,
     status: task.status,
     statusLabel: TASK_STATUS_LABEL[task.status],
     priority: task.priority,
@@ -147,6 +147,18 @@ export function toRemarkSummary(remark: GeneralRemark): RemarkSummaryView {
   };
 }
 
+/**
+ * Whether the ordinary task page opens a task for an employee: their own, or
+ * one they support. Exported so Meeting Minutes asks the same question
+ * without a second copy of the rule (`FE-1123`); `getById` answers from it.
+ */
+export function employeeCanOpenTask(
+  task: { readonly assigneeEmployeeId: string | null; readonly supportingMemberIds: readonly string[] },
+  employeeId: string,
+): boolean {
+  return task.assigneeEmployeeId === employeeId || task.supportingMemberIds.includes(employeeId);
+}
+
 export const mockTaskService = {
   async listForEmployee(employeeId: string): Promise<Result<readonly TaskSummaryView[]>> {
     await delay();
@@ -164,10 +176,7 @@ export const mockTaskService = {
   async getById(taskId: string, employeeId?: string) {
     await delay();
     const task = mockStore.findTask(taskId);
-    const inScope =
-      !employeeId ||
-      task?.assigneeEmployeeId === employeeId ||
-      task?.supportingMemberIds.includes(employeeId);
+    const inScope = !employeeId || (task !== undefined && employeeCanOpenTask(task, employeeId));
     if (!task || !inScope) {
       return { status: 'not_found' as const, code: 'NOT_FOUND' as const, message: 'Task not found.' };
     }

@@ -13,6 +13,15 @@ export interface Toast {
   readonly description?: string;
   /** Milliseconds. `0` keeps the toast until dismissed. */
   readonly duration?: number;
+  /**
+   * Whether the toast is its own live region. Defaults to `true`.
+   *
+   * Pass `false` only when the page already announces the same change
+   * through a live region of its own — the Meeting Minutes processing
+   * announcer, for example. Both speaking would read the change out twice;
+   * the toast then stays a purely visual notice (`FE-1126`).
+   */
+  readonly announce?: boolean;
 }
 
 interface ToastContextValue {
@@ -101,8 +110,10 @@ function ToastViewport({
         return (
           <div
             key={toast.id}
-            role={toast.tone === 'error' ? 'alert' : 'status'}
-            aria-live={toast.tone === 'error' ? 'assertive' : 'polite'}
+            role={toast.announce === false ? undefined : toast.tone === 'error' ? 'alert' : 'status'}
+            aria-live={
+              toast.announce === false ? undefined : toast.tone === 'error' ? 'assertive' : 'polite'
+            }
             className={cn(
               'pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-lg border',
               'bg-surface p-3.5 shadow-lg animate-[slide-up_200ms_cubic-bezier(0,0,0.15,1)]',

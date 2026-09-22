@@ -82,6 +82,13 @@ const ROUTES = [
   { path: '/meeting-minutes', auth: true, email: TEAM_LEAD_USER },
   { path: '/meeting-minutes/new', auth: true, email: TEAM_LEAD_USER },
   { path: '/meeting-minutes/min-1001', auth: true, email: TEAM_LEAD_USER },
+  { path: '/tasks/tsk-15', auth: true, email: TEAM_LEAD_USER },
+  // FE-1133: long content, the failure panel, generated tasks with unassigned
+  // rows, and an unassigned task's own page.
+  { path: '/meeting-minutes/min-1007', auth: true, email: TEAM_LEAD_USER },
+  { path: '/meeting-minutes/min-1008', auth: true, email: TEAM_LEAD_USER },
+  { path: '/meeting-minutes/min-1004', auth: true, email: HR_USER },
+  { path: '/tasks/tsk-17', auth: true, email: TEAM_LEAD_USER },
   { path: '/meeting-minutes/min-1001/edit', auth: true, email: TEAM_LEAD_USER },
   { path: '/requests', auth: true, email: TEAM_LEAD_USER },
   { path: '/requests/leave/lv-4', auth: true, email: TEAM_LEAD_USER },

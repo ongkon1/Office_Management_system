@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { TaskSourceMinute } from '@/features/meeting-minutes/task-source-minute';
 import { useRouter } from 'next/navigation';
 import { Plus } from 'lucide-react';
 import type { TaskSummaryView } from '@/contracts/view-models';
@@ -33,7 +34,7 @@ function employeeBoardTask(task: TaskSummaryView): WorkflowBoardTask {
     href: task.href,
     project: { name: task.project.name, code: task.project.code },
     division: { name: task.division.name, code: task.division.code },
-    assignee: { id: task.assignee.id, fullName: task.assignee.fullName },
+    assignee: task.assignee ? { id: task.assignee.id, fullName: task.assignee.fullName } : null,
     status: task.status,
     estimated: task.estimated,
     actual: task.actual,
@@ -190,6 +191,8 @@ export function TaskDetail({ taskId }: { taskId: string }) {
           ) : undefined
         }
       />
+      {/* `FE-1124`: renders nothing for an ordinary task. */}
+      <TaskSourceMinute taskId={taskId} />
 
       <TaskDetailTransitions
         task={workflowTask}

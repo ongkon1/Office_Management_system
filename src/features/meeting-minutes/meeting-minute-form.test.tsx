@@ -40,20 +40,23 @@ function renderForm() {
   );
 }
 
+/*
+ * Text goes in by paste rather than keystroke by keystroke. These tests are
+ * about what the form does with a complete minute, not about typing, and
+ * sixty synthetic keystrokes per test made the file slow enough to time out
+ * when the whole suite runs in parallel on a busy machine. The tests that are
+ * about typing — errors clearing as a field is edited — still type.
+ */
 async function fillValidMinute() {
-  await userEvent.type(
-    await screen.findByLabelText(/^Title/),
-    'Quarterly review with Meghna Group',
-  );
+  await userEvent.click(await screen.findByLabelText(/^Title/));
+  await userEvent.paste('Quarterly review with Meghna Group');
   await userEvent.selectOptions(screen.getByLabelText(/^Client/), 'cli-meghna');
   await waitFor(() =>
     expect(screen.getByLabelText(/^Project/)).not.toBeDisabled(),
   );
   await userEvent.selectOptions(screen.getByLabelText(/^Project/), 'prj-vp2');
-  await userEvent.type(
-    screen.getByLabelText(/What the meeting covered/),
-    'Agreed the October scope.',
-  );
+  await userEvent.click(screen.getByLabelText(/What the meeting covered/));
+  await userEvent.paste('Agreed the October scope.');
 }
 
 beforeEach(() => {

@@ -203,6 +203,12 @@ const ROUTES = [
   { path: '/meeting-minutes', email: TEAM_LEAD, title: 'Meeting Minutes' },
   { path: '/meeting-minutes/new', email: TEAM_LEAD, title: null },
   { path: '/meeting-minutes/min-1001', email: TEAM_LEAD, title: null },
+  { path: '/tasks/tsk-15', email: TEAM_LEAD, title: null },
+  // FE-1130/FE-1133: unassigned tasks and a skipped duplicate, long content,
+  // and an unassigned task's own page.
+  { path: '/meeting-minutes/min-1008', email: TEAM_LEAD, title: null },
+  { path: '/meeting-minutes/min-1007', email: TEAM_LEAD, title: null },
+  { path: '/tasks/tsk-17', email: TEAM_LEAD, title: null },
   { path: '/meeting-minutes/min-1001/edit', email: TEAM_LEAD, title: null },
   { path: '/wfh', email: EMPLOYEE, title: null },
   { path: '/leave', email: EMPLOYEE, title: null },
