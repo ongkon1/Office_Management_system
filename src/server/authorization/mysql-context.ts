@@ -7,7 +7,7 @@ interface IdentityRow extends RowDataPacket { user_id:string; employee_id:string
 interface ScopeRow extends RowDataPacket { division_id:string|null; employee_id:string|null; project_id:string|null; team_id:string|null }
 
 /** Loads only grants and assignments effective on the requested local business date. */
-export async function loadActorPolicyContext(pool: Pool, userId: string, localDate: string): Promise<ActorPolicyContext | null> {
+export async function loadActorPolicyContext(pool: Pick<Pool, 'execute'>, userId: string, localDate: string): Promise<ActorPolicyContext | null> {
   const authorizationDate=localParts(new Date().toISOString(),'Asia/Dhaka').date;
   const [identity] = await pool.execute<IdentityRow[]>(`SELECT u.id user_id,e.id employee_id,r.role_key,p.permission_key
     FROM users u LEFT JOIN employees e ON e.user_id=u.id AND e.status='active'

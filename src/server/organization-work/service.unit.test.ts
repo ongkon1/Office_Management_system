@@ -43,3 +43,11 @@ describe('Backend Phase 3 organization and work rules',()=>{
   it('requires a rejection note and makes a decision idempotent',async()=>{const r=new MemoryRepository();r.tasks.set('t1',task());r.leads.set('e1','lead');const s=new OrganizationWorkService(r,effects);expect((await s.decideTask(leadActor,'t1',{decision:'rejected',note:'',idempotencyKey:'k',decidedAt:'2026-09-08T10:00:00Z'})).status).toBe('validation_failure');expect((await s.decideTask(leadActor,'t1',{decision:'approved',note:'',idempotencyKey:'k',decidedAt:'2026-09-08T10:00:00Z'})).status).toBe('success');expect((await s.decideTask(leadActor,'t1',{decision:'approved',note:'',idempotencyKey:'k',decidedAt:'2026-09-08T10:00:00Z'})).status).toBe('success')});
   it('derives actual minutes and overdue state instead of accepting an editable total',async()=>{const r=new MemoryRepository();r.projects.set('p1',project);r.tasks.set('t1',task('approved'));r.taskMinutes=125;const s=new OrganizationWorkService(r,effects);const result=await s.saveTask(leadActor,task('approved'));expect(result.status).toBe('success');if(result.status==='success'){expect(result.data.actualMinutes).toBe(125);expect(result.data.overdue).toBe(true)}});
 });
+
+it('refuses status and assignment changes through ordinary task metadata saves', async () => {
+  const repository = new MemoryRepository(); repository.projects.set('p1', project); repository.tasks.set('t1', task('approved'));
+  const service = new OrganizationWorkService(repository, effects);
+  expect((await service.saveTask(leadActor, { ...task('approved'), status: 'completed' }, 1)).status).toBe('conflict');
+  expect((await service.saveTask(leadActor, { ...task('approved'), assigneeEmployeeId: 'someone-else' }, 1)).status).toBe('conflict');
+  expect(repository.tasks.get('t1')?.status).toBe('pending');
+});

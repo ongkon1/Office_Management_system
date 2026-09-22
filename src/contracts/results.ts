@@ -17,7 +17,8 @@ export type ErrorCode =
   | 'PERIOD_LOCKED'
   | 'RATE_LIMITED'
   | 'DEPENDENCY_FAILED'
-  | 'INTERNAL_ERROR';
+  | 'INTERNAL_ERROR'
+  | 'OPERATION_RETIRED';
 
 /**
  * A single field-level validation failure.
@@ -92,7 +93,7 @@ export interface Conflict {
 
 export interface UnexpectedError {
   readonly status: 'error';
-  readonly code: 'RATE_LIMITED' | 'DEPENDENCY_FAILED' | 'INTERNAL_ERROR';
+  readonly code: 'RATE_LIMITED' | 'DEPENDENCY_FAILED' | 'INTERNAL_ERROR' | 'OPERATION_RETIRED';
   readonly message: string;
   /** Correlation identifier safe to show in a support message. */
   readonly reference?: string;

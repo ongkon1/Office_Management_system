@@ -302,46 +302,50 @@ This phase is shared. Neither milestone may start building until it is complete.
 
 ## Phase B2 - Backend Work-Log Use Cases, Validation and Calculation
 
+**Completed 21 September 2026.** Task-by-task implementation mapping, HTTP v2 contract, and verification evidence: [Phase B2 verification](docs/backend/modify/phase-b2-verification.md). All 241 backend tests, 57 final focused time tests, 582 frontend/shared tests, TypeScript, lint, 11 migration/recovery checks and the production build pass. B1 HR sign-off remains pending; browser/production cutover remains B4.
+
 ### Use Cases
 
-- [ ] `MBE-0201` Implement work-log create, read, list, update, correction and permitted delete, replacing the clock-entry use cases in `src/server/time/application.ts`.
-- [ ] `MBE-0202` Retire `startTimer`, `stopTimer`, `cancelTimer` and `runningTimer`, and `view=timer` in `src/app/api/time/route.ts`; version the HTTP contract and return a defined response for a retired operation rather than a 404 that reads as an outage.
-- [ ] `MBE-0206` Make saves idempotent on the unique key, so a retry returns the original log.
-- [ ] `MBE-0209` Implement copy-previous as decided in D8.
-- [ ] `MBE-0210` Route corrections and amendments of logs in verified periods through the existing `BE-0442`, `BE-0445` and `BE-0446` paths.
+- [x] `MBE-0201` Implement work-log create, read, list, update, correction and permitted delete, replacing the clock-entry use cases in `src/server/time/application.ts`.
+- [x] `MBE-0202` Retire `startTimer`, `stopTimer`, `cancelTimer` and `runningTimer`, and `view=timer` in `src/app/api/time/route.ts`; version the HTTP contract and return a defined response for a retired operation rather than a 404 that reads as an outage.
+- [x] `MBE-0206` Make saves idempotent on the unique key, so a retry returns the original log.
+- [x] `MBE-0209` Implement copy-previous as decided in D8.
+- [x] `MBE-0210` Route corrections and amendments of logs in verified periods through the existing `BE-0442`, `BE-0445` and `BE-0446` paths.
 
 ### Validation and Calculation
 
-- [ ] `MBE-0203` Validate division authorization on the work date, an active project in that division, a task in that project, assignment or availability, positive integer minutes, the business-timezone date, locked periods, leave and holiday conflicts, and the daily cap from D7 — each with a field, code and guidance.
-- [ ] `MBE-0204` Enforce the single "may receive work" rule — review state plus status per D3 and D4 — at the entry endpoint, so the server refuses what the frontend dropdown hides.
-- [ ] `MBE-0205` Remove overlap and range validation for new records while keeping it readable for historical rows.
-- [ ] `MBE-0207` Aggregate work-log minutes in the calculation engine, apply cross-midnight splitting only to historical rows, and continue storing the applied policy version.
-- [ ] `MBE-0208` Recalculate daily summaries and downstream projections on every log change, transactionally or through reliable invalidation, as `BE-0427` does today.
-- [ ] `MBE-0211` Test that `AC-CALC-001`–`004`, `006` and `007` hold unchanged, and cover completed-task refusal, the daily cap, idempotent retry, locked periods, and unauthorized division, project or task.
+- [x] `MBE-0203` Validate division authorization on the work date, an active project in that division, a task in that project, assignment or availability, positive integer minutes, the business-timezone date, locked periods, leave and holiday conflicts, and the daily cap from D7 — each with a field, code and guidance.
+- [x] `MBE-0204` Enforce the single "may receive work" rule — review state plus status per D3 and D4 — at the entry endpoint, so the server refuses what the frontend dropdown hides.
+- [x] `MBE-0205` Remove overlap and range validation for new records while keeping it readable for historical rows.
+- [x] `MBE-0207` Aggregate work-log minutes in the calculation engine, apply cross-midnight splitting only to historical rows, and continue storing the applied policy version.
+- [x] `MBE-0208` Recalculate daily summaries and downstream projections on every log change, transactionally or through reliable invalidation, as `BE-0427` does today.
+- [x] `MBE-0211` Test that `AC-CALC-001`–`004`, `006` and `007` hold unchanged, and cover completed-task refusal, the daily cap, idempotent retry, locked periods, and unauthorized division, project or task.
 
 ### Phase B2 Exit Criteria
 
-- [ ] No endpoint accepts a clock range or starts a timer for a new record.
-- [ ] Every calculation acceptance scenario passes against the server.
-- [ ] A completed or unapproved task is refused at the endpoint, not only hidden in the UI.
+- [x] No endpoint accepts a clock range or starts a timer for a new record.
+- [x] Every calculation acceptance scenario passes against the server.
+- [x] A completed or unapproved task is refused at the endpoint, not only hidden in the UI.
 
 ## Phase B3 - Backend Task Transitions, History and Notifications
 
-- [ ] `MBE-0301` Implement the transition use case enforcing the transition map and the D5 authorization rule, with append-only, idempotent writes.
-- [ ] `MBE-0302` Make transitions concurrency-safe with a version check, so two simultaneous moves produce one recorded result and a defined conflict.
-- [ ] `MBE-0303` Require a reason to reopen, preserve the original completion event, and define how the completion date is kept or cleared.
-- [ ] `MBE-0304` Keep transition timestamps out of the calculation engine by module boundary, and prove it with a test that fails if the engine can read them.
-- [ ] `MBE-0305` Build the task history read model — transitions and logs in order — with authorization applied before anything is counted or grouped.
-- [ ] `MBE-0306` Derive actual and variance from logs at read time, never from a stored, overwriteable total.
-- [ ] `MBE-0307` Send notifications through the Phase 7 notification service for started, completed, reopened, assigned or reassigned, correction requested, significant variance, and overtime or critical totals, with no restricted field in the text.
-- [ ] `MBE-0308` Audit every transition, note, work-log create, edit and correction, assignment change, reopen, locked-period conflict and amendment.
-- [ ] `MBE-0309` Test every legal and illegal transition, reopen, concurrent moves, idempotent retry, and authorization from every role.
+- [x] `MBE-0301` Implement the transition use case enforcing the transition map and the D5 authorization rule, with append-only, idempotent writes.
+- [x] `MBE-0302` Make transitions concurrency-safe with a version check, so two simultaneous moves produce one recorded result and a defined conflict.
+- [x] `MBE-0303` Require a reason to reopen, preserve the original completion event, and define how the completion date is kept or cleared.
+- [x] `MBE-0304` Keep transition timestamps out of the calculation engine by module boundary, and prove it with a test that fails if the engine can read them.
+- [x] `MBE-0305` Build the task history read model — transitions and logs in order — with authorization applied before anything is counted or grouped.
+- [x] `MBE-0306` Derive actual and variance from logs at read time, never from a stored, overwriteable total.
+- [x] `MBE-0307` Send notifications through the Phase 7 notification service for started, completed, reopened, assigned or reassigned, correction requested, significant variance, and overtime or critical totals, with no restricted field in the text.
+- [x] `MBE-0308` Audit every transition, note, work-log create, edit and correction, assignment change, reopen, locked-period conflict and amendment.
+- [x] `MBE-0309` Test every legal and illegal transition, reopen, concurrent moves, idempotent retry, and authorization from every role.
 
 ### Phase B3 Exit Criteria
 
-- [ ] Transition history is append-only and complete for every task.
-- [ ] No transition affects a calculated total.
-- [ ] Concurrent and retried transitions produce exactly one recorded result.
+- [x] Transition history is append-only and complete for every task.
+- [x] No transition affects a calculated total.
+- [x] Concurrent and retried transitions produce exactly one recorded result.
+
+Evidence and task-to-file mapping: `docs/backend/modify/phase-b3-verification.md`. Backend operations are complete; browser cutover remains B4. The shared transactional notification foundation is implemented without claiming completion of the remaining Backend Phase 7 work.
 
 ## Phase B4 - Backend Downstream, Cutover and Verification
 
@@ -440,8 +444,8 @@ Other dependencies: the Phase 7 notification service (`MBE-0307`), the existing 
 | Phase F3 - Frontend Log Work and Timesheet Rework | Done | 11/11 |
 | Phase F4 - Frontend Downstream Surfaces, Demo Data and Gates | Pending | 0/11 |
 | Phase B1 - Backend Schema and Data Migration | In progress — HR sign-off pending | 9/10 |
-| Phase B2 - Backend Work-Log Use Cases, Validation and Calculation | Pending | 0/11 |
-| Phase B3 - Backend Task Transitions, History and Notifications | Pending | 0/9 |
+| Phase B2 - Backend Work-Log Use Cases, Validation and Calculation | Done | 11/11 |
+| Phase B3 - Backend Task Transitions, History and Notifications | Done | 9/9 |
 | Phase B4 - Backend Downstream, Cutover and Verification | Pending | 0/10 |
 
 Update this table whenever numbered tasks change status. Acceptance scenarios and phase exit criteria are gates and are not included in the totals.

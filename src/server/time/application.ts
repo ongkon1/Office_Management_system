@@ -2,14 +2,14 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { DailySummary, GeneralRemark } from '@/contracts/domain';
 import type { Failure, Result } from '@/contracts/results';
 import { success } from '@/contracts/results';
-import type { IdempotentInput, StartTimerInput, TimeEntryInput } from '@/contracts/services';
+import type { WorkLog, WorkLogInput, WorkLogRevision } from '@/contracts/work-log';
 import { calculateDay } from '@/lib/calculation/engine';
-import { draftMinutes, validateEntry } from '@/lib/calculation/validation';
-import { clockInstant, elapsedMinutes, localParts } from '@/lib/calculation/instants';
+import { validateWorkLog } from '@/lib/calculation/validation';
+import { localParts } from '@/lib/calculation/instants';
 import { addDays, daysBetween } from '@/lib/format';
 import { hasPermission, indistinguishableNotFound, type ActorPolicyContext } from '@/server/authorization/policy';
-import type { DayContext, StoredEntry, StoredPeriod, StoredTimer, TimeRepository } from './ports';
-import { conflict, dateSchema, entryInputSchema, invalid, timerInputSchema } from './validation';
+import type { DayContext, StoredEntry, StoredPeriod, TimeRepository } from './ports';
+import { conflict, dateSchema, entryInputSchema, invalid } from './validation';
 export type ActorResolver = (date: string) => Promise<ActorPolicyContext | null>;
 const notFound = () => indistinguishableNotFound('record');
 const unauthenticated: Failure = { status: 'unauthenticated', code: 'UNAUTHENTICATED', message: 'Sign in to continue.', reason: 'no_session' };
@@ -39,10 +39,15 @@ export class TimeApplication {
             (actor.employeeId === entry.employeeId || actor.roles.includes('hr_manager') || actor.roles.includes('super_admin') || actor.divisionIds.has(entry.divisionId));
     }
     summary(employeeId: string, date: string, context: DayContext, entries = context.entries.filter((e) => e.isActive && e.state !== 'draft')): DailySummary {
-        return calculateDay({ employeeId, workDate: date, entries, policy: context.policy, breakOverrideMinutes: context.breakOverrideMinutes,
+        return calculateDay({ employeeId, workDate: date, entries: entries.filter(isHistorical), workLogs: entries.filter(e => !isHistorical(e)).map(toWorkLog), policy: context.policy, breakOverrideMinutes: context.breakOverrideMinutes,
             leave: context.leave, holidayName: context.holidayName, approvedWfh: context.approvedWfh, isLocked: locked(context),
             overtimeReason: entries.find((e) => e.overtimeReason?.trim())?.overtimeReason,
             criticalExplanation: entries.find((e) => e.criticalExplanation?.trim())?.criticalExplanation });
+    }
+    private async lockedConflict(actor: ActorPolicyContext, employeeId: string, date: string) {
+        // Independent audit write survives rollback of the refused mutation.
+        await this.repository.audit({ actorUserId: actor.userId, action: 'time.period.locked_conflict', resourceId: employeeId, employeeId, before: null, after: { workDate: date }, reason: 'Verified period refused an ordinary mutation.', correlationId: randomUUID() });
+        return conflict('This period is verified and locked.', true);
     }
     private async record(tx: TimeRepository, actor: ActorPolicyContext, action: string, id: string, before: unknown, after: unknown, employeeId?: string, reason?: string) {
         await tx.audit({ actorUserId: actor.userId, action, resourceId: id, before, after, employeeId, reason, correlationId: randomUUID() });
@@ -54,6 +59,7 @@ export class TimeApplication {
         const summary = this.summary(employeeId, date, context);
         await tx.saveSummary(summary, context.policyId, context);
         await tx.enqueue(`${employeeId}:${date}:${fingerprint(summary)}`, 'time.projections.changed', employeeId, date);
+        if (summary.status === 'overtime') await tx.enqueue(`${employeeId}:${date}`, 'time.overtime', employeeId, date);
         if (summary.status === 'critical')
             await tx.enqueue(`${employeeId}:${date}`, 'time.critical', employeeId, date);
         return summary;
@@ -104,7 +110,7 @@ export class TimeApplication {
         }
         return success(items);
     }
-    private async prepare(tx: TimeRepository, actor: ActorPolicyContext, raw: TimeEntryInput, id?: string, amendment = false): Promise<Result<{
+    private async prepare(tx: TimeRepository, actor: ActorPolicyContext, raw: WorkLogInput, id?: string, amendment = false): Promise<Result<{
         entry: StoredEntry;
         context: DayContext;
         before: StoredEntry | null;
@@ -121,54 +127,39 @@ export class TimeApplication {
         if (id && (!before || before.employeeId !== input.employeeId || !before.isActive))
             return notFound();
         if (before && before.workDate !== input.workDate)
-            return invalid('workDate', 'Keep the existing date; copy the entry to record work on another date.');
+            return notFound();
         const context = await tx.context(input.employeeId, input.workDate, amendment ? before?.policyId : undefined);
         if (!context)
             return notFound();
         if (!amendment && (locked(context) || before?.state === 'locked'))
-            return conflict('This period is verified and locked.', true);
+            return this.lockedConflict(actor, input.employeeId, input.workDate);
         const division = context.divisions.find((d) => d.id === input.divisionId);
         if (!division || (division.isRestricted && !hasPermission(actor, 'organization.government.view')))
             return notFound();
         if (before && !this.visible(actor, context, before))
             return notFound();
+        if (before && isHistorical(before)) return conflict('Historical clock entries are read-only.');
         // A write validates the complete employee-day. Do not disclose hidden
         // contributions through an overtime threshold or overlap response.
         if (context.entries.some((entry)=>entry.isActive && entry.state!=='draft' && !this.visible(actor,context,entry))) return notFound();
-        if (input.taskId && !input.projectId)
-            return invalid('projectId', 'Choose the project that owns this task.');
-        const validation = validateEntry({ ...input, id }, { ...context, existingEntries: context.entries.filter((e) => e.isActive && e.state !== 'draft'), isPeriodLocked: false });
+        if (!context.effectiveDivisionIds.includes(input.divisionId) || !context.projects.some(p => p.id === input.projectId) || !context.tasks.some(t => t.id === input.taskId)) return notFound();
+        const existing = context.entries.filter(e => e.isActive && e.state !== 'draft' && e.id !== id);
+        const validation = validateWorkLog(input, { ...context, existingWorkLogs: existing.filter(e => !isHistorical(e)).map(toWorkLog), historicalEntries: existing.filter(isHistorical), availableTaskIds: context.tasks.map(t => t.id), isPeriodLocked: false, excludeWorkLogId: id });
         if (validation.length)
-            return { status: 'validation_failure', code: 'VALIDATION_FAILED', message: 'Correct the highlighted fields.', fieldErrors: validation.map((error) => error.relatedRecordId && !context.entries.some((e) => e.id === error.relatedRecordId && this.visible(actor, context, e)) ? { ...error, message: 'This entry conflicts with existing work.', relatedRecordId: undefined } : error), focusField: validation[0].field };
+            return { status: 'validation_failure', code: 'VALIDATION_FAILED', message: 'Correct the highlighted fields.', fieldErrors: validation, focusField: validation[0].field };
         for (const attachment of input.attachmentIds)
             if (!(await tx.attachmentAllowed(attachment, input.employeeId, actor)))
                 return invalid('attachmentIds', 'Choose an authorized, clean attachment owned by this employee.');
-        let startTime: string | null = null;
-        let endTime: string | null = null;
-        if (input.entryMethod === 'manual_clock') {
-            startTime = clockInstant(input.workDate, input.startTime!, context.policy.businessTimezone);
-            endTime = clockInstant(input.workDate, input.endTime!, context.policy.businessTimezone);
-            if (!startTime || !endTime)
-                return invalid('startTime', 'Choose an unambiguous local time that exists in the work timezone.');
-            if (context.entries.some((e) => e.isActive && e.id !== id && e.state !== 'draft' && e.startTime && e.endTime && Date.parse(startTime!) < Date.parse(e.endTime) && Date.parse(e.startTime) < Date.parse(endTime!)))
-                return invalid('startTime', 'Adjust the times to avoid overlapping existing work.', 'OVERLAPPING_ENTRY');
-        }
-        if (before?.state === 'draft' && before.entryMethod === 'timer') {
-            if (input.activeMinutes !== before.activeMinutes)
-                return invalid('activeMinutes', 'Keep the measured timer duration, or remove this draft and enter corrected work manually.');
-            startTime = before.startTime;
-            endTime = before.endTime;
-        }
-        if (startTime && endTime && await tx.overlapsClock(input.employeeId, startTime, endTime, id))
-            return invalid('startTime', 'Adjust the times to avoid overlapping existing work.', 'OVERLAPPING_ENTRY');
         const now = this.now();
-        const entry: StoredEntry = { ...input, entryMethod:before?.state==='draft'&&before.entryMethod==='timer'?'timer':input.entryMethod, id: id ?? randomUUID(), startTime, endTime, activeMinutes: startTime && endTime ? elapsedMinutes(startTime, endTime) : draftMinutes(input),
+        const entry: StoredEntry = { ...input, idempotencyKey: before?.idempotencyKey ?? input.idempotencyKey, entryMethod: 'manual_duration', id: id ?? randomUUID(), startTime: null, endTime: null, activeMinutes: input.durationMinutes,
             state: amendment ? 'locked' : 'saved', crossMidnightGroupId: null, policyVersion: context.policy.version, policyId: context.policyId, timezone: context.policy.businessTimezone,
             version: (before?.version ?? 0) + 1, isActive: true, createdAt: before?.createdAt ?? now, updatedAt: now, createdBy: before?.createdBy ?? { userId: actor.userId, displayName: 'Employee' }, updatedBy: { userId: actor.userId, displayName: 'Employee' } };
         return success({ entry, context, before });
     }
-    async save(input: TimeEntryInput & Partial<IdempotentInput>, id?: string, expectedVersion?: number): Promise<Result<StoredEntry>> {
+    async save(input: WorkLogInput, id?: string, expectedVersion?: number, changeReason?: string, legacyDraft?: { id: string; version: number }): Promise<Result<StoredEntry>> {
         return this.run(async () => {
+            const parsed = entryInputSchema.safeParse(input);
+            if (!parsed.success) { const issue = parsed.error.issues[0]; return invalid(issue.path.join('.'), issue.message); }
             const actor = await this.resolveActor(input.workDate);
             if (!actor)
                 return unauthenticated;
@@ -179,35 +170,59 @@ export class TimeApplication {
                 if (!(await tx.lockEmployee(input.employeeId)))
                     return notFound();
                 const work = async (): Promise<Result<StoredEntry>> => {
-                    const targetId = id ?? input.draftEntryId;
+                    if (id && !changeReason?.trim()) return invalid('changeReason', 'Explain why this work log is being corrected.');
+                    await tx.lockTask(input.taskId);
+                    if (!id && await tx.keyUsed(input.idempotencyKey)) return conflict('This retry key is already in use.');
+                    const draft = legacyDraft ? await tx.entry(legacyDraft.id) : null;
+                    if (legacyDraft && (!draft || draft.employeeId !== input.employeeId || draft.workDate !== input.workDate)) return notFound();
+                    if (legacyDraft && (!draft?.isActive || draft.state !== 'draft' || draft.version !== legacyDraft.version)) return conflict('This draft has already changed or been converted.');
+                    const targetId = id;
                     const result = await this.prepare(tx, actor, input, targetId);
                     if (result.status !== 'success')
                         return result;
                     const { entry, before } = result.data;
-                    if (input.draftEntryId && (!before || before.state !== 'draft' || before.version !== input.draftVersion))
-                        return conflict('This timer draft has already changed or been saved.');
                     if (id && (!Number.isInteger(expectedVersion) || before?.version !== expectedVersion))
                         return conflict();
                     if (!(await tx.saveEntry(entry, before?.version)))
                         return conflict();
+                    if (draft) {
+                        if (!this.visible(actor, result.data.context, draft)) return notFound();
+                        if (!(await tx.saveEntry({ ...draft, isActive: false, version: draft.version + 1 }, draft.version))) return conflict();
+                        await this.record(tx, actor, 'time.draft.convert', draft.id, draft, { workLogId: entry.id }, entry.employeeId, 'Employee reviewed the preserved draft and saved a duration work log.');
+                    }
                     await this.refresh(tx, entry.employeeId, entry.workDate);
-                    await this.record(tx, actor, id ? 'time.correct' : 'time.create', entry.id, before, entry, entry.employeeId);
+                    await this.record(tx, actor, id ? 'time.correct' : 'time.create', entry.id, before, entry, entry.employeeId, changeReason);
                     return success(entry);
                 };
-                if (!id) {
-                    const context = await tx.context(input.employeeId, input.workDate);
-                    const division = context?.divisions.find((d) => d.id === input.divisionId);
-                    if (!division || (division.isRestricted && !hasPermission(actor, 'organization.government.view')))
-                        return notFound();
-                }
-                return id ? work() : this.idempotent(tx, actor, 'time.create', input.idempotencyKey ?? '', input, work);
+                // Recheck current access before replaying a previously successful response.
+                const context = await tx.context(input.employeeId, input.workDate);
+                const division = context?.divisions.find(d => d.id === input.divisionId);
+                if (!context || !division || (division.isRestricted && !hasPermission(actor, 'organization.government.view')) || !context.effectiveDivisionIds.includes(input.divisionId) || !context.projects.some(p => p.id === input.projectId) || !context.tasks.some(t => t.id === input.taskId)) return notFound();
+                if (id) { const current = await tx.entry(id); if (!current || !this.visible(actor, context, current)) return notFound(); }
+                for (const attachment of input.attachmentIds) if (!await tx.attachmentAllowed(attachment, input.employeeId, actor)) return invalid('attachmentIds', 'Choose an authorized, clean attachment owned by this employee.');
+                return this.idempotent(tx, actor, id ? `time.update:${id}` : 'time.create', input.idempotencyKey, { input, expectedVersion, changeReason, legacyDraft }, work);
             });
         });
     }
-    async preview(input: TimeEntryInput): Promise<Result<DailySummary>> {
+    async history(id: string): Promise<Result<readonly WorkLogRevision[]>> {
+        return this.run(async () => {
+            const entry = await this.repository.entry(id);
+            if (!entry) return notFound();
+            const day = await this.day(entry.employeeId, entry.workDate);
+            if (day.status !== 'success') return day;
+            if (!day.data.context.entries.some(e => e.id === id) || isHistorical(entry)) return notFound();
+            const { actor, context } = day.data;
+            if (!hasPermission(actor, 'control.audit.view')) return denied;
+            const revisions = await this.repository.revisions(id);
+            if (revisions.some(r => !this.visible(actor, context, r.before) || !this.visible(actor, context, r.after))) return notFound();
+            if (!hasPermission(actor, 'file.protected.view') && revisions.some(r => r.before.attachmentIds.length || r.after.attachmentIds.length)) return denied;
+            return success(revisions.map(r => ({ id: r.id, workLogId: id, version: r.after.version, reason: r.reason, changedAt: r.changedAt, changedBy: r.after.updatedBy, before: toWorkLog(r.before), after: toWorkLog(r.after) })));
+        });
+    }
+    async preview(input: WorkLogInput, excludeWorkLogId?: string): Promise<Result<DailySummary>> {
         return this.run(async () => { const actor = await this.resolveActor(input.workDate); if (!actor)
-            return unauthenticated; const result = await this.prepare(this.repository, actor, input); if (result.status !== 'success')
-            return result; const { entry, context } = result.data; return success(this.summary(input.employeeId, input.workDate, context, [...context.entries.filter((e) => e.isActive && e.state !== 'draft'), entry])); });
+            return unauthenticated; const result = await this.prepare(this.repository, actor, input, excludeWorkLogId); if (result.status !== 'success')
+            return result; const { entry, context } = result.data; return success(this.summary(input.employeeId, input.workDate, context, [...context.entries.filter((e) => e.isActive && e.state !== 'draft' && e.id !== excludeWorkLogId), entry])); });
     }
     async remove(id: string, expectedVersion: number): Promise<Result<void>> {
         return this.run(() => this.repository.transaction(async (tx) => {
@@ -228,7 +243,8 @@ export class TimeApplication {
             if (!context || !this.visible(actor, context, entry))
                 return notFound();
             if (locked(context))
-                return conflict('This period is verified and locked.', true);
+                return this.lockedConflict(actor, entry.employeeId, entry.workDate);
+            if (isHistorical(entry)) return conflict('Historical clock entries are read-only.');
             if (entry.version !== expectedVersion)
                 return conflict();
             const next = { ...entry, isActive: false, version: entry.version + 1, updatedAt: this.now() };
@@ -239,17 +255,17 @@ export class TimeApplication {
             return success(undefined);
         }));
     }
-    async copy(id: string, date: string): Promise<Result<TimeEntryInput>> {
+    async copy(id: string, date: string): Promise<Result<WorkLogInput>> {
         return this.run(async () => { const entry = await this.repository.entry(id); if (!entry)
             return notFound(); const source = await this.day(entry.employeeId, entry.workDate); if (source.status !== 'success')
             return source; if (!source.data.context.entries.some((e) => e.id === id))
             return notFound(); const target = await this.day(entry.employeeId, date); if (target.status !== 'success')
             return target; if (!this.canWrite(target.data.actor, entry.employeeId))
             return notFound(); if (locked(target.data.context))
-            return conflict('The target period is locked.', true); return success(this.draft(entry, date)); });
+            return conflict('The target period is locked.', true); const draft = this.draft(entry, date); const checked = await this.prepare(this.repository, target.data.actor, draft); return checked.status === 'success' ? success(draft) : checked; });
     }
-    private draft(entry: StoredEntry, date = entry.workDate): TimeEntryInput {
-        return { employeeId: entry.employeeId, workDate: date, divisionId: entry.divisionId, projectId: entry.projectId, taskId: entry.taskId, entryMethod: 'manual_duration', workLocation: entry.workLocation, startTime: null, endTime: null, activeMinutes: entry.activeMinutes, workDescription: entry.workDescription, completedWork: entry.completedWork, supportingLink: null, attachmentIds: [], overtimeReason: null, criticalExplanation: null };
+    private draft(entry: StoredEntry, date = entry.workDate): WorkLogInput {
+        return { employeeId: entry.employeeId, workDate: date, divisionId: entry.divisionId, projectId: entry.projectId ?? '', taskId: entry.taskId ?? '', source: 'manual', idempotencyKey: randomUUID(), workLocation: entry.workLocation, durationMinutes: entry.activeMinutes, workDescription: entry.workDescription, completedWork: entry.completedWork, supportingLink: null, attachmentIds: [], overtimeReason: null, criticalExplanation: null };
     }
     async overrideBreak(input: {
         employeeId: string;
@@ -264,80 +280,11 @@ export class TimeApplication {
             return invalid('minutes', 'Enter whole minutes from 0 to 1440.'); if (!input.reason.trim())
             return invalid('reason', 'Explain why the recognized break must change.'); await tx.lockPeriods(); await tx.lockEmployee(input.employeeId); const context = await tx.context(input.employeeId, input.workDate); if (!context)
             return notFound(); if (locked(context))
-            return conflict('This period is verified and locked.', true); if (context.entries.some((e) => !this.visible(actor, context, e)))
+            return this.lockedConflict(actor, input.employeeId, input.workDate); if (context.entries.some((e) => !this.visible(actor, context, e)))
             return notFound(); const proposed = this.summary(input.employeeId, input.workDate, { ...context, breakOverrideMinutes: input.minutes }); if (proposed.totalMinutes > context.policy.overtimeThresholdMinutes && !proposed.overtimeReason)
             return invalid('reason', 'Record the day’s overtime reason before increasing its break.'); if (proposed.totalMinutes > context.policy.criticalThresholdMinutes && !proposed.criticalExplanation)
             return invalid('reason', 'Record the day’s critical explanation before increasing its break.'); await tx.saveBreak(input.employeeId, input.workDate, input.minutes, input.reason, context.policyId); const result = await this.refresh(tx, input.employeeId, input.workDate); await this.record(tx, actor, 'time.break.override', randomUUID(), context.breakOverrideMinutes, input.minutes, input.employeeId, input.reason); return success(result); }));
     }
-    private async timerVisible(tx: TimeRepository, actor: ActorPolicyContext, timer: StoredTimer) {
-        if (timer.employeeId !== actor.employeeId)
-            return false;
-        const context = await tx.context(timer.employeeId, localParts(timer.startedAt, timer.timezone).date, timer.policyId);
-        const division = context?.divisions.find((d) => d.id === timer.divisionId);
-        return Boolean(division) && (!division!.isRestricted || hasPermission(actor, 'organization.government.view'));
-    }
-    async runningTimer() { return this.run(async () => { const actor = await this.resolveActor(localParts(this.now(), 'Asia/Dhaka').date); if (!actor)
-        return unauthenticated; if (!actor.employeeId)
-        return notFound(); const timer = await this.repository.runningTimer(actor.employeeId); if (timer && !await this.timerVisible(this.repository, actor, timer))
-        return notFound(); return success(timer); }); }
-    async startTimer(input: StartTimerInput & IdempotentInput) {
-        return this.run(() => this.repository.transaction(async (tx) => {
-            const startedAt = this.now();
-            let date = localParts(startedAt, 'Asia/Dhaka').date;
-            let actor = await this.resolveActor(date);
-            if (!actor) return unauthenticated;
-            if (!actor.employeeId || !this.canWrite(actor, actor.employeeId)) return denied;
-            const parsed = timerInputSchema.safeParse(input);
-            if (!parsed.success) return invalid('divisionId', 'Choose a valid division, project, task and work location.');
-            await tx.lockPeriods();
-            await tx.lockEmployee(actor.employeeId);
-            let context = await tx.context(actor.employeeId, date);
-            if (!context) return notFound();
-            const localDate = localParts(startedAt, context.policy.businessTimezone).date;
-            if (localDate !== date) {
-                date = localDate;
-                actor = await this.resolveActor(date);
-                if (!actor || !actor.employeeId || !this.canWrite(actor, actor.employeeId)) return denied;
-                context = await tx.context(actor.employeeId, date);
-                if (!context) return notFound();
-            }
-            const division = context.divisions.find((d) => d.id === input.divisionId);
-            if (!division || (division.isRestricted && !hasPermission(actor,'organization.government.view'))) return notFound();
-            const currentActor = actor;
-            const employeeId = actor.employeeId!;
-            const timerContext = context;
-            return this.idempotent(tx, currentActor, 'timer.start', input.idempotencyKey, parsed.data, async () => {
-                if (await tx.runningTimer(employeeId)) return conflict('A timer is already running.');
-                if (locked(timerContext)) return conflict('This period is verified and locked.', true);
-                const draft: TimeEntryInput = {...parsed.data, employeeId, workDate:date, entryMethod:'manual_duration',activeMinutes:1,startTime:null,endTime:null,workDescription:'Timer start',completedWork:'Timer draft',attachmentIds:[],supportingLink:null,overtimeReason:'Timer preview',criticalExplanation:'Timer preview'};
-                const valid = await this.prepare(tx,currentActor,draft);
-                if (valid.status !== 'success') return valid;
-                const timer:StoredTimer = {...parsed.data,id:randomUUID(),employeeId,startedAt,isRunning:true,draftTimeEntryId:null,timezone:timerContext.policy.businessTimezone,policyId:timerContext.policyId,stoppedAt:null,cancelledAt:null,draft:null};
-                await tx.saveTimer(timer,currentActor.userId);
-                await this.record(tx,currentActor,'timer.start',timer.id,null,timer,employeeId);
-                return success(timer);
-            });
-        }));
-    }
-    async stopTimer(input: {
-        sessionId: string;
-        idempotencyKey: string;
-    }) {
-        return this.run(() => this.repository.transaction(async (tx) => { const actor = await this.resolveActor(localParts(this.now(), 'Asia/Dhaka').date); if (!actor)
-            return unauthenticated; if (!actor.employeeId || !this.canWrite(actor, actor.employeeId))
-            return denied; await tx.lockPeriods(); await tx.lockEmployee(actor.employeeId); const timer = await tx.timer(input.sessionId); if (!timer || !await this.timerVisible(tx, actor, timer))
-            return notFound(); return this.idempotent(tx, actor, 'timer.stop', input.idempotencyKey, { sessionId: input.sessionId }, async () => { if (timer.draft)
-            return success(timer.draft); if (!timer.isRunning)
-            return conflict('This timer is no longer running.'); const stoppedAt = this.now(); const workDate = localParts(timer.startedAt, timer.timezone).date; const context = await tx.context(actor.employeeId!, workDate, timer.policyId); if (!context)
-            return notFound(); if (locked(context))
-            return conflict('The timer’s work date is locked.', true); const minutes = elapsedMinutes(timer.startedAt, stoppedAt); if (minutes < 1 || minutes > 1440)
-            return invalid('activeMinutes', 'A timer must contain 1–1440 whole minutes; cancel it and enter longer work as separate daily records.'); const draftId = randomUUID(); const draft: TimeEntryInput = { draftEntryId: draftId, draftVersion: 1, employeeId: actor.employeeId!, workDate, divisionId: timer.divisionId, projectId: timer.projectId, taskId: timer.taskId, workLocation: timer.workLocation, entryMethod: 'manual_duration', startTime: null, endTime: null, activeMinutes: minutes, workDescription: '', completedWork: '', supportingLink: null, attachmentIds: [], overtimeReason: null, criticalExplanation: null }; const entry: StoredEntry = { ...draft, id: draftId, entryMethod: 'timer', activeMinutes: minutes, startTime: timer.startedAt, endTime: stoppedAt, state: 'draft', crossMidnightGroupId: null, policyId: timer.policyId, policyVersion: context.policy.version, timezone: timer.timezone, version: 1, isActive: true, createdAt: stoppedAt, updatedAt: stoppedAt, createdBy: { userId: actor.userId, displayName: 'Employee' }, updatedBy: { userId: actor.userId, displayName: 'Employee' } }; await tx.saveEntry(entry); await tx.saveTimer({ ...timer, isRunning: false, stoppedAt, draftTimeEntryId: draftId, draft }, actor.userId); await this.record(tx, actor, 'timer.stop', timer.id, timer, { draftTimeEntryId: draftId }, actor.employeeId!); return success(draft); }); }));
-    }
-    async cancelTimer(id: string): Promise<Result<void>> { return this.run(() => this.repository.transaction(async (tx) => { const actor = await this.resolveActor(localParts(this.now(), 'Asia/Dhaka').date); if (!actor)
-        return unauthenticated; if (!actor.employeeId || !this.canWrite(actor, actor.employeeId))
-        return denied; await tx.lockEmployee(actor.employeeId); const timer = await tx.timer(id); if (!timer || !await this.timerVisible(tx, actor, timer))
-        return notFound(); if (!timer.isRunning)
-        return conflict('This timer has already stopped.'); await tx.saveTimer({ ...timer, isRunning: false, cancelledAt: this.now() }, actor.userId); await this.record(tx, actor, 'timer.cancel', id, timer, null, actor.employeeId); return success(undefined); })); }
     async periodInventory(id: string): Promise<Result<{
         period: StoredPeriod;
         days: readonly DailySummary[];
@@ -398,8 +345,6 @@ export class TimeApplication {
                 if (exceptions.length)
                     return conflict('Resolve incomplete days and missing explanations before verification.');
                 for (const employeeId of new Set(inventory.data.days.map((d) => d.employeeId))) {
-                    if (await tx.runningTimer(employeeId))
-                        return conflict('Stop running timers before verification.');
                     if ((await tx.remarks(employeeId)).some((r) => r.isCorrectionRequest && r.state !== 'resolved' && r.relatedRecord.type === 'timesheet' && r.relatedRecord.workDate >= period.startDate && r.relatedRecord.workDate <= period.endDate))
                         return conflict('Resolve outstanding correction requests before verification.');
                 }
@@ -412,6 +357,7 @@ export class TimeApplication {
                     for (const entry of context.entries.filter((e) => e.isActive)) {
                         if (entry.state === 'draft')
                             return conflict('Review and save or remove draft entries before verification.');
+                        if (isHistorical(entry)) continue;
                         if (!(await tx.saveEntry({ ...entry, state: 'locked', version: entry.version + 1 }, entry.version)))
                             return conflict();
                     }
@@ -450,7 +396,7 @@ export class TimeApplication {
                 await tx.lockEmployee(before.employeeId);
                 if (before.version !== input.expectedVersion)
                     return conflict();
-                const allowed = ['divisionId', 'projectId', 'taskId', 'workLocation', 'startTime', 'endTime', 'entryMethod', 'activeMinutes', 'workDescription', 'completedWork', 'supportingLink', 'attachmentIds', 'overtimeReason', 'criticalExplanation'];
+                const allowed = ['divisionId', 'projectId', 'taskId', 'workLocation', 'durationMinutes', 'workDescription', 'completedWork', 'supportingLink', 'attachmentIds', 'overtimeReason', 'criticalExplanation'];
                 if (Object.keys(input.changes).some((key) => !allowed.includes(key)))
                     return invalid('changes', 'Change only editable time-entry fields; employee, date and policy are fixed.');
                 const candidate = { ...this.draft(before), attachmentIds: before.attachmentIds, supportingLink: before.supportingLink, overtimeReason: before.overtimeReason, criticalExplanation: before.criticalExplanation, ...input.changes };
@@ -483,7 +429,7 @@ export class TimeApplication {
             const context = await tx.context(day.employeeId, day.workDate);
             if (!context)
                 continue;
-            for (const entry of context.entries.filter((e) => e.isActive && e.state === 'locked'))
+            for (const entry of context.entries.filter((e) => e.isActive && e.state === 'locked' && !isHistorical(e)))
                 await tx.saveEntry({ ...entry, state: 'saved', version: entry.version + 1 }, entry.version);
             await this.refresh(tx, day.employeeId, day.workDate);
         } await this.record(tx, actor, 'period.unlock', period.id, period, next, undefined, input.reason); return success(undefined); }));
@@ -517,7 +463,7 @@ export class TimeApplication {
             return denied; if (!input.message.trim() || (input.isCorrectionRequest && !input.requestedChanges?.trim()))
             return invalid('message', 'Provide a remark and describe any requested correction.'); if (input.isCorrectionRequest && !hasPermission(actor, 'time.team.read') && !hasPermission(actor, 'time.period.verify'))
             return denied; await tx.lockEmployee(input.employeeId); const now = this.now(); const remark: GeneralRemark = { ...input, id: randomUUID(), authorEmployeeId: actor.employeeId, state: 'open', responses: [], createdAt: now, updatedAt: now, createdBy: { userId: actor.userId, displayName: 'Employee' }, updatedBy: { userId: actor.userId, displayName: 'Employee' } }; if (!(await this.remarkVisible(actor, remark)))
-            return notFound(); await tx.saveRemark(remark, actor.userId); await this.record(tx, actor, 'remark.create', remark.id, null, remark, input.employeeId); await tx.enqueue(remark.id, 'time.remark.created', input.employeeId, date); return success(remark); }));
+            return notFound(); await tx.saveRemark(remark, actor.userId); await this.record(tx, actor, 'remark.create', remark.id, null, remark, input.employeeId); await tx.enqueue(remark.id, input.isCorrectionRequest ? 'time.correction.requested' : 'time.remark.created', input.employeeId, date); return success(remark); }));
     }
     async changeRemark(id: string, message: string | null): Promise<Result<GeneralRemark>> {
         return this.run(() => this.repository.transaction(async (tx) => { const actor = await this.resolveActor(localParts(this.now(), 'Asia/Dhaka').date); if (!actor)
@@ -529,4 +475,9 @@ export class TimeApplication {
             return denied; if (message !== null && !message.trim())
             return invalid('message', 'Enter a clarification.'); const next: GeneralRemark = { ...remark, state: message === null ? 'resolved' : 'responded', updatedAt: this.now(), responses: message === null ? remark.responses : [...remark.responses, { id: randomUUID(), remarkId: id, authorEmployeeId: actor.employeeId, message, createdAt: this.now() }] }; await tx.saveRemark(next, actor.userId); await this.record(tx, actor, message === null ? 'remark.resolve' : 'remark.respond', id, remark, next, remark.employeeId); await tx.enqueue(`${id}:${next.responses.length}:${next.state}`, 'time.remark.changed', remark.employeeId, localParts(this.now(), 'Asia/Dhaka').date); return success(next); }));
     }
+}
+
+export const isHistorical = (entry: StoredEntry) => entry.source === 'migrated_clock_entry' || Boolean(entry.startTime || entry.endTime);
+export function toWorkLog(entry: StoredEntry): WorkLog {
+    return { id: entry.id, version: entry.version, employeeId: entry.employeeId, workDate: entry.workDate, divisionId: entry.divisionId, projectId: entry.projectId ?? '', taskId: entry.taskId ?? '', durationMinutes: entry.activeMinutes, workLocation: entry.workLocation, workDescription: entry.workDescription, completedWork: entry.completedWork, supportingLink: entry.supportingLink, attachmentIds: entry.attachmentIds, overtimeReason: entry.overtimeReason, criticalExplanation: entry.criticalExplanation, source: entry.source ?? 'manual', idempotencyKey: entry.idempotencyKey ?? entry.id, state: entry.state, policyVersion: entry.policyVersion, createdAt: entry.createdAt, updatedAt: entry.updatedAt, createdBy: entry.createdBy, updatedBy: entry.updatedBy };
 }

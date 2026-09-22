@@ -104,10 +104,11 @@ describe('Phase 5 real database workflows', () => {
         expect(history).toHaveLength(4);
         await expect(pool.execute('DELETE FROM hr_workflow_history WHERE resource_id=?', [r.id])).rejects.toThrow();
     });
+    // Sunday–Thursday are scheduled days; Friday/Saturday cannot exercise leave debits.
     it('concurrent submissions cannot overspend a balance', async () => {
         const [before] = await repo.balances(eid, 2026);
         await pool.execute('UPDATE leave_balances SET entitled_minutes=used_minutes+reserved_minutes+420 WHERE id=?', [String(before.id)]);
-        const a = data(await self.save('leave', leave('2026-10-08'))), b = data(await self.save('leave', leave('2026-10-09')));
+        const a = data(await self.save('leave', leave('2026-10-08'))), b = data(await self.save('leave', leave('2026-10-11')));
         const results = await Promise.all([self.transition('leave', a.id, 'submit'), self.transition('leave', b.id, 'submit')]);
         expect(results.map(r => r.status).sort()).toEqual(['success', 'validation_failure']);
         for (const r of [a, b]) {
@@ -120,10 +121,10 @@ describe('Phase 5 real database workflows', () => {
     it('company holidays remove missing-time requirements and reduce active weekly capacity', async () => {
         const holidays = new HolidayApplication(admin);
         data(await holidays.save({
-            name: 'Company holiday', scope: 'company', divisionId: null, date: '2026-10-09', weekday: null, isActive: true
+            name: 'Company holiday', scope: 'company', divisionId: null, date: '2026-10-11', weekday: null, isActive: true
         }));
         const attendance = new AttendanceApplication(self);
-        expect(data(await attendance.day(eid, '2026-10-09'))).toMatchObject({ state: 'holiday', requiredActiveMinutes: 0 });
+        expect(data(await attendance.day(eid, '2026-10-11'))).toMatchObject({ state: 'holiday', requiredActiveMinutes: 0 });
         const week = data(await attendance.workload(eid, '2026-10-05'));
         expect(week.capacityMinutes).toBe(1470);
         expect(week.actualActiveMinutes).toBe(0);
@@ -174,8 +175,8 @@ describe('Phase 5 real database workflows', () => {
         expect(data(await attendance.day(eid, '2026-10-14'))).toMatchObject({ state: 'approved_leave', requiredActiveMinutes: 0 });
         data(await attendance.duty(eid, '2026-10-15', 'training_duty', 'Approved training'));
         expect(data(await attendance.day(eid, '2026-10-15')).state).toBe('training_duty');
-        data(await attendance.duty(eid, '2026-10-16', 'absent', 'Confirmed absence'));
-        expect(data(await attendance.day(eid, '2026-10-16')).state).toBe('absent');
+        data(await attendance.duty(eid, '2026-10-18', 'absent', 'Confirmed absence'));
+        expect(data(await attendance.day(eid, '2026-10-18')).state).toBe('absent');
     });
     it('an audit failure rolls back a request and its workflow history', async () => {
         const failing = new HrRepository(pool);
