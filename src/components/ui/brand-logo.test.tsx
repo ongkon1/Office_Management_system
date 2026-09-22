@@ -13,6 +13,8 @@ describe('BrandLogo', () => {
     const second = render(<BrandLogo size="md" />);
     expect(first.container).toHaveTextContent('T');
     expect(second.container).toHaveTextContent('T');
+    expect(first.container).toHaveTextContent('Beta');
+    expect(second.container).toHaveTextContent('Beta');
 
     await act(async () => {
       await mockAdminService.updateBranding(ADMIN, {
@@ -33,5 +35,7 @@ describe('BrandLogo', () => {
       'src',
       'data:image/png;base64,iVBORw0KGgo=',
     );
+    expect(first.container).toHaveTextContent('Beta');
+    expect(second.container).toHaveTextContent('Beta');
   });
 });
