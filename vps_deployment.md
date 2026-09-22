@@ -84,6 +84,8 @@ The application expects two credentials for the same database:
 - `DATABASE_URL`: the restricted runtime account used by the web application.
 - `DATABASE_MIGRATION_URL`: a separately controlled account allowed to create and alter the application schema.
 
+Never use `root`, a MySQL system account, or the migration account in `RUNTIME_DATABASE_ACCOUNTS`. The hardening command rejects these identities because revoking their grants can break migration-owned triggers and database administration.
+
 Ask the VPS/database administrator to provide both URLs. The database and accounts may already exist; do not recreate them unnecessarily. Use `127.0.0.1` when MySQL is on the same VPS, or the database server's private address when it is remote.
 
 Example URL format:

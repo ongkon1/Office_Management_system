@@ -6,6 +6,13 @@ const accounts = (process.env.RUNTIME_DATABASE_ACCOUNTS ?? '')
   .map((value) => value.trim())
   .filter(Boolean);
 
+const protectedDatabaseUsers = new Set([
+  'root',
+  'mysql.infoschema',
+  'mysql.session',
+  'mysql.sys',
+]);
+
 if (accounts.length === 0) {
   throw new Error('RUNTIME_DATABASE_ACCOUNTS must list runtime accounts as user@host.');
 }
@@ -18,13 +25,23 @@ function quoteIdentifier(value) {
 function quoteAccount(value) {
   const match = /^([a-zA-Z0-9_]+)@([a-zA-Z0-9_.%-]+)$/.exec(value);
   if (!match) throw new Error(`Invalid runtime account: ${value}`);
+  if (protectedDatabaseUsers.has(match[1])) {
+    throw new Error(`Refusing to modify protected database account: ${value}`);
+  }
   return `'${match[1]}'@'${match[2]}'`;
 }
 
-const url = new URL(migrationDatabaseUrl());
+// Validate every target before opening a connection or changing any grants.
+const quotedAccounts = accounts.map((value) => ({ value, quoted: quoteAccount(value) }));
+const migrationUrl = migrationDatabaseUrl();
+const url = new URL(migrationUrl);
+const migrationUsername = decodeURIComponent(url.username);
+if (quotedAccounts.some(({ value }) => value.split('@', 1)[0] === migrationUsername)) {
+  throw new Error('The migration account cannot also be a runtime-hardening target.');
+}
 const database = decodeURIComponent(url.pathname.slice(1));
 const databaseName = quoteIdentifier(database);
-const connection = await mysql.createConnection({ uri: migrationDatabaseUrl(), timezone: 'Z' });
+const connection = await mysql.createConnection({ uri: migrationUrl, timezone: 'Z' });
 
 try {
   const [rows] = await connection.query(
@@ -37,8 +54,7 @@ try {
     if (!tables.includes(required)) throw new Error(`Migration 0011 is not applied: missing ${required}`);
   }
 
-  for (const rawAccount of accounts) {
-    const account = quoteAccount(rawAccount);
+  for (const { quoted: account } of quotedAccounts) {
     await connection.query(`REVOKE ALL PRIVILEGES, GRANT OPTION FROM ${account}`);
     await connection.query(`GRANT SELECT ON ${databaseName}.* TO ${account}`);
 
