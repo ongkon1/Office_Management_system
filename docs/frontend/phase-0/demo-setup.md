@@ -27,7 +27,7 @@ All values below are **development-only fixtures**. They must never be seeded in
 | Item | Value | Purpose |
 |---|---|---|
 | Password, every account | `Demo1234!` | Shown in the demo account picker on `/login`. |
-| Two-factor code | `123456` | Only Arif Mahmud (Super Administrator) has 2FA enabled, so the verification step is reachable without forcing it on every sign-in. |
+| Two-factor code | `123456` | **No demo account enables 2FA.** Arif Mahmud (Super Administrator) did, until the step proved unusable on a deployed server: the pending challenge is held in module memory, so any hard navigation to `/two-factor` — a bookmark, a refresh, a fresh document from the server — loses it and verification can only report that the attempt expired. The screen and `verifyTwoFactor` still accept this code, and remain in place for the real TOTP cutover. |
 | Failed-attempt lockout | 5 attempts | Demonstrates the lockout path without a fixture account. |
 | Session length | 30 minutes | Long enough to work, short enough to demo. The expiry warning appears at 5 minutes remaining; the demo tools panel can shorten it on demand. |
 | Reset link, valid | `/reset-password?token=demo-valid-token` | Successful reset. |

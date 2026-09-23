@@ -26,8 +26,8 @@ async function openAs(email, { twoFactor = false } = {}) {
   await page.fill('input[name="password"]', PASSWORD);
   await page.click('button[type="submit"]');
   await page.waitForURL((url) => !new URL(url).pathname.startsWith('/login'), { timeout: 15000 });
-  if (twoFactor) {
-    // The administrator is the only 2FA account.
+  // No demo account enables 2FA, but the step is kept working in case one does.
+  if (twoFactor && new URL(page.url()).pathname.startsWith('/two-factor')) {
     await page.fill('input[name="one-time-code"]', '123456');
     await page.click('button[type="submit"]');
     await page.waitForURL((url) => !new URL(url).pathname.startsWith('/two-factor'), {

@@ -254,10 +254,14 @@ export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
     scopedDivisionIds: ['pia', 'pit', 'gov', 'cjg', 'wcf'],
     scopedEmployeeIds: [],
     status: 'active',
-    // The only account with 2FA, so the verification step is demonstrable.
-    twoFactorEnabled: true,
+    // 2FA is off for every demo account. The pending challenge lives only in
+    // module memory, so any hard navigation to /two-factor — a bookmark, a
+    // refresh, a fresh document from the server — loses it and the step can
+    // only report that the attempt expired. The verification screen and
+    // `verifyTwoFactor` are left intact for the real TOTP cutover.
+    twoFactorEnabled: false,
     lastLoginAt: '2026-09-01T07:55:00+06:00',
-    demonstrates: 'Full administration — and the only account that requires 2FA',
+    demonstrates: 'Full administration across every division',
   },
   {
     userId: 'usr-1090',

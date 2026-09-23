@@ -8,7 +8,7 @@ import {
 } from './auth';
 
 const EMPLOYEE = 'nadia.rahman@demo.local';
-const ADMIN_WITH_2FA = 'arif.mahmud@demo.local';
+const ADMIN = 'arif.mahmud@demo.local';
 const LOCKED = 'rafiq.chowdhury@demo.local';
 const INACTIVE = 'nusrat.jahan@demo.local';
 
@@ -127,38 +127,26 @@ describe('login', () => {
 });
 
 describe('two-factor', () => {
-  it('withholds the session until the code is verified', async () => {
+  // No demo account enables 2FA any more: the pending challenge is held in
+  // module memory and cannot survive a page load, so the step stranded anyone
+  // who reached /two-factor by anything but a client-side push. The service
+  // still implements it for the real TOTP cutover, hence the guard test below.
+  it('completes the administrator sign-in without a second step', async () => {
     const auth = service();
     const login = await auth.login({
-      identifier: ADMIN_WITH_2FA,
+      identifier: ADMIN,
       password: DEMO_PASSWORD,
       rememberMe: false,
     });
 
     expect(login.status).toBe('success');
     if (login.status !== 'success') return;
-    expect(login.data.requiresTwoFactor).toBe(true);
-    expect(login.data.user).toBeNull();
+    expect(login.data.requiresTwoFactor).toBe(false);
+    expect(login.data.user?.primaryRole).toBe('super_admin');
 
-    // No session exists between the password step and verification.
-    const between = await auth.getSession();
-    expect(between.status === 'success' && between.data).toBeNull();
-
-    const verified = await auth.verifyTwoFactor({ code: DEMO_TWO_FACTOR_CODE });
-    expect(verified.status).toBe('success');
-    if (verified.status !== 'success') return;
-    expect(verified.data.primaryRole).toBe('super_admin');
-  });
-
-  it('rejects a wrong code without ending the attempt', async () => {
-    const auth = service();
-    await auth.login({ identifier: ADMIN_WITH_2FA, password: DEMO_PASSWORD, rememberMe: false });
-
-    const wrong = await auth.verifyTwoFactor({ code: '000000' });
-    expect(wrong.status).toBe('validation_failure');
-
-    const right = await auth.verifyTwoFactor({ code: DEMO_TWO_FACTOR_CODE });
-    expect(right.status).toBe('success');
+    // The session is live immediately, with no verification in between.
+    const session = await auth.getSession();
+    expect(session.status === 'success' && session.data?.primaryRole).toBe('super_admin');
   });
 
   it('refuses verification when no sign-in is pending', async () => {
