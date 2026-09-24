@@ -31,6 +31,7 @@ import type {
   DepartmentAdminView,
   DivisionAdminView,
   DivisionFormInput,
+  EmployeeAccessRole,
   IntegrationPlaceholderView,
   NotificationSettingView,
   OrganizationBrandingView,
@@ -43,8 +44,15 @@ import { success } from '@/contracts/results';
 import { formatDate, formatTimestamp } from '@/lib/format';
 import { PROJECTS, STANDARD_POLICY } from '@/fixtures';
 import { EMPLOYEES } from '@/fixtures/hr';
-import { AUDIT_EVENTS } from '@/fixtures/workspace';
-import { DEMO_ACCOUNTS, DEMO_DATE, DIVISIONS, findAccountByUserId } from './accounts';
+import { AUDIT_EVENTS, type AuditEventFixture } from '@/fixtures/workspace';
+import {
+  DEMO_DATE,
+  DIVISIONS,
+  findAccountByUserId,
+  listDemoAccounts,
+  resetDemoAccountState,
+  updateDemoAccount,
+} from './accounts';
 import { mockStore } from './store';
 import {
   departmentRecords,
@@ -109,6 +117,31 @@ function employeeRef(employeeId: string) {
     avatarUrl: null,
     designation: employee?.designation ?? null,
   };
+}
+
+function userViews(): readonly UserAdminView[] {
+  return listDemoAccounts().map<UserAdminView>((account) => ({
+    userId: account.userId,
+    employee: employeeRef(account.employeeId),
+    email: account.email,
+    roles: account.roles,
+    roleLabels: account.roles.map((role) => ROLE_LABEL[role]),
+    primaryRole: account.primaryRole,
+    status: account.status,
+    statusLabel:
+      account.status === 'active' ? 'Active' : account.status === 'locked' ? 'Locked' : 'Inactive',
+    twoFactorEnabled: account.twoFactorEnabled,
+    lastLoginLabel: account.lastLoginAt ? formatTimestamp(account.lastLoginAt) : null,
+    scopeSummary:
+      account.scopedEmployeeIds.length > 0
+        ? `${account.scopedEmployeeIds.length} assigned employee(s) across ${account.scopedDivisionIds.length} division(s)`
+        : `${account.scopedDivisionIds.length} division(s)`,
+    divisions: account.scopedDivisionIds.map(divisionRef),
+    sensitivePermissions: account.permissions.map(
+      (permission) =>
+        PERMISSION_SPECS.find((spec) => spec.key === permission)?.label ?? permission,
+    ),
+  }));
 }
 
 function divisionRef(divisionId: string) {
@@ -371,7 +404,7 @@ function roleView(role: RoleKey): RoleAdminView {
     key: role,
     label: ROLE_LABEL[role],
     description: ROLE_DESCRIPTION[role],
-    userCount: DEMO_ACCOUNTS.filter((account) => account.roles.includes(role)).length,
+    userCount: listDemoAccounts().filter((account) => account.roles.includes(role)).length,
     scopeSummary: ROLE_SCOPE[role],
     isRetired: false,
     permissions: PERMISSION_SPECS.map<PermissionGrantView>((spec) => ({
@@ -473,6 +506,42 @@ let notificationSettings: NotificationSettingRecord[] = seedNotificationSettings
 /* -------------------------------------------------------------------------- */
 /* Audit log                                                                  */
 /* -------------------------------------------------------------------------- */
+
+let runtimeAuditEvents: AuditEventFixture[] = [];
+let runtimeAuditSequence = 0;
+
+function appendAccountAuditEvent(
+  actorUserId: string,
+  targetUserId: string,
+  action: 'user.role_changed' | 'user.deactivated',
+  reason: string | null,
+  before: Readonly<Record<string, string>>,
+  after: Readonly<Record<string, string>>,
+): void {
+  const actor = findAccountByUserId(actorUserId);
+  const target = findAccountByUserId(targetUserId);
+  runtimeAuditSequence += 1;
+  runtimeAuditEvents.push({
+    id: `aud-runtime-${runtimeAuditSequence}`,
+    occurredAt: new Date().toISOString(),
+    actorUserId,
+    actorName: actor?.fullName ?? 'Administrator',
+    action,
+    actionLabel: action === 'user.role_changed' ? 'User role changed' : 'User deactivated',
+    resourceType: 'user_account',
+    resourceLabel: target?.fullName ?? targetUserId,
+    scopeDivisionId: target?.primaryDivisionId ?? null,
+    reason,
+    correlationId: `cor-runtime-${runtimeAuditSequence}`,
+    before,
+    after,
+    valuePermission: null,
+  });
+}
+
+function allAuditEvents(): readonly AuditEventFixture[] {
+  return [...AUDIT_EVENTS, ...runtimeAuditEvents];
+}
 
 function auditView(
   fixture: (typeof AUDIT_EVENTS)[number],
@@ -853,34 +922,84 @@ export const mockAdminService: AdminService = {
     await delay();
     if (!isAdministrator(userId)) return denied(ADMIN_DENIAL.message, ADMIN_DENIAL.guidance);
 
-    return success(
-      DEMO_ACCOUNTS.map<UserAdminView>((account) => ({
-        userId: account.userId,
-        employee: employeeRef(account.employeeId),
-        email: account.email,
-        roles: account.roles,
-        roleLabels: account.roles.map((role) => ROLE_LABEL[role]),
-        primaryRole: account.primaryRole,
-        status: account.status,
-        statusLabel:
-          account.status === 'active'
-            ? 'Active'
-            : account.status === 'locked'
-              ? 'Locked'
-              : 'Inactive',
-        twoFactorEnabled: account.twoFactorEnabled,
-        lastLoginLabel: account.lastLoginAt ? formatTimestamp(account.lastLoginAt) : null,
-        scopeSummary:
-          account.scopedEmployeeIds.length > 0
-            ? `${account.scopedEmployeeIds.length} assigned employee(s) across ${account.scopedDivisionIds.length} division(s)`
-            : `${account.scopedDivisionIds.length} division(s)`,
-        divisions: account.scopedDivisionIds.map(divisionRef),
-        sensitivePermissions: account.permissions.map(
-          (permission) =>
-            PERMISSION_SPECS.find((spec) => spec.key === permission)?.label ?? permission,
-        ),
-      })),
+    return success(userViews());
+  },
+
+  async updateEmployeeAccessRole(userId, targetUserId, role: EmployeeAccessRole) {
+    await delay();
+    if (!isAdministrator(userId)) return denied(ADMIN_DENIAL.message, ADMIN_DENIAL.guidance);
+    const target = findAccountByUserId(targetUserId);
+    if (!target) return notFound('User account not found.');
+    if (target.status !== 'active') {
+      return {
+        status: 'conflict' as const,
+        code: 'CONFLICT' as const,
+        message: 'Only an active employee account can have its access role changed.',
+        guidance: 'Restore or unlock the account before changing its role.',
+      };
+    }
+    if (!['employee', 'team_lead'].includes(target.primaryRole)) {
+      return {
+        status: 'conflict' as const,
+        code: 'CONFLICT' as const,
+        message: 'This account holds a protected administrative or management role.',
+        guidance: 'Use the dedicated role-governance process for non-employee roles.',
+      };
+    }
+
+    const roles: readonly RoleKey[] = role === 'team_lead' ? ['team_lead', 'employee'] : ['employee'];
+    updateDemoAccount(targetUserId, (account) => ({ ...account, roles, primaryRole: role }));
+    appendAccountAuditEvent(
+      userId,
+      targetUserId,
+      'user.role_changed',
+      null,
+      { roles: target.roles.join(', ') },
+      { roles: roles.join(', ') },
     );
+    return success(userViews());
+  },
+
+  async deactivateUser(userId, targetUserId, reason) {
+    await delay();
+    if (!isAdministrator(userId)) return denied(ADMIN_DENIAL.message, ADMIN_DENIAL.guidance);
+    const target = findAccountByUserId(targetUserId);
+    if (!target) return notFound('User account not found.');
+    if (targetUserId === userId) {
+      return {
+        status: 'conflict' as const,
+        code: 'CONFLICT' as const,
+        message: 'You cannot remove your own account access.',
+        guidance: 'Ask another Super Administrator to manage this account.',
+      };
+    }
+    if (target.status === 'inactive') {
+      return {
+        status: 'conflict' as const,
+        code: 'CONFLICT' as const,
+        message: 'This account is already inactive.',
+        guidance: 'No further removal action is required.',
+      };
+    }
+    const cleanReason = reason.trim();
+    if (cleanReason.length < 5) {
+      return invalid(
+        'reason',
+        'Enter a reason for removing this user\u2019s access.',
+        'Use at least 5 characters so the audit record explains the decision.',
+      );
+    }
+
+    updateDemoAccount(targetUserId, (account) => ({ ...account, status: 'inactive' }));
+    appendAccountAuditEvent(
+      userId,
+      targetUserId,
+      'user.deactivated',
+      cleanReason,
+      { status: target.status },
+      { status: 'inactive' },
+    );
+    return success(userViews());
   },
 
   async listRoles(userId) {
@@ -974,7 +1093,8 @@ export const mockAdminService: AdminService = {
       );
     }
 
-    const events = AUDIT_EVENTS.filter((event) => {
+    const auditEvents = allAuditEvents();
+    const events = auditEvents.filter((event) => {
       if (filters?.actors?.length && !filters.actors.includes(event.actorUserId)) return false;
       if (filters?.actions?.length && !filters.actions.includes(event.action)) return false;
       if (filters?.resourceTypes?.length && !filters.resourceTypes.includes(event.resourceType)) {
@@ -993,14 +1113,14 @@ export const mockAdminService: AdminService = {
       totalCount: events.length,
       actorOptions: [
         ...new Map(
-          AUDIT_EVENTS.map((event) => [event.actorUserId, event.actorName]),
+          auditEvents.map((event) => [event.actorUserId, event.actorName]),
         ).entries(),
       ].map(([value, label]) => ({ value, label })),
       actionOptions: [
-        ...new Map(AUDIT_EVENTS.map((event) => [event.action, event.actionLabel])).entries(),
+        ...new Map(auditEvents.map((event) => [event.action, event.actionLabel])).entries(),
       ].map(([value, label]) => ({ value, label })),
       resourceOptions: [
-        ...new Set(AUDIT_EVENTS.map((event) => event.resourceType)),
+        ...new Set(auditEvents.map((event) => event.resourceType)),
       ].map((value) => ({ value, label: value.replace(/_/g, ' ') })),
       restrictedCount: events.filter(
         (event) => event.before?.visible === false || event.after?.visible === false,
@@ -1022,6 +1142,9 @@ export function resetAdminState(): void {
   rolePermissions = seedRolePermissions();
   notificationSettings = seedNotificationSettings();
   resetBranding();
+  resetDemoAccountState();
+  runtimeAuditEvents = [];
+  runtimeAuditSequence = 0;
 }
 
 export type { Division };

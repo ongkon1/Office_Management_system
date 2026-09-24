@@ -623,6 +623,61 @@ describe('department administration', () => {
 });
 
 describe('roles and permissions (FE-0731)', () => {
+  it('lets only a Super Administrator promote an employee to Team Lead', async () => {
+    const denied = await mockAdminService.updateEmployeeAccessRole(
+      EMPLOYEE,
+      'usr-1002',
+      'team_lead',
+    );
+    expect(denied.status).toBe('permission_denied');
+
+    const promoted = await mockAdminService.updateEmployeeAccessRole(
+      ADMIN,
+      'usr-1002',
+      'team_lead',
+    );
+    expect(promoted.status).toBe('success');
+    if (promoted.status === 'success') {
+      const account = promoted.data.find((item) => item.userId === 'usr-1002');
+      expect(account?.primaryRole).toBe('team_lead');
+      expect(account?.roles).toEqual(['team_lead', 'employee']);
+    }
+  });
+
+  it('deactivates instead of deleting a user and records the reason', async () => {
+    const removed = await mockAdminService.deactivateUser(
+      ADMIN,
+      'usr-1002',
+      'Employment ended',
+    );
+    expect(removed.status).toBe('success');
+    if (removed.status === 'success') {
+      const account = removed.data.find((item) => item.userId === 'usr-1002');
+      expect(account?.status).toBe('inactive');
+      expect(removed.data).toHaveLength(13);
+    }
+
+    const audit = await mockAdminService.getAuditLog(ADMIN, {
+      actions: ['user.deactivated'],
+    });
+    expect(audit.status).toBe('success');
+    if (audit.status === 'success') {
+      expect(audit.data.events[0]?.reason).toBe('Employment ended');
+    }
+  });
+
+  it('requires an audit reason and prevents self-deactivation', async () => {
+    const missingReason = await mockAdminService.deactivateUser(ADMIN, 'usr-1002', '');
+    expect(missingReason.status).toBe('validation_failure');
+
+    const selfRemoval = await mockAdminService.deactivateUser(
+      ADMIN,
+      ADMIN,
+      'No longer required',
+    );
+    expect(selfRemoval.status).toBe('conflict');
+  });
+
   it('states the consequence of every sensitive grant', async () => {
     const result = await mockAdminService.listRoles(ADMIN);
     if (result.status !== 'success') return;

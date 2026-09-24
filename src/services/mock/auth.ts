@@ -291,6 +291,14 @@ export class MockAuthService implements AuthService {
         message: 'Unknown demo account.',
       };
     }
+    if (account.status !== 'active') {
+      return {
+        status: 'permission_denied',
+        code: 'FORBIDDEN',
+        message: 'This account is not active.',
+        guidance: BLOCKED_STATUS_ROUTE[account.status],
+      };
+    }
     const session = toSessionUser(account);
     this.currentSession = session;
     return success(session);

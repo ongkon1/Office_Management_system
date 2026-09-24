@@ -13,7 +13,7 @@ import { Card } from '@/components/feedback/card';
 import { Avatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { formatTimestamp } from '@/lib/format';
-import { DEMO_ACCOUNTS, findAccountByUserId } from '@/services/mock/accounts';
+import { findAccountByUserId, listDemoAccounts } from '@/services/mock/accounts';
 import { resetDemoData } from '@/services/mock/reset';
 import { resetPresentation } from '@/features/finance/presentation-store';
 import { resetFeatureFlags } from '@/features/settings/flag-store';
@@ -134,7 +134,7 @@ function DemoTools() {
           <section>
             <h3 className="text-label text-ink-muted">Switch role</h3>
             <ul className="mt-2 flex max-h-64 flex-col gap-1.5 overflow-y-auto">
-              {DEMO_ACCOUNTS.filter((account) => account.status === 'active').map(
+              {listDemoAccounts().filter((account) => account.status === 'active').map(
                 (account) => (
                   <li key={account.userId}>
                     <button

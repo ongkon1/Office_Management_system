@@ -301,6 +301,34 @@ export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
   },
 ];
 
+/**
+ * Runtime account overrides used by the mock administration adapter.
+ *
+ * The exported fixture remains immutable evidence for the demo dataset. Admin
+ * mutations are layered over it so reset is reliable and authentication reads
+ * the same account state as the Users screen.
+ */
+let accountOverrides = new Map<string, DemoAccount>();
+
+export function listDemoAccounts(): readonly DemoAccount[] {
+  return DEMO_ACCOUNTS.map((account) => accountOverrides.get(account.userId) ?? account);
+}
+
+export function updateDemoAccount(
+  userId: string,
+  update: (account: DemoAccount) => DemoAccount,
+): DemoAccount | undefined {
+  const current = listDemoAccounts().find((account) => account.userId === userId);
+  if (!current) return undefined;
+  const next = update(current);
+  accountOverrides.set(userId, next);
+  return next;
+}
+
+export function resetDemoAccountState(): void {
+  accountOverrides = new Map<string, DemoAccount>();
+}
+
 export const DEMO_TIMEZONE = TIMEZONE;
 export const DEMO_LOCALE = 'en-GB';
 
@@ -308,7 +336,7 @@ export const DEMO_LOCALE = 'en-GB';
 export function findAccountByIdentifier(identifier: string): DemoAccount | undefined {
   const needle = identifier.trim().toLowerCase();
   if (!needle) return undefined;
-  return DEMO_ACCOUNTS.find(
+  return listDemoAccounts().find(
     (account) =>
       account.email.toLowerCase() === needle ||
       account.employeeCode.toLowerCase() === needle,
@@ -316,5 +344,5 @@ export function findAccountByIdentifier(identifier: string): DemoAccount | undef
 }
 
 export function findAccountByUserId(userId: string): DemoAccount | undefined {
-  return DEMO_ACCOUNTS.find((account) => account.userId === userId);
+  return listDemoAccounts().find((account) => account.userId === userId);
 }

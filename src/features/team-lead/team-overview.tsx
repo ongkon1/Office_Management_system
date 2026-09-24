@@ -4,6 +4,7 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { AlertTriangle, ArrowRight, MapPin, MessageSquareText, Users } from 'lucide-react';
 import type { TeamTimesheetRowView } from '@/contracts/view-models';
+import type { TeamMemberView } from '@/contracts/team-lead';
 import { mockTeamLeadService } from '@/services/mock/team-lead';
 import { mockRequisitionService } from '@/services/mock/requisition';
 import { mockConveyanceService } from '@/services/mock/conveyance';
@@ -20,9 +21,9 @@ import { Duration } from '@/components/ui/misc';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import { ProgressBar } from '@/components/ui/progress';
 import { DataTable, type DataTableColumn } from '@/components/data/data-table';
-import { FilterBar, MultiSelectFilter } from '@/components/data/filters';
+import { FilterBar, MultiSelectFilter, type AppliedFilter } from '@/components/data/filters';
 import { Field } from '@/components/forms/field';
-import { Checkbox, Select, Textarea } from '@/components/forms/inputs';
+import { Checkbox, SearchInput, Select, Textarea } from '@/components/forms/inputs';
 import { Dialog } from '@/components/feedback/overlay';
 import { StepIndicator } from '@/components/feedback/disclosure';
 import { useToast } from '@/components/feedback/toast';
@@ -242,25 +243,196 @@ function TimesheetCompactRow({ row }: { row: TeamTimesheetRowView }) {
 
 export function TeamMembers() {
   const { user } = useSession();
+  const [query, setQuery] = React.useState('');
+  const [divisionId, setDivisionId] = React.useState('all');
+  const [status, setStatus] = React.useState('all');
   const { state } = useAsync(() => mockTeamLeadService.listMembers(user?.userId ?? ''), [user?.userId]);
   if (state.status === 'loading') return <LoadingPage label="assigned employees" />;
   if (state.status !== 'success') return <PageContainer><EmptyState variant="error" title="Team unavailable" /></PageContainer>;
+
+  const members = state.data;
+  const normalizedQuery = query.trim().toLowerCase();
+  const divisionOptions = [
+    ...new Map(
+      members.flatMap((member) => member.divisions.map((division) => [division.id, division])),
+    ).values(),
+  ].sort((a, b) => a.name.localeCompare(b.name));
+  const statusOptions = [
+    ...new Map(members.map((member) => [member.status.status, member.status.label])).entries(),
+  ].sort((a, b) => a[1].localeCompare(b[1]));
+  const rows = members
+    .filter((member) => {
+      const matchesQuery =
+        !normalizedQuery ||
+        member.employee.fullName.toLowerCase().includes(normalizedQuery) ||
+        member.employee.employeeCode.toLowerCase().includes(normalizedQuery) ||
+        member.employee.designation?.toLowerCase().includes(normalizedQuery);
+      const matchesDivision =
+        divisionId === 'all' || member.divisions.some((division) => division.id === divisionId);
+      const matchesStatus = status === 'all' || member.status.status === status;
+      return matchesQuery && matchesDivision && matchesStatus;
+    })
+    .sort((a, b) => a.employee.fullName.localeCompare(b.employee.fullName));
+
+  const clearFilters = () => {
+    setQuery('');
+    setDivisionId('all');
+    setStatus('all');
+  };
+  const applied: AppliedFilter[] = [];
+  if (query.trim()) {
+    applied.push({ key: 'search', label: 'Search', value: query.trim(), onRemove: () => setQuery('') });
+  }
+  if (divisionId !== 'all') {
+    applied.push({
+      key: 'division',
+      label: 'Division',
+      value: divisionOptions.find((division) => division.id === divisionId)?.name ?? divisionId,
+      onRemove: () => setDivisionId('all'),
+    });
+  }
+  if (status !== 'all') {
+    applied.push({
+      key: 'status',
+      label: 'Today',
+      value: statusOptions.find(([value]) => value === status)?.[1] ?? status,
+      onRemove: () => setStatus('all'),
+    });
+  }
+
+  const columns: readonly DataTableColumn<TeamMemberView>[] = [
+    {
+      key: 'employee',
+      header: 'Employee',
+      alwaysVisible: true,
+      render: (member) => (
+        <div>
+          <p className="font-medium text-ink">{member.employee.fullName}</p>
+          <p className="text-caption text-ink-muted">
+            {member.employee.employeeCode} · {member.employee.designation ?? 'Designation not recorded'}
+          </p>
+        </div>
+      ),
+    },
+    {
+      key: 'divisions',
+      header: 'Divisions',
+      hideBelow: 'md',
+      render: (member) => (
+        <span className="flex flex-wrap gap-1">
+          {member.divisions.map((division) => (
+            <Badge key={division.id} tone="neutral">{division.code}</Badge>
+          ))}
+        </span>
+      ),
+    },
+    {
+      key: 'active',
+      header: 'Active today',
+      align: 'right',
+      render: (member) => <Duration value={member.active} />,
+    },
+    {
+      key: 'attendance',
+      header: 'Location',
+      hideBelow: 'lg',
+      render: (member) => member.attendanceLabel,
+    },
+    {
+      key: 'remarks',
+      header: 'Open remarks',
+      align: 'right',
+      hideBelow: 'lg',
+      render: (member) => member.openRemarkCount,
+    },
+    {
+      key: 'status',
+      header: 'Today',
+      alwaysVisible: true,
+      render: (member) => <StatusIndicator status={member.status.status} />,
+    },
+  ];
+
   return (
     <PageContainer>
-      <PageHeader title="My Team" description="Employees explicitly assigned to your Team Lead scope." meta={<ScopeBadge />} />
-      <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {state.data.map((member) => (
-          <Card key={member.employee.id}>
-            <div className="flex items-start justify-between gap-3"><div><h2 className="text-h3 text-ink">{member.employee.fullName}</h2><p className="text-body-sm text-ink-muted">{member.employee.employeeCode} · {member.employee.designation}</p></div><StatusIndicator status={member.status.status} /></div>
-            <div className="mt-4 flex flex-wrap gap-1.5">{member.divisions.map((division) => <Badge key={division.id} tone="neutral">{division.code}</Badge>)}</div>
-            <dl className="mt-4 grid grid-cols-3 gap-2 border-t border-border pt-3 text-center">
-              <div><dt className="text-caption text-ink-muted">Today</dt><dd className="text-body-sm font-semibold text-ink"><Duration value={member.active} /></dd></div>
+      <PageHeader
+        title="My Team"
+        description="Employees explicitly assigned to your Team Lead scope."
+        meta={<span className="flex flex-wrap gap-2"><ScopeBadge /><Badge tone="neutral">{rows.length} of {members.length}</Badge></span>}
+      />
+      <FilterBar
+        className="mt-5"
+        applied={applied}
+        onClearAll={clearFilters}
+        resultSummary={`${rows.length} of ${members.length} assigned team members`}
+      >
+        <SearchInput
+          aria-label="Search team members"
+          placeholder="Search name, ID or designation"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          onClear={() => setQuery('')}
+          className="w-full md:w-72"
+        />
+        <Select
+          aria-label="Filter team by division"
+          value={divisionId}
+          onChange={(event) => setDivisionId(event.target.value)}
+          options={[
+            { value: 'all', label: 'All divisions' },
+            ...divisionOptions.map((division) => ({ value: division.id, label: division.name })),
+          ]}
+          className="min-w-44"
+        />
+        <Select
+          aria-label="Filter team by today status"
+          value={status}
+          onChange={(event) => setStatus(event.target.value)}
+          options={[
+            { value: 'all', label: 'All daily statuses' },
+            ...statusOptions.map(([value, label]) => ({ value, label })),
+          ]}
+          className="min-w-44"
+        />
+      </FilterBar>
+      <DataTable<TeamMemberView>
+        className="mt-4"
+        caption="Employees assigned to this Team Lead"
+        rows={rows}
+        columns={columns}
+        getRowId={(member) => member.employee.id}
+        emptyState={{
+          variant: applied.length > 0 ? 'no-results' : 'empty',
+          title: applied.length > 0 ? 'No matching team members' : 'No team members assigned',
+          description: applied.length > 0
+            ? 'Clear or change the filters to see assigned employees.'
+            : 'Department assignments determine which employees appear here.',
+          action: applied.length > 0 ? { label: 'Clear filters', onClick: clearFilters } : undefined,
+        }}
+        renderMobileCard={(member) => (
+          <div>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate font-semibold text-ink">{member.employee.fullName}</p>
+                <p className="truncate text-caption text-ink-muted">
+                  {member.employee.employeeCode} · {member.employee.designation ?? 'Designation not recorded'}
+                </p>
+              </div>
+              <StatusIndicator status={member.status.status} />
+            </div>
+            <div className="mt-3 flex flex-wrap gap-1">
+              {member.divisions.map((division) => (
+                <Badge key={division.id} tone="neutral">{division.code}</Badge>
+              ))}
+            </div>
+            <dl className="mt-3 grid grid-cols-3 gap-2 border-t border-border pt-3 text-center">
+              <div><dt className="text-caption text-ink-muted">Active</dt><dd className="text-body-sm font-semibold text-ink"><Duration value={member.active} /></dd></div>
               <div><dt className="text-caption text-ink-muted">Location</dt><dd className="text-body-sm font-semibold text-ink">{member.attendanceLabel}</dd></div>
-              <div><dt className="text-caption text-ink-muted">Open remarks</dt><dd className="text-body-sm font-semibold text-ink">{member.openRemarkCount}</dd></div>
+              <div><dt className="text-caption text-ink-muted">Remarks</dt><dd className="text-body-sm font-semibold text-ink">{member.openRemarkCount}</dd></div>
             </dl>
-          </Card>
-        ))}
-      </div>
+          </div>
+        )}
+      />
     </PageContainer>
   );
 }

@@ -117,6 +117,9 @@ export interface UserAdminView {
   readonly sensitivePermissions: readonly string[];
 }
 
+/** Roles that may be changed from the employee account-management screen. */
+export type EmployeeAccessRole = 'employee' | 'team_lead';
+
 export interface PermissionGrantView {
   readonly key: PermissionKey;
   readonly label: string;
@@ -282,6 +285,16 @@ export interface AdminService {
   ): Promise<Result<readonly DepartmentAdminView[]>>;
 
   listUsers(userId: string): Promise<Result<readonly UserAdminView[]>>;
+  updateEmployeeAccessRole(
+    userId: string,
+    targetUserId: string,
+    role: EmployeeAccessRole,
+  ): Promise<Result<readonly UserAdminView[]>>;
+  deactivateUser(
+    userId: string,
+    targetUserId: string,
+    reason: string,
+  ): Promise<Result<readonly UserAdminView[]>>;
   listRoles(userId: string): Promise<Result<readonly RoleAdminView[]>>;
   setRolePermission(
     userId: string,

@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { KeyRound, ShieldAlert, TriangleAlert } from 'lucide-react';
+import { KeyRound, ShieldAlert, TriangleAlert, UserRoundCog, UserRoundMinus } from 'lucide-react';
 import type { PermissionGrantView, RoleAdminView, UserAdminView } from '@/contracts/admin';
 import type { RoleKey } from '@/contracts/domain';
 import { mockAdminService } from '@/services/mock/admin';
@@ -13,7 +13,8 @@ import { Card, CardHeader } from '@/components/feedback/card';
 import { Alert, Callout } from '@/components/feedback/alert';
 import { Dialog } from '@/components/feedback/overlay';
 import { DataTable } from '@/components/data/data-table';
-import { Switch } from '@/components/forms/inputs';
+import { Switch, Textarea } from '@/components/forms/inputs';
+import { Field } from '@/components/forms/field';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar } from '@/components/ui/avatar';
@@ -29,10 +30,50 @@ import { ReportsFallback, ReportsLoading } from '@/features/reports/report-catal
  */
 export function UserAdministration() {
   const { user } = useSession();
-  const { state } = useAsync(
+  const toast = useToast();
+  const [pending, setPending] = React.useState<
+    | { readonly kind: 'promote'; readonly account: UserAdminView }
+    | { readonly kind: 'deactivate'; readonly account: UserAdminView }
+    | null
+  >(null);
+  const [reason, setReason] = React.useState('');
+  const [failure, setFailure] = React.useState<string | null>(null);
+  const [saving, setSaving] = React.useState(false);
+  const { state, reload } = useAsync(
     () => mockAdminService.listUsers(user?.userId ?? ''),
     [user?.userId],
   );
+
+  async function applyPendingAction() {
+    if (!pending) return;
+    setFailure(null);
+    setSaving(true);
+    const result = pending.kind === 'promote'
+      ? await mockAdminService.updateEmployeeAccessRole(
+          user?.userId ?? '', pending.account.userId, 'team_lead',
+        )
+      : await mockAdminService.deactivateUser(
+          user?.userId ?? '', pending.account.userId, reason,
+        );
+    setSaving(false);
+    if (result.status === 'success') {
+      const wasPromotion = pending.kind === 'promote';
+      setPending(null);
+      setReason('');
+      reload();
+      toast.show({
+        tone: wasPromotion ? 'success' : 'warning',
+        title: wasPromotion ? 'Team Lead access assigned' : 'User access removed',
+        description: wasPromotion
+          ? 'The employee keeps self-service access. Department scope is managed separately.'
+          : 'The account is inactive. Historical records were retained.',
+      });
+      return;
+    }
+    setFailure(
+      'guidance' in result ? `${result.message} ${result.guidance ?? ''}`.trim() : result.message,
+    );
+  }
 
   if (state.status === 'loading') return <ReportsLoading label="users" />;
   if (state.status !== 'success') return <ReportsFallback result={state.failure} subject="Users" />;
@@ -50,6 +91,12 @@ export function UserAdministration() {
         Scope is what a role can reach; a sensitive permission is what it may additionally read.
         Both are listed here, because an account’s real reach is the combination.
       </Callout>
+
+      {failure && (
+        <Alert className="mt-4" tone="danger" title="Could not update the user" live>
+          {failure}
+        </Alert>
+      )}
 
       <DataTable<UserAdminView>
         className="mt-5"
@@ -133,6 +180,42 @@ export function UserAdministration() {
               </span>
             ),
           },
+          {
+            key: 'actions',
+            header: 'Actions',
+            alwaysVisible: true,
+            render: (row) => (
+              <span className="flex flex-wrap justify-end gap-2">
+                {row.status === 'active' && row.primaryRole === 'employee' && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    iconLeading={<UserRoundCog aria-hidden className="size-4" />}
+                    onClick={() => {
+                      setFailure(null);
+                      setPending({ kind: 'promote', account: row });
+                    }}
+                  >
+                    Make Team Lead
+                  </Button>
+                )}
+                {row.status !== 'inactive' && row.userId !== user?.userId && (
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    iconLeading={<UserRoundMinus aria-hidden className="size-4" />}
+                    onClick={() => {
+                      setFailure(null);
+                      setReason('');
+                      setPending({ kind: 'deactivate', account: row });
+                    }}
+                  >
+                    Remove user
+                  </Button>
+                )}
+              </span>
+            ),
+          },
         ]}
         renderMobileCard={(row) => (
           <div>
@@ -158,9 +241,97 @@ export function UserAdministration() {
                 {row.sensitivePermissions.join(', ')}
               </p>
             )}
+            <div className="mt-3 flex flex-wrap gap-2">
+              {row.status === 'active' && row.primaryRole === 'employee' && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    setFailure(null);
+                    setPending({ kind: 'promote', account: row });
+                  }}
+                >
+                  Make Team Lead
+                </Button>
+              )}
+              {row.status !== 'inactive' && row.userId !== user?.userId && (
+                <Button
+                  size="sm"
+                  variant="danger"
+                  onClick={() => {
+                    setFailure(null);
+                    setReason('');
+                    setPending({ kind: 'deactivate', account: row });
+                  }}
+                >
+                  Remove user
+                </Button>
+              )}
+            </div>
           </div>
         )}
       />
+
+      <Dialog
+        open={pending !== null}
+        onClose={() => {
+          if (saving) return;
+          setPending(null);
+          setReason('');
+          setFailure(null);
+        }}
+        title={pending?.kind === 'promote' ? 'Make this employee a Team Lead?' : 'Remove this user?'}
+        description={pending?.account.employee.fullName}
+        dismissOnBackdrop={false}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              disabled={saving}
+              onClick={() => {
+                setPending(null);
+                setReason('');
+                setFailure(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant={pending?.kind === 'deactivate' ? 'danger' : 'primary'}
+              loading={saving}
+              onClick={applyPendingAction}
+            >
+              {pending?.kind === 'promote' ? 'Make Team Lead' : 'Remove access'}
+            </Button>
+          </>
+        }
+      >
+        {pending?.kind === 'promote' ? (
+          <Callout tone="info">
+            The employee will keep Employee self-service and gain the Team Lead role. Assigning
+            employees to this lead remains a separate department-level action.
+          </Callout>
+        ) : (
+          <div className="space-y-4">
+            <Alert tone="warning" title="This deactivates access; it does not delete history">
+              The user will no longer be able to sign in. Their timesheets, assignments, tasks,
+              approvals and audit records will remain available.
+            </Alert>
+            <Field
+              label="Reason for removal"
+              required
+              helperText="This reason is stored in the audit record."
+              error={failure && reason.trim().length < 5 ? failure : undefined}
+            >
+              <Textarea
+                value={reason}
+                onChange={(event) => setReason(event.target.value)}
+                placeholder="For example, employment ended"
+              />
+            </Field>
+          </div>
+        )}
+      </Dialog>
     </PageContainer>
   );
 }
