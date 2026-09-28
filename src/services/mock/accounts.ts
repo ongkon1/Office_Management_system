@@ -325,6 +325,38 @@ export function updateDemoAccount(
   return next;
 }
 
+export function createDemoAccount(input: {
+  readonly userId: string;
+  readonly employeeId: string;
+  readonly employeeCode: string;
+  readonly fullName: string;
+  readonly email: string;
+  readonly primaryDivisionId: string;
+  readonly role: RoleKey;
+}): DemoAccount {
+  const roles: readonly RoleKey[] = input.role === 'team_lead' ? ['team_lead', 'employee'] : [input.role];
+  const account: DemoAccount = {
+    userId: input.userId,
+    employeeId: input.employeeId,
+    employeeCode: input.employeeCode,
+    fullName: input.fullName,
+    email: input.email,
+    designation: input.role === 'hr_manager' ? 'HR Manager' : input.role === 'team_lead' ? 'Team Lead' : 'Employee',
+    roles,
+    primaryRole: input.role,
+    permissions: [],
+    primaryDivisionId: input.primaryDivisionId,
+    scopedDivisionIds: [input.primaryDivisionId],
+    scopedEmployeeIds: [],
+    status: 'active',
+    twoFactorEnabled: false,
+    lastLoginAt: null,
+    demonstrates: 'Created by a Super Administrator',
+  };
+  accountOverrides.set(account.userId, account);
+  return account;
+}
+
 export function resetDemoAccountState(): void {
   accountOverrides = new Map<string, DemoAccount>();
 }

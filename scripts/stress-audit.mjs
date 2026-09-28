@@ -24,6 +24,7 @@ const EMPLOYEE = 'nadia.rahman@demo.local';
 const TEAM_LEAD = 'imran.hossain@demo.local';
 const HR = 'rezaul.haque@demo.local';
 const FINANCE = 'mahmuda.akter@demo.local';
+const ADMIN = 'arif.mahmud@demo.local';
 
 const WIDTHS = [375, 768, 1440];
 
@@ -141,6 +142,7 @@ const ROUTES = [
   { path: '/finance', email: FINANCE },
   { path: '/finance/hours', email: FINANCE },
   { path: '/finance/project-costs', email: FINANCE },
+  { path: '/admin/departments', email: ADMIN },
 ];
 
 const routesToAudit = routeFilter

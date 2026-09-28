@@ -312,6 +312,7 @@ const EMPTY_FORM: EmployeeFormInput = {
   standardWeeklyActiveMinutes: 2100,
   skills: [],
   status: 'active',
+  userRole: 'employee',
 };
 
 export function EmployeeForm({ employeeId }: { employeeId?: string }) {
@@ -354,6 +355,7 @@ export function EmployeeForm({ employeeId }: { employeeId?: string }) {
       standardWeeklyActiveMinutes: detail.standardWeekly.minutes,
       skills: detail.skills,
       status: detail.status,
+      userRole: 'employee',
     });
     setSkillText(detail.skills.join(', '));
   }
@@ -501,6 +503,24 @@ export function EmployeeForm({ employeeId }: { employeeId?: string }) {
                 onChange={(event) => update('status', event.target.value as 'active' | 'inactive')}
               />
             </Field>
+            {user?.primaryRole === 'super_admin' && (
+              <Field
+                label="User role"
+                helperText="Team Lead also keeps Employee self-service. HR access is administrative."
+              >
+                <Select
+                  value={form.userRole ?? 'employee'}
+                  options={[
+                    { value: 'employee', label: 'Employee' },
+                    { value: 'team_lead', label: 'Team Lead' },
+                    { value: 'hr_manager', label: 'HR Manager' },
+                  ]}
+                  onChange={(event) =>
+                    update('userRole', event.target.value as NonNullable<EmployeeFormInput['userRole']>)
+                  }
+                />
+              </Field>
+            )}
           </div>
         </Card>
 

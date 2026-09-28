@@ -28,7 +28,6 @@ import type {
   AuditEventView,
   BrandLogoAsset,
   AuditLogView,
-  DepartmentAdminView,
   DivisionAdminView,
   DivisionFormInput,
   EmployeeAccessRole,
@@ -46,7 +45,6 @@ import { PROJECTS, STANDARD_POLICY } from '@/fixtures';
 import { EMPLOYEES } from '@/fixtures/hr';
 import { AUDIT_EVENTS, type AuditEventFixture } from '@/fixtures/workspace';
 import {
-  DEMO_DATE,
   DIVISIONS,
   findAccountByUserId,
   listDemoAccounts,
@@ -55,14 +53,8 @@ import {
 } from './accounts';
 import { mockStore } from './store';
 import {
-  departmentRecords,
-  effectiveLeadAssignment,
-  removeDepartmentRecord,
   resetDepartmentState,
-  saveDepartmentRecord,
-  type DepartmentRecord,
 } from './department-store';
-import { departmentMembers } from './organization-hierarchy';
 import {
   DEFAULT_BRANDING,
   commitBranding,
@@ -110,12 +102,13 @@ const ADMIN_DENIAL = {
 
 function employeeRef(employeeId: string) {
   const employee = EMPLOYEES.find((item) => item.id === employeeId);
+  const account = listDemoAccounts().find((item) => item.employeeId === employeeId);
   return {
     id: employeeId,
-    fullName: employee?.fullName ?? employeeId,
-    employeeCode: employee?.employeeCode ?? employeeId,
+    fullName: employee?.fullName ?? account?.fullName ?? employeeId,
+    employeeCode: employee?.employeeCode ?? account?.employeeCode ?? employeeId,
     avatarUrl: null,
-    designation: employee?.designation ?? null,
+    designation: employee?.designation ?? account?.designation ?? null,
   };
 }
 
@@ -225,33 +218,6 @@ function divisionAdminView(record: DivisionRecord): DivisionAdminView {
     openTaskCount: openTasks.length,
     deactivationBlockers: record.isActive ? blockers : [],
   };
-}
-
-/* -------------------------------------------------------------------------- */
-/* Departments                                                                */
-/* -------------------------------------------------------------------------- */
-
-function departmentAdminView(record: DepartmentRecord): DepartmentAdminView {
-  const lead = effectiveLeadAssignment(record.id, DEMO_DATE);
-  const employeeCount = departmentMembers(record.id, DEMO_DATE).length;
-  return {
-    ...record,
-    division: divisionRef(record.divisionId),
-    currentLead: lead ? employeeRef(lead.leadEmployeeId) : null,
-    employeeCount,
-    canDelete: employeeCount === 0,
-  };
-}
-
-function departmentViews(): readonly DepartmentAdminView[] {
-  return departmentRecords()
-    .slice()
-    .sort(
-      (left, right) =>
-        divisionRef(left.divisionId).name.localeCompare(divisionRef(right.divisionId).name) ||
-        left.name.localeCompare(right.name),
-    )
-    .map(departmentAdminView);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -811,113 +777,6 @@ export const mockAdminService: AdminService = {
     return success(divisions.map(divisionAdminView));
   },
 
-  async listDepartments(userId) {
-    await delay();
-    if (!isAdministrator(userId)) return denied(ADMIN_DENIAL.message, ADMIN_DENIAL.guidance);
-    return success(departmentViews());
-  },
-
-  async saveDepartment(userId, input, id) {
-    await delay();
-    if (!isAdministrator(userId)) return denied(ADMIN_DENIAL.message, ADMIN_DENIAL.guidance);
-
-    const name = input.name.trim();
-    const code = input.code.trim().toUpperCase();
-    const description = input.description.trim() || null;
-    const divisionId = input.divisionId.trim();
-    if (!DIVISIONS[divisionId as keyof typeof DIVISIONS]) {
-      return invalid('divisionId', 'Choose a valid division.', 'Select the division that owns this department.');
-    }
-    if (!name) {
-      return invalid('name', 'Enter a department name.', 'Use the department name employees recognize.');
-    }
-    if (!code) {
-      return invalid('code', 'Enter a department code.', 'Use a short code such as ENG or HR.');
-    }
-    if (!/^[A-Z0-9-]{2,12}$/.test(code)) {
-      return invalid(
-        'code',
-        'Use 2 to 12 uppercase letters, numbers, or hyphens.',
-        'For example, use ENG, HR, or CLIENT-SVC.',
-      );
-    }
-
-    const current = id ? departmentRecords().find((department) => department.id === id) : undefined;
-    if (id && !current) return notFound('Department not found.');
-    if (
-      current &&
-      departmentMembers(current.id, DEMO_DATE).length > 0 &&
-      (current.name !== name || current.divisionId !== divisionId)
-    ) {
-      return {
-        status: 'conflict' as const,
-        code: 'CONFLICT' as const,
-        message: `${current.name} is already referenced by employee records.`,
-        guidance: 'Keep its division and name unchanged; you can still update its Team Lead, code, and description.',
-      };
-    }
-    const duplicateName = departmentRecords().find(
-      (department) =>
-        department.id !== id &&
-        department.divisionId === divisionId &&
-        department.name.toLowerCase() === name.toLowerCase(),
-    );
-    const duplicateCode = departmentRecords().find(
-      (department) =>
-        department.id !== id &&
-        department.divisionId === divisionId &&
-        department.code.toLowerCase() === code.toLowerCase(),
-    );
-    if (duplicateName || duplicateCode) {
-      return {
-        status: 'conflict' as const,
-        code: 'CONFLICT' as const,
-        message: duplicateName
-          ? `A department named ${duplicateName.name} already exists.`
-          : `Department code ${duplicateCode?.code} is already in use.`,
-        guidance: 'Use a department name and code that are unique within the selected division.',
-      };
-    }
-
-    saveDepartmentRecord({
-      id: current?.id ?? `dept-${Date.now()}`,
-      divisionId,
-      name,
-      code,
-      description,
-      isActive: current?.isActive ?? true,
-      createdAt: current?.createdAt ?? new Date().toISOString(),
-      createdBy: current?.createdBy ?? {
-        userId,
-        displayName: findAccountByUserId(userId)?.fullName ?? 'Administrator',
-      },
-      updatedAt: new Date().toISOString(),
-      updatedBy: {
-        userId,
-        displayName: findAccountByUserId(userId)?.fullName ?? 'Administrator',
-      },
-    });
-    return success(departmentViews());
-  },
-
-  async deleteDepartment(userId, id) {
-    await delay();
-    if (!isAdministrator(userId)) return denied(ADMIN_DENIAL.message, ADMIN_DENIAL.guidance);
-    const department = departmentRecords().find((item) => item.id === id);
-    if (!department) return notFound('Department not found.');
-    const employeeCount = departmentMembers(department.id, DEMO_DATE).length;
-    if (employeeCount > 0) {
-      return {
-        status: 'conflict' as const,
-        code: 'CONFLICT' as const,
-        message: `${department.name} is assigned to ${employeeCount} employee(s).`,
-        guidance: 'Move those employees to another department before deleting it.',
-      };
-    }
-    removeDepartmentRecord(id);
-    return success(departmentViews());
-  },
-
   async listUsers(userId) {
     await delay();
     if (!isAdministrator(userId)) return denied(ADMIN_DENIAL.message, ADMIN_DENIAL.guidance);
@@ -938,16 +797,16 @@ export const mockAdminService: AdminService = {
         guidance: 'Restore or unlock the account before changing its role.',
       };
     }
-    if (!['employee', 'team_lead'].includes(target.primaryRole)) {
+    if (!['employee', 'team_lead', 'hr_manager'].includes(target.primaryRole)) {
       return {
         status: 'conflict' as const,
         code: 'CONFLICT' as const,
-        message: 'This account holds a protected administrative or management role.',
-        guidance: 'Use the dedicated role-governance process for non-employee roles.',
+        message: 'This account holds a protected Super Administrator or Management role.',
+        guidance: 'Use the dedicated governance process for protected roles.',
       };
     }
 
-    const roles: readonly RoleKey[] = role === 'team_lead' ? ['team_lead', 'employee'] : ['employee'];
+    const roles: readonly RoleKey[] = role === 'team_lead' ? ['team_lead', 'employee'] : [role];
     updateDemoAccount(targetUserId, (account) => ({ ...account, roles, primaryRole: role }));
     appendAccountAuditEvent(
       userId,

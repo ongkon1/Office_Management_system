@@ -113,7 +113,7 @@ for (const [email, label, expected] of ROLES) {
   const page = await context.newPage();
   await signIn(page, 'nadia.rahman@demo.local');
 
-  for (const route of ['/hr', '/admin/users', '/attendance']) {
+  for (const route of ['/hr', '/admin/users', '/admin/departments', '/attendance']) {
     await page.goto(`${baseUrl}${route}`, { waitUntil: 'networkidle' });
     // The guard renders after hydration, so wait for the outcome rather than
     // sampling once — a single check races the client boundary.

@@ -563,67 +563,14 @@ describe('division administration (FE-0730)', () => {
   });
 });
 
-describe('department administration', () => {
-  it('allows only a Super Administrator to manage the catalogue', async () => {
-    const denied = await mockAdminService.listDepartments(HR);
-    const allowed = await mockAdminService.listDepartments(ADMIN);
-    expect(denied.status).toBe('permission_denied');
-    expect(allowed.status).toBe('success');
-  });
-
-  it('creates, updates, and deletes an unused department', async () => {
-    const created = await mockAdminService.saveDepartment(ADMIN, {
-      divisionId: 'wcf',
-      name: 'Customer Success',
-      code: 'CS',
-      description: 'Customer adoption and retention.',
-    });
-    if (created.status !== 'success') return;
-    const department = created.data.find((item) => item.code === 'CS');
-    expect(department?.employeeCount).toBe(0);
-
-    const updated = await mockAdminService.saveDepartment(
-      ADMIN,
-      {
-        divisionId: 'wcf',
-        name: 'Customer Experience',
-        code: 'CX',
-        description: '',
-      },
-      department?.id,
-    );
-    if (updated.status !== 'success') return;
-    const renamed = updated.data.find((item) => item.code === 'CX');
-    expect(renamed?.name).toBe('Customer Experience');
-
-    const removed = await mockAdminService.deleteDepartment(ADMIN, renamed?.id ?? '');
-    expect(removed.status).toBe('success');
-    if (removed.status === 'success') {
-      expect(removed.data.some((item) => item.code === 'CX')).toBe(false);
-    }
-  });
-
-  it('protects a department referenced by employee records', async () => {
-    const listed = await mockAdminService.listDepartments(ADMIN);
-    if (listed.status !== 'success') return;
-    const technical = listed.data.find(
-      (item) => item.division.id === 'pia' && item.name === 'Technical',
-    );
-    expect(technical?.canDelete).toBe(false);
-    const result = await mockAdminService.deleteDepartment(ADMIN, technical?.id ?? '');
-    expect(result.status).toBe('conflict');
-  });
-
-  it('allows the same department name in separate divisions', async () => {
-    const listed = await mockAdminService.listDepartments(ADMIN);
-    if (listed.status !== 'success') return;
-    const sales = listed.data.filter((item) => item.name === 'Sales');
-    expect(sales.map((item) => item.division.id).sort()).toEqual(['pia', 'wcf']);
-  });
-});
+/*
+ * Department administration moved to `department-admin.test.ts` with the
+ * service itself (`OH-FE-0201`–`OH-FE-0208`): the prototype's flat catalogue,
+ * delete-if-unassigned rule and single department-per-employee field are gone.
+ */
 
 describe('roles and permissions (FE-0731)', () => {
-  it('lets only a Super Administrator promote an employee to Team Lead', async () => {
+  it('lets only a Super Administrator change Employee, Team Lead and HR roles', async () => {
     const denied = await mockAdminService.updateEmployeeAccessRole(
       EMPLOYEE,
       'usr-1002',
@@ -642,6 +589,25 @@ describe('roles and permissions (FE-0731)', () => {
       expect(account?.primaryRole).toBe('team_lead');
       expect(account?.roles).toEqual(['team_lead', 'employee']);
     }
+
+    const changedToHr = await mockAdminService.updateEmployeeAccessRole(
+      ADMIN,
+      'usr-1002',
+      'hr_manager',
+    );
+    expect(changedToHr.status).toBe('success');
+    if (changedToHr.status === 'success') {
+      const account = changedToHr.data.find((item) => item.userId === 'usr-1002');
+      expect(account?.primaryRole).toBe('hr_manager');
+      expect(account?.roles).toEqual(['hr_manager']);
+    }
+
+    const protectedRole = await mockAdminService.updateEmployeeAccessRole(
+      ADMIN,
+      'usr-5001',
+      'employee',
+    );
+    expect(protectedRole.status).toBe('conflict');
   });
 
   it('deactivates instead of deleting a user and records the reason', async () => {

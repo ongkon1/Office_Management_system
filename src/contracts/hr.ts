@@ -25,6 +25,7 @@ import type {
   LeaveTypeKey,
   PeriodStatus,
   RequestWorkflowState,
+  RoleKey,
   WorkMode,
 } from './domain';
 import type { Result } from './results';
@@ -185,6 +186,8 @@ export interface EmployeeFormInput {
   readonly standardWeeklyActiveMinutes: number;
   readonly skills: readonly string[];
   readonly status: 'active' | 'inactive';
+  /** Account role selected by a Super Administrator when provisioning access. */
+  readonly userRole?: Extract<RoleKey, 'employee' | 'team_lead' | 'hr_manager'>;
 }
 
 export interface AssignmentFormInput {

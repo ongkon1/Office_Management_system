@@ -74,7 +74,13 @@ import {
   type PeriodAmendmentFixture,
   type UnlockRequestFixture,
 } from '@/fixtures/hr';
-import { DIVISIONS, findAccountByUserId } from './accounts';
+import {
+  DIVISIONS,
+  createDemoAccount,
+  findAccountByUserId,
+  listDemoAccounts,
+  updateDemoAccount,
+} from './accounts';
 import { actualProjectMinutes, isEffectiveOn } from './organization';
 import { mockStore } from './store';
 import { summaryFor } from './timesheet';
@@ -1148,6 +1154,14 @@ export const mockHrService: HrService = {
     if (!input.email.trim()) {
       return invalid('email', 'Enter a work email address.', 'The employee signs in with this address.');
     }
+    const viewer = viewerOf(userId);
+    const requestedRole = input.userRole ?? 'employee';
+    if (requestedRole !== 'employee' && viewer?.primaryRole !== 'super_admin') {
+      return denied(
+        'Only a Super Administrator can assign Team Lead or HR access.',
+        'Ask a Super Administrator to provision this account with the requested role.',
+      );
+    }
     const duplicate = employees.find(
       (employee) =>
         employee.id !== employeeId &&
@@ -1163,6 +1177,9 @@ export const mockHrService: HrService = {
     }
 
     const existing = employeeId ? employeeById(employeeId) : undefined;
+    const existingAccount = existing
+      ? listDemoAccounts().find((account) => account.employeeId === existing.id)
+      : undefined;
     const now = new Date().toISOString();
     const actor = { userId, displayName: actorName(userId) };
     const record: Employee = {
@@ -1193,6 +1210,28 @@ export const mockHrService: HrService = {
     employees = existing
       ? employees.map((employee) => (employee.id === record.id ? record : employee))
       : [...employees, record];
+    if (existingAccount) {
+      updateDemoAccount(existingAccount.userId, (account) => ({
+        ...account,
+        fullName: record.fullName,
+        email: record.email,
+        employeeCode: record.employeeCode,
+        primaryDivisionId: input.primaryDivisionId,
+        status: record.status,
+        roles: requestedRole === 'team_lead' ? ['team_lead', 'employee'] : [requestedRole],
+        primaryRole: requestedRole,
+      }));
+    } else {
+      createDemoAccount({
+        userId: `usr-${Date.now()}`,
+        employeeId: record.id,
+        employeeCode: record.employeeCode,
+        fullName: record.fullName,
+        email: record.email,
+        primaryDivisionId: input.primaryDivisionId,
+        role: requestedRole,
+      });
+    }
     return success(employeeRow(record));
   },
 

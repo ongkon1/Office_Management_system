@@ -77,25 +77,17 @@ export interface DivisionFormInput {
 /* Departments                                                               */
 /* ------------------------------------------------------------------------- */
 
-export interface DepartmentAdminView {
-  readonly id: string;
-  readonly division: DivisionRef;
-  readonly name: string;
-  readonly code: string;
-  readonly description: string | null;
-  readonly currentLead: EmployeeRef | null;
-  readonly isActive: boolean;
-  readonly employeeCount: number;
-  /** Referenced departments are retained so historical employee records stay readable. */
-  readonly canDelete: boolean;
-}
-
-export interface DepartmentFormInput {
-  readonly divisionId: string;
-  readonly name: string;
-  readonly code: string;
-  readonly description: string;
-}
+/*
+ * Department administration does not live here.
+ *
+ * The preliminary primary-department prototype (`DepartmentAdminView`,
+ * `DepartmentFormInput`, `listDepartments`, `saveDepartment`,
+ * `deleteDepartment`) was retired by `OH-FE-0201`–`OH-FE-0208`. Department is
+ * division-owned, leadership is effective-dated, and a referenced department is
+ * deactivated rather than deleted — none of which the prototype could express.
+ * The replacement is `DepartmentAdministrationService` in
+ * `src/contracts/organization-hierarchy.ts`.
+ */
 
 /* ------------------------------------------------------------------------- */
 /* Users, roles and permissions (`FE-0731`)                                  */
@@ -117,8 +109,8 @@ export interface UserAdminView {
   readonly sensitivePermissions: readonly string[];
 }
 
-/** Roles that may be changed from the employee account-management screen. */
-export type EmployeeAccessRole = 'employee' | 'team_lead';
+/** Roles that a Super Administrator may assign from user management. */
+export type EmployeeAccessRole = 'employee' | 'team_lead' | 'hr_manager';
 
 export interface PermissionGrantView {
   readonly key: PermissionKey;
@@ -272,17 +264,6 @@ export interface AdminService {
     id: string,
     isActive: boolean,
   ): Promise<Result<readonly DivisionAdminView[]>>;
-
-  listDepartments(userId: string): Promise<Result<readonly DepartmentAdminView[]>>;
-  saveDepartment(
-    userId: string,
-    input: DepartmentFormInput,
-    id?: string,
-  ): Promise<Result<readonly DepartmentAdminView[]>>;
-  deleteDepartment(
-    userId: string,
-    id: string,
-  ): Promise<Result<readonly DepartmentAdminView[]>>;
 
   listUsers(userId: string): Promise<Result<readonly UserAdminView[]>>;
   updateEmployeeAccessRole(

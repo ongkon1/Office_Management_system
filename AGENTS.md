@@ -137,7 +137,7 @@ returns carries a field, a message **and** corrective guidance, because
 
 Assignments, holidays and payroll periods are held in `src/services/mock/store.ts`, not as fixture constants, because HR mutates them and the daily calculation reads them. Adding an assignment must immediately widen which divisions accept time; verifying a period must immediately lock its dates. That only holds while both sides read the same state — `mockStore.isDateLocked` is the single lock check, and nothing re-derives it.
 
-The current `src/services/mock/department-store.ts` and employee-level department fields are a preliminary, incomplete prototype. The approved replacement is tracked in `organization_hierarchy_milestone.md`: Department is division-owned, EmployeeDivisionAssignment carries `departmentId`, DepartmentLeadAssignment is effective-dated, and authorization derives bounded lead scopes. Names/codes are unique within a division. Referenced departments are deactivated rather than moved or deleted. Do not extend the primary-department prototype as if it were final.
+Department administration itself is now final (`organization_hierarchy_milestone.md` Phase F2): `DepartmentAdministrationService` in `src/contracts/organization-hierarchy.ts`, implemented by `src/services/mock/department-admin.ts` and consumed by `/admin/departments`. The older `AdminService` department operations and `DepartmentAdminView` are **removed** — do not reintroduce them. What remains preliminary is the employee-level department field. The approved replacement is tracked in `organization_hierarchy_milestone.md`: Department is division-owned, EmployeeDivisionAssignment carries `departmentId`, DepartmentLeadAssignment is effective-dated, and authorization derives bounded lead scopes. Names/codes are unique within a division. Referenced departments are deactivated rather than moved or deleted. Do not extend the primary-department prototype as if it were final.
 
 ### Money arithmetic is exact and centralised
 
@@ -209,7 +209,8 @@ src/
                                 reports · workspace · admin · settings
   services/mock/                auth · organization · timesheet · work ·
                                 team-lead · hr · finance · reporting ·
-                                workspace · admin · department-store · store
+                                workspace · admin · department-admin ·
+                                department-store · store
   fixtures/                     index.ts (core dataset) · hr.ts (employees,
                                 evaluations, amendments) · finance.ts (rates,
                                 billability, payroll periods, exports) ·
@@ -291,7 +292,10 @@ React Compiler lint errors (`set-state-in-effect`, render-phase mutation) are re
 | Backend | 13 — Meeting Minutes and AI task generation | Pending (0/34) |
 | Backend | 14 — Client Panel reporting | Pending (0/23) — new milestone; cuts over with frontend Phase 12 |
 | Modify | B1 — Backend schema and data migration | Technical implementation done (9/10); HR rehearsal sign-off pending |
-| Organization hierarchy | 0 — Product rules and architecture | Done (10/10); F1 implementation is next |
+| Organization hierarchy | 0 — Product rules and architecture | Done (10/10) |
+| Organization hierarchy | F1 — Frontend contracts and mock model | Done (12/12) |
+| Organization hierarchy | F2 — Department administration | Done (11/11) |
+| Organization hierarchy | F3 — Employee placement and department lead experience | **Next** (0/14) |
 
 Baseline gates before the preliminary hierarchy prototype: contrast 48/48, responsive 268/268, accessibility 217/217, content-stress 63/63, role journeys 41/41, performance 16/16, Phase 2 flows 16/16, Phase 3 flows 18/18, Phase 4 flows 20/20, Phase 5 flows 51/51, Phase 6 flows 40/40, Phase 7 flows 55/55. Modify F3 evidence is in `docs/frontend/modify/phase-f3-verification.md`. Modify B1 now has migration `0011`, guarded recovery, runtime-grant hardening and 7/7 focused database tests; evidence is in `docs/backend/modify/phase-b1-verification.md`. Its technical work is complete, but `MBE-0110` stays `[~]` until HR signs the rehearsal totals. The preliminary hierarchy prototype now type-checks, but it is not completion evidence for the approved per-assignment hierarchy. Complete `OH-FE-0101`–`OH-FE-0112` and rerun every applicable gate before claiming that milestone complete.
 

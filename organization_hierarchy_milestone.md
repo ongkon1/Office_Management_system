@@ -13,7 +13,7 @@
 | Lead authority | The effective appointment grants Team Lead capabilities only for that department |
 | Multiplicity | One current lead per department; one employee may lead multiple departments |
 | Delivery order | Contracts and frontend behavior → schema/migration → services/authorization → downstream cutover |
-| Current status | Phase F1 complete; Phase F2 is next |
+| Current status | Phase F2 complete; Phase F3 is next |
 
 ## 1. Task Status Convention
 
@@ -124,24 +124,76 @@ Verification completed 16 Sep 2026: `npm.cmd run typecheck` passed; `npm.cmd run
 
 ## Phase F2 — Department Administration
 
-- [ ] `OH-FE-0201` Build the Super Administrator department catalogue grouped and filterable by division.
-- [ ] `OH-FE-0202` Show department code, status, current lead, effective date, and active employee count.
-- [ ] `OH-FE-0203` Build create/edit forms with division-dependent validation and in-division uniqueness guidance.
-- [ ] `OH-FE-0204` Build an eligible-lead picker limited to active employees assigned to the department's division.
-- [ ] `OH-FE-0205` Build effective-now and scheduled-future lead appointment flows.
-- [ ] `OH-FE-0206` Show leadership history without allowing historical rows to be overwritten.
-- [ ] `OH-FE-0207` Support department deactivation and block new placements into inactive departments.
-- [ ] `OH-FE-0208` Block destructive deletion or division movement for referenced departments with corrective guidance.
-- [ ] `OH-FE-0209` Cover loading, empty, validation, conflict, denied, error, and success states.
-- [ ] `OH-FE-0210` Verify dialogs, forms, tables/cards, and destructive actions with keyboard and screen readers.
-- [ ] `OH-FE-0211` Add `/admin/departments` to responsive, accessibility, stress, and role-access audits.
+- [x] `OH-FE-0201` Build the Super Administrator department catalogue grouped and filterable by division.
+- [x] `OH-FE-0202` Show department code, status, current lead, effective date, and active employee count.
+- [x] `OH-FE-0203` Build create/edit forms with division-dependent validation and in-division uniqueness guidance.
+- [x] `OH-FE-0204` Build an eligible-lead picker limited to active employees assigned to the department's division.
+- [x] `OH-FE-0205` Build effective-now and scheduled-future lead appointment flows.
+- [x] `OH-FE-0206` Show leadership history without allowing historical rows to be overwritten.
+- [x] `OH-FE-0207` Support department deactivation and block new placements into inactive departments.
+- [x] `OH-FE-0208` Block destructive deletion or division movement for referenced departments with corrective guidance.
+- [x] `OH-FE-0209` Cover loading, empty, validation, conflict, denied, error, and success states.
+- [x] `OH-FE-0210` Verify dialogs, forms, tables/cards, and destructive actions with keyboard and screen readers.
+- [x] `OH-FE-0211` Add `/admin/departments` to responsive, accessibility, stress, and role-access audits.
 
 ### Phase F2 Exit Criteria
 
-- [ ] Only Super Administrators see and can use mutation controls.
-- [ ] The same department name may exist in two divisions without ambiguity.
-- [ ] Lead changes show their effective date and retained history.
-- [ ] The screen works at 375, 768, 1024, and 1440 px without page-level overflow.
+- [x] Only Super Administrators see and can use mutation controls.
+- [x] The same department name may exist in two divisions without ambiguity.
+- [x] Lead changes show their effective date and retained history.
+- [x] The screen works at 375, 768, 1024, and 1440 px without page-level overflow.
+
+### Phase F2 Evidence
+
+| Tasks | Evidence |
+|---|---|
+| `OH-FE-0201`–`OH-FE-0202` | `src/features/admin/departments.tsx`, `src/features/admin/department-shared.tsx` |
+| `OH-FE-0203` | `src/features/admin/department-form.tsx` |
+| `OH-FE-0204`–`OH-FE-0205` | `src/features/admin/department-lead-dialog.tsx` |
+| `OH-FE-0206` | `src/features/admin/department-detail-drawer.tsx` |
+| `OH-FE-0207`–`OH-FE-0208` | `src/features/admin/department-status-dialogs.tsx`, `src/services/mock/department-admin.ts` |
+| Service and contracts | `src/contracts/organization-hierarchy.ts` (`DepartmentAdministrationService`), `src/services/mock/department-admin.ts` |
+| `OH-FE-0209`–`OH-FE-0210` | `src/services/mock/department-admin.test.ts` (29 tests), `src/features/admin/departments.test.tsx` (12 tests), `scripts/_ohfe02-probe.mjs` (77 checks) |
+| `OH-FE-0211` | `scripts/responsive-audit.mjs`, `scripts/a11y-audit.mjs`, `scripts/stress-audit.mjs`, `scripts/phase2-flows.mjs` |
+
+**F1 delivered the view models but no service**, so F2 added one rather than
+extending the preliminary prototype, which AGENTS.md forbids. The new
+`DepartmentAdministrationService` (`catalogue`, `get`, `create`, `update`,
+`setStatus`, `remove`, `listEligibleLeads`, `appointLead`) returns `Result<T>`
+over the F1 `DepartmentListView`, `DepartmentDetailView`,
+`DepartmentValidationView` and `DepartmentConflictView`; the F1 validation field
+union gained `name`, `code`, `description` and `reason`, which a catalogue form
+needs. `AdminService.listDepartments`, `saveDepartment` and `deleteDepartment`,
+and the `DepartmentAdminView`/`DepartmentFormInput` types, are **removed**, with a
+note in `src/contracts/admin.ts` recording where department administration lives
+now; their tests left `workspace.test.ts` with them.
+
+Decisions this phase had to make, each enforced in the service rather than the
+screen:
+
+- **"Referenced" means any placement or appointment that ever named the
+  department**, not only current members. Every seeded department has an
+  appointment, so none of them can be deleted or moved to another division —
+  which is the intended outcome: deletion exists only for a department created by
+  mistake.
+- **An appointment may not start in the past, and one that already starts on or
+  after the chosen date is a `lead_period_overlap` conflict.** Appointing closes
+  the open period the day before the new one and appends a row; a closed period is
+  never touched. A future date leaves the current lead effective and reports who
+  takes over when.
+- **Deactivation requires a reason and keeps every placement**, reporting how many
+  employees remain. New placements are refused by the same
+  `validateAssignmentDepartment` the assignment forms use, so the two cannot
+  drift.
+- **Below the `md` breakpoint the shared table is hidden and its cards carry no
+  action menu**, so a card opens the detail panel and every action lives in that
+  panel's footer. The probe checks that at all four widths.
+
+Verification: typecheck, eslint, contrast 48/48, the unit suite 899/899, the
+production build, a 77/77 browser probe, `/admin/departments` added to and passing
+the responsive audit (4/4), the accessibility audit (11/11) and the content-stress
+audit (13/13), and Phase 2 role-access flows 17/17 with the new denial. Browser
+checks ran against this project's dev server on port 3000.
 
 ## Phase F3 — Employee Placement and Department Lead Experience
 
@@ -307,11 +359,11 @@ Verification completed 16 Sep 2026: `npm.cmd run typecheck` passed; `npm.cmd run
 |---:|---|---:|---|
 | 0 — Product rules and architecture | Done | 10 / 10 | `OH-FE-0101` |
 | F1 — Frontend contracts and mock model | Done | 12 / 12 | `OH-FE-0201` |
-| F2 — Department administration | Pending | 0 / 11 | `OH-FE-0201` |
-| F3 — Employee placement and lead experience | Pending | 0 / 14 | Blocked by F2 |
+| F2 — Department administration | Done | 11 / 11 | `OH-FE-0301` |
+| F3 — Employee placement and lead experience | Pending | 0 / 14 | `OH-FE-0301` |
 | B1 — MySQL schema and migration | Pending | 0 / 15 | Starts after F1 contracts stabilize |
 | B2 — Services, authorization, and audit | Pending | 0 / 16 | Blocked by B1 |
 | B3 — Workflow and reporting integration | Pending | 0 / 14 | Blocked by B2 |
-| V1 — Cutover and quality gates | Pending | 0 / 14 | Blocked by F2, F3, B3 |
+| V1 — Cutover and quality gates | Pending | 0 / 14 | Blocked by F3, B3 |
 
-Overall implementation progress: **22 / 106 tasks complete**. Phase F1 established the typed hierarchy and effective-dated mock authorization model; Phase F2 is next.
+Overall implementation progress: **33 / 106 tasks complete**. Phase F1 established the typed hierarchy and effective-dated mock authorization model, and Phase F2 delivered department administration on a typed service that replaces the preliminary prototype; Phase F3 is next.

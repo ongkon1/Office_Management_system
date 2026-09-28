@@ -19,6 +19,7 @@ const PASSWORD = 'Demo1234!';
 const EMPLOYEE = 'nadia.rahman@demo.local';
 const TEAM_LEAD = 'imran.hossain@demo.local';
 const HR = 'rezaul.haque@demo.local';
+const ADMIN = 'arif.mahmud@demo.local';
 
 const browser = await chromium.launch();
 const failures = [];
@@ -225,6 +226,7 @@ const ROUTES = [
   { path: '/employees', email: HR, title: null },
   { path: '/attendance', email: HR, title: null },
   { path: '/hr/timesheets', email: HR, title: null },
+  { path: '/admin/departments', email: ADMIN, title: 'Departments' },
 ];
 
 const routesToAudit = routeFilter

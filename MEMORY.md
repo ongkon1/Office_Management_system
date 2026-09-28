@@ -98,7 +98,10 @@ src/
   features/timesheet/           Views, entry drawer, timer
   features/tasks/               Task list/detail, divisions, remarks, profile
   features/dashboard/           Employee dashboard
-  features/admin/departments.tsx Super Admin department catalogue and lead assignment
+  features/admin/departments.tsx Super Admin department catalogue, with
+                            department-form / -lead-dialog / -detail-drawer /
+                            -status-dialogs beside it
+  services/mock/department-admin.ts Typed department administration service
   services/mock/department-store.ts Division-owned department demo state
   services/mock/                Accounts, auth, store, timesheet, organization
   fixtures/                     The deterministic demo dataset
@@ -152,7 +155,7 @@ Environment: Windows + WAMP, PowerShell. **Not currently a git repository.**
 
 **Mock state the calculation reads lives in the store.** Assignments, holidays and payroll periods are held in `src/services/mock/store.ts` rather than as fixture constants, because HR mutates them and the daily calculation reads them. Adding an assignment must immediately widen which divisions accept time; verifying a period must immediately lock its dates. `mockStore.isDateLocked` is the single lock check.
 
-**Department placement is service-owned and belongs to EmployeeDivisionAssignment.** The approved model requires `Department` and effective-dated `DepartmentLeadAssignment` records. Department names/codes are unique within a division, the same name may exist elsewhere, and the service validates every assignment's division/department relationship. A lead appointment produces a bounded authorization scope rather than a global role. The current `employees.department` string, direct employee/assignment Team Lead fields, and preliminary primary-department mock are transitional and must be removed through `organization_hierarchy_milestone.md`.
+**Department placement is service-owned and belongs to EmployeeDivisionAssignment.** The approved model requires `Department` and effective-dated `DepartmentLeadAssignment` records. Department names/codes are unique within a division, the same name may exist elsewhere, and the service validates every assignment's division/department relationship. A lead appointment produces a bounded authorization scope rather than a global role. Department administration is now delivered against that model (Phase F2): `DepartmentAdministrationService` with `src/services/mock/department-admin.ts`, and the prototype's `AdminService` department operations and `DepartmentAdminView` are removed. The remaining transitional pieces are the `employees.department` string and the direct employee/assignment Team Lead fields, removed through Phase F3.
 
 **Money arithmetic is exact and centralised.** `src/lib/money.ts` is the only place a money value is computed — `bigint` minor units, rounded half-up once at the end, never per row, never `number`. Cost reaches the UI as `RedactableMoneyView`, whose restricted variant carries no value at all, so redaction is enforced by the type rather than by a component remembering to hide something.
 
@@ -201,13 +204,16 @@ Environment: Windows + WAMP, PowerShell. **Not currently a git repository.**
 | Modify | B1 — Backend schema and data migration | In progress (9/10); technical delivery complete, HR sign-off pending |
 | Modify | B2 — Backend work-log use cases, validation and calculation | Done (11/11); browser/production cutover remains B4 |
 | Modify | B3 — Backend task transitions, history and notifications | Done (9/9); browser/production cutover remains B4 |
-| Organization hierarchy | 0 — Product rules and architecture | Done (10/10); implementation F1 is next |
+| Organization hierarchy | 0 — Product rules and architecture | Done (10/10) |
+| Organization hierarchy | F1 — Frontend contracts and mock model | Done (12/12) |
+| Organization hierarchy | F2 — Department administration | Done (11/11) |
+| Organization hierarchy | F3 — Employee placement and department lead experience | Next (0/14) |
 
 Gate results: contrast 48/48, accessibility 279/279, content-stress 73/73, role journeys 41/41, performance 16/16, Phase 2–7 flows 16/18/20/51/40/55, requisition 45/45, conveyance 45/45. Modify Phase F3 passes route type generation, TypeScript, ESLint with zero warnings, contrast 48/48, all 579 frontend/shared tests across 35 files, every Phase 3 browser flow, all 316 responsive route/width combinations, and a 62-route production build. Detailed evidence is in `docs/frontend/modify/phase-f3-verification.md`; the dedicated task-work browser gate remains an F4 deliverable.
 
 Modify Phase B1 passes migration validation for 11 forward/recovery pairs, route type generation, TypeScript, ESLint, and 7/7 focused real-MySQL migration/foundation tests. It fingerprints all legacy time-entry facts, reconciles every counted employee-day and verified/amended period, and verifies guarded recovery and runtime grants. Evidence and the pending HR approval record are in `docs/backend/modify/phase-b1-verification.md`. The retired Phase 4 clock/timer scenarios have now been replaced by B2 work-log and retirement coverage. The three HR regression fixtures now exercise scheduled Sunday–Thursday days while preserving their original assertions.
 
-Those gate results predate the preliminary hierarchy prototype. Its nullable legacy-department lookup now type-checks, but the prototype is still not completion evidence for the approved per-assignment hierarchy. Treat `OH-FE-0101`–`OH-FE-0112` and all applicable rerun gates as mandatory before claiming that milestone complete.
+Those gate results predate the preliminary hierarchy prototype. Its nullable legacy-department lookup now type-checks, but the prototype is still not completion evidence for the approved per-assignment hierarchy. Phases F1 and F2 are complete with their own evidence: F2 adds 29 department-admin service tests, 12 screen tests, a 77/77 `/admin/departments` probe, and that route inside the responsive (4/4), accessibility (11/11), content-stress (13/13) and Phase 2 role-access (17/17) gates, alongside typecheck, eslint, contrast 48/48, the unit suite 899/899 and the production build. Phase F3 onwards still needs its own gates before the milestone is complete.
 
 Sign in at `/login`; every demo account uses `Demo1234!` and the sign-in page carries a picker. Auth fixtures — 2FA code, reset tokens, lockout threshold — are in `docs/frontend/phase-0/demo-setup.md` §1.1.
 
@@ -236,6 +242,7 @@ Later phases harden screens and fixtures around these assumptions, so the cost o
 
 | Date | Decision | Rationale |
 |---|---|---|
+| 27 Sep 2026 | Department administration runs on its own typed service, and "referenced" means *ever* referenced | Phase F2 replaced the preliminary `AdminService` department operations with `DepartmentAdministrationService`. A department named by any placement or appointment, current or historical, can be deactivated but never deleted or moved to another division; appointing a lead closes the open period the day before the new one and appends a row, so no recorded period is ever rewritten, and an appointment may not start in the past. |
 | 16 Sep 2026 | Department placement belongs to every EmployeeDivisionAssignment; effective lead appointment grants scoped capability | Preserves correct organization structure for employees working across several divisions. Any eligible active employee may lead multiple departments without receiving unrelated company-wide access, and effective dates preserve historical responsibility. Delivery is tracked in `organization_hierarchy_milestone.md`. |
 | 16 Sep 2026 | One administrator-managed organization logo feeds a shared `BrandLogo` component | Removes hardcoded marks from authentication, desktop and mobile chrome. The current mock frontend persists a validated PNG/JPEG/WebP asset (maximum 1 MB) in browser storage and updates every mounted logo immediately; production-wide persistence and private object storage remain part of backend/browser cutover. |
 | Phase 0 | Durations as integer minutes, money as decimal string + currency code | Floating-point hours and JS numbers produce payroll errors |

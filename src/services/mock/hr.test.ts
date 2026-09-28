@@ -6,6 +6,7 @@ import { summaryFor } from './timesheet';
 const HR = 'usr-3001';
 const EMPLOYEE = 'usr-1001';
 const TEAM_LEAD = 'usr-2001';
+const ADMIN = 'usr-9001';
 
 beforeEach(() => {
   mockStore.reset();
@@ -92,6 +93,31 @@ describe('HR scope', () => {
     if (detail.status === 'success') {
       expect(detail.data.assignments).toEqual([]);
     }
+  });
+
+  it('allows only a Super Administrator to provision Team Lead or HR access', async () => {
+    const base = {
+      fullName: 'Provisioned Team Lead',
+      employeeCode: 'EMP-7788',
+      designation: 'Delivery Lead',
+      employmentType: 'full_time' as const,
+      joiningDate: '2026-09-01',
+      email: 'provisioned.lead@demo.local',
+      phone: '',
+      officeLocation: '',
+      primaryDivisionId: 'pia',
+      normalWorkMode: 'office' as const,
+      standardDailyActiveMinutes: 420,
+      standardWeeklyActiveMinutes: 2100,
+      skills: [],
+      status: 'active' as const,
+      userRole: 'team_lead' as const,
+    };
+    const hrDenied = await mockHrService.saveEmployee(HR, base);
+    expect(hrDenied.status).toBe('permission_denied');
+
+    const created = await mockHrService.saveEmployee(ADMIN, base);
+    expect(created.status).toBe('success');
   });
 });
 

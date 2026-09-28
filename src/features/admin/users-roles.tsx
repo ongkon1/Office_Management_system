@@ -2,7 +2,12 @@
 
 import * as React from 'react';
 import { KeyRound, ShieldAlert, TriangleAlert, UserRoundCog, UserRoundMinus } from 'lucide-react';
-import type { PermissionGrantView, RoleAdminView, UserAdminView } from '@/contracts/admin';
+import type {
+  EmployeeAccessRole,
+  PermissionGrantView,
+  RoleAdminView,
+  UserAdminView,
+} from '@/contracts/admin';
 import type { RoleKey } from '@/contracts/domain';
 import { mockAdminService } from '@/services/mock/admin';
 import { useAsync } from '@/lib/use-async';
@@ -13,12 +18,22 @@ import { Card, CardHeader } from '@/components/feedback/card';
 import { Alert, Callout } from '@/components/feedback/alert';
 import { Dialog } from '@/components/feedback/overlay';
 import { DataTable } from '@/components/data/data-table';
-import { Switch, Textarea } from '@/components/forms/inputs';
+import { Select, Switch, Textarea } from '@/components/forms/inputs';
 import { Field } from '@/components/forms/field';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar } from '@/components/ui/avatar';
 import { ReportsFallback, ReportsLoading } from '@/features/reports/report-catalogue';
+
+const EDITABLE_USER_ROLES: readonly EmployeeAccessRole[] = [
+  'employee',
+  'team_lead',
+  'hr_manager',
+];
+
+function isEditableUserRole(role: RoleKey): role is EmployeeAccessRole {
+  return EDITABLE_USER_ROLES.includes(role as EmployeeAccessRole);
+}
 
 /**
  * FE-0731 — users, roles and permissions.
@@ -32,11 +47,12 @@ export function UserAdministration() {
   const { user } = useSession();
   const toast = useToast();
   const [pending, setPending] = React.useState<
-    | { readonly kind: 'promote'; readonly account: UserAdminView }
+    | { readonly kind: 'role'; readonly account: UserAdminView }
     | { readonly kind: 'deactivate'; readonly account: UserAdminView }
     | null
   >(null);
   const [reason, setReason] = React.useState('');
+  const [roleChoice, setRoleChoice] = React.useState<EmployeeAccessRole>('employee');
   const [failure, setFailure] = React.useState<string | null>(null);
   const [saving, setSaving] = React.useState(false);
   const { state, reload } = useAsync(
@@ -48,24 +64,24 @@ export function UserAdministration() {
     if (!pending) return;
     setFailure(null);
     setSaving(true);
-    const result = pending.kind === 'promote'
+    const result = pending.kind === 'role'
       ? await mockAdminService.updateEmployeeAccessRole(
-          user?.userId ?? '', pending.account.userId, 'team_lead',
+          user?.userId ?? '', pending.account.userId, roleChoice,
         )
       : await mockAdminService.deactivateUser(
           user?.userId ?? '', pending.account.userId, reason,
         );
     setSaving(false);
     if (result.status === 'success') {
-      const wasPromotion = pending.kind === 'promote';
+      const wasRoleChange = pending.kind === 'role';
       setPending(null);
       setReason('');
       reload();
       toast.show({
-        tone: wasPromotion ? 'success' : 'warning',
-        title: wasPromotion ? 'Team Lead access assigned' : 'User access removed',
-        description: wasPromotion
-          ? 'The employee keeps self-service access. Department scope is managed separately.'
+        tone: wasRoleChange ? 'success' : 'warning',
+        title: wasRoleChange ? 'User role updated' : 'User access removed',
+        description: wasRoleChange
+          ? 'The new role will apply the next time the user signs in.'
           : 'The account is inactive. Historical records were retained.',
       });
       return;
@@ -186,17 +202,18 @@ export function UserAdministration() {
             alwaysVisible: true,
             render: (row) => (
               <span className="flex flex-wrap justify-end gap-2">
-                {row.status === 'active' && row.primaryRole === 'employee' && (
+                {row.status === 'active' && isEditableUserRole(row.primaryRole) && (
                   <Button
                     size="sm"
                     variant="secondary"
                     iconLeading={<UserRoundCog aria-hidden className="size-4" />}
                     onClick={() => {
                       setFailure(null);
-                      setPending({ kind: 'promote', account: row });
+                      setRoleChoice(row.primaryRole as EmployeeAccessRole);
+                      setPending({ kind: 'role', account: row });
                     }}
                   >
-                    Make Team Lead
+                    Change role
                   </Button>
                 )}
                 {row.status !== 'inactive' && row.userId !== user?.userId && (
@@ -242,16 +259,17 @@ export function UserAdministration() {
               </p>
             )}
             <div className="mt-3 flex flex-wrap gap-2">
-              {row.status === 'active' && row.primaryRole === 'employee' && (
+              {row.status === 'active' && isEditableUserRole(row.primaryRole) && (
                 <Button
                   size="sm"
                   variant="secondary"
                   onClick={() => {
                     setFailure(null);
-                    setPending({ kind: 'promote', account: row });
+                    setRoleChoice(row.primaryRole as EmployeeAccessRole);
+                    setPending({ kind: 'role', account: row });
                   }}
                 >
-                  Make Team Lead
+                  Change role
                 </Button>
               )}
               {row.status !== 'inactive' && row.userId !== user?.userId && (
@@ -280,7 +298,7 @@ export function UserAdministration() {
           setReason('');
           setFailure(null);
         }}
-        title={pending?.kind === 'promote' ? 'Make this employee a Team Lead?' : 'Remove this user?'}
+        title={pending?.kind === 'role' ? 'Change this user’s role?' : 'Remove this user?'}
         description={pending?.account.employee.fullName}
         dismissOnBackdrop={false}
         footer={
@@ -301,16 +319,32 @@ export function UserAdministration() {
               loading={saving}
               onClick={applyPendingAction}
             >
-              {pending?.kind === 'promote' ? 'Make Team Lead' : 'Remove access'}
+              {pending?.kind === 'role' ? 'Save role' : 'Remove access'}
             </Button>
           </>
         }
       >
-        {pending?.kind === 'promote' ? (
-          <Callout tone="info">
-            The employee will keep Employee self-service and gain the Team Lead role. Assigning
-            employees to this lead remains a separate department-level action.
-          </Callout>
+        {pending?.kind === 'role' ? (
+          <div className="space-y-4">
+            <Field label="User role" required>
+              <Select
+                value={roleChoice}
+                options={[
+                  { value: 'employee', label: 'Employee' },
+                  { value: 'team_lead', label: 'Team Lead' },
+                  { value: 'hr_manager', label: 'HR Manager' },
+                ]}
+                onChange={(event) => setRoleChoice(event.target.value as EmployeeAccessRole)}
+              />
+            </Field>
+            <Callout tone="info">
+              {roleChoice === 'team_lead'
+                ? 'Team Lead keeps Employee self-service. Department assignments determine which employees they can manage.'
+                : roleChoice === 'hr_manager'
+                  ? 'HR Manager receives HR administration access and no longer uses Employee or Team Lead navigation.'
+                  : 'Employee receives personal self-service access without Team Lead or HR administration capabilities.'}
+            </Callout>
+          </div>
         ) : (
           <div className="space-y-4">
             <Alert tone="warning" title="This deactivates access; it does not delete history">
