@@ -313,6 +313,7 @@ const EMPTY_FORM: EmployeeFormInput = {
   skills: [],
   status: 'active',
   userRole: 'employee',
+  initialPassword: '',
 };
 
 export function EmployeeForm({ employeeId }: { employeeId?: string }) {
@@ -321,6 +322,7 @@ export function EmployeeForm({ employeeId }: { employeeId?: string }) {
   const toast = useToast();
   const [form, setForm] = React.useState<EmployeeFormInput>(EMPTY_FORM);
   const [skillText, setSkillText] = React.useState('');
+  const [confirmPassword, setConfirmPassword] = React.useState('');
   const [errors, setErrors] = React.useState<readonly { field: string; message: string }[]>([]);
   const [conflict, setConflict] = React.useState<string | null>(null);
   const [saving, setSaving] = React.useState(false);
@@ -355,7 +357,7 @@ export function EmployeeForm({ employeeId }: { employeeId?: string }) {
       standardWeeklyActiveMinutes: detail.standardWeekly.minutes,
       skills: detail.skills,
       status: detail.status,
-      userRole: 'employee',
+      userRole: detail.userRole,
     });
     setSkillText(detail.skills.join(', '));
   }
@@ -374,6 +376,11 @@ export function EmployeeForm({ employeeId }: { employeeId?: string }) {
   async function save() {
     setSaving(true);
     setConflict(null);
+    if (!employeeId && user?.primaryRole === 'super_admin' && form.initialPassword !== confirmPassword) {
+      setSaving(false);
+      setErrors([{ field: 'confirmPassword', message: 'The passwords do not match. Retype them so they are identical.' }]);
+      return;
+    }
     const payload: EmployeeFormInput = {
       ...form,
       skills: skillText
@@ -520,6 +527,37 @@ export function EmployeeForm({ employeeId }: { employeeId?: string }) {
                   }
                 />
               </Field>
+            )}
+            {user?.primaryRole === 'super_admin' && !employeeId && (
+              <>
+                <Field
+                  label="Initial password"
+                  required
+                  helperText="At least 12 characters. Share it securely with the user."
+                  error={fieldError('initialPassword')}
+                >
+                  <Input
+                    name="initial-password"
+                    type="password"
+                    autoComplete="new-password"
+                    value={form.initialPassword ?? ''}
+                    onChange={(event) => update('initialPassword', event.target.value)}
+                  />
+                </Field>
+                <Field
+                  label="Confirm initial password"
+                  required
+                  error={fieldError('confirmPassword')}
+                >
+                  <Input
+                    name="confirm-initial-password"
+                    type="password"
+                    autoComplete="new-password"
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                  />
+                </Field>
+              </>
             )}
           </div>
         </Card>

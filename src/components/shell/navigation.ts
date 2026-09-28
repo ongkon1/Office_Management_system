@@ -41,6 +41,7 @@ const EMPLOYEE_SELF_GROUP: NavGroupDefinition = {
     { key: 'my-tasks', label: 'My Tasks', href: '/tasks', iconKey: 'check-square' },
     { key: 'my-wfh', label: 'WFH', href: '/wfh', iconKey: 'house', flag: 'wfhRequests' },
     { key: 'my-leave', label: 'Leave', href: '/leave', iconKey: 'calendar-off', flag: 'leaveManagement' },
+    { key: 'my-settings', label: 'Settings', href: '/settings', iconKey: 'settings' },
   ],
 };
 
@@ -76,6 +77,7 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
         { key: 'messages', label: 'Messages', href: '/messages', iconKey: 'message-square', flag: 'messages' },
         { key: 'meeting-minutes', label: 'Meeting Minutes', href: '/meeting-minutes', iconKey: 'clipboard-list', flag: 'meetingMinutes' },
         { key: 'profile', label: 'Profile', href: '/profile', iconKey: 'user', inMobileBottomNav: true },
+        { key: 'settings', label: 'Settings', href: '/settings', iconKey: 'settings' },
       ],
     },
   ],
@@ -136,6 +138,7 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
         { key: 'reports', label: 'Reports', href: '/reports', iconKey: 'file-chart-column' },
         { key: 'holidays', label: 'Holidays', href: '/admin/holidays', iconKey: 'calendar-days' },
         { key: 'documents', label: 'Documents', href: '/documents', iconKey: 'folder', flag: 'documents' },
+        { key: 'settings', label: 'Settings', href: '/settings', iconKey: 'settings' },
         { key: 'meeting-minutes', label: 'Meeting Minutes', href: '/meeting-minutes', iconKey: 'clipboard-list', flag: 'meetingMinutes' },
       ],
     },
@@ -222,6 +225,7 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
         { key: 'projects', label: 'Projects', href: '/projects', iconKey: 'folder-kanban', inMobileBottomNav: true },
         { key: 'meeting-minutes', label: 'Meeting Minutes', href: '/meeting-minutes', iconKey: 'clipboard-list', flag: 'meetingMinutes' },
         { key: 'documents', label: 'Documents', href: '/documents', iconKey: 'folder', flag: 'documents' },
+        { key: 'settings', label: 'Settings', href: '/settings', iconKey: 'settings' },
       ],
     },
   ],
@@ -250,6 +254,7 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
         { key: 'policies', label: 'Work Policies', href: '/admin/policies', iconKey: 'settings' },
         { key: 'holidays', label: 'Holidays', href: '/admin/holidays', iconKey: 'calendar-days' },
         { key: 'audit', label: 'Audit Log', href: '/admin/audit', iconKey: 'scroll-text', inMobileBottomNav: true },
+        { key: 'settings', label: 'Settings', href: '/settings', iconKey: 'settings' },
         {
           key: 'integrations',
           label: 'Integrations',

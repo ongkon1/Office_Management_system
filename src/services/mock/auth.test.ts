@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { DEMO_PASSWORD } from './accounts';
+import { DEMO_PASSWORD, resetDemoAccountState } from './accounts';
 import {
   MockAuthService,
   DEMO_RESET_TOKENS,
@@ -18,6 +18,7 @@ function service() {
 
 beforeEach(() => {
   MockAuthService.resetAttempts();
+  resetDemoAccountState();
 });
 
 describe('login', () => {
@@ -181,6 +182,39 @@ describe('password reset', () => {
     expect(valid.status).toBe('success');
     expect(expired.status).toBe('conflict');
     expect(invalid.status).toBe('not_found');
+  });
+});
+
+describe('change password', () => {
+  it('requires the current password and uses the new password for the next sign-in', async () => {
+    const auth = service();
+    const incorrect = await auth.changePassword({
+      userId: 'usr-1001',
+      currentPassword: 'not-the-current-password',
+      newPassword: 'a-new-secure-passphrase',
+    });
+    expect(incorrect.status).toBe('validation_failure');
+
+    const changed = await auth.changePassword({
+      userId: 'usr-1001',
+      currentPassword: DEMO_PASSWORD,
+      newPassword: 'a-new-secure-passphrase',
+    });
+    expect(changed.status).toBe('success');
+
+    const oldLogin = await service().login({
+      identifier: EMPLOYEE,
+      password: DEMO_PASSWORD,
+      rememberMe: false,
+    });
+    expect(oldLogin.status).toBe('validation_failure');
+
+    const newLogin = await service().login({
+      identifier: EMPLOYEE,
+      password: 'a-new-secure-passphrase',
+      rememberMe: false,
+    });
+    expect(newLogin.status).toBe('success');
   });
 });
 

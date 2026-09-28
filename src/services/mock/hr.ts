@@ -76,6 +76,7 @@ import {
 } from '@/fixtures/hr';
 import {
   DIVISIONS,
+  DEMO_PASSWORD,
   createDemoAccount,
   findAccountByUserId,
   listDemoAccounts,
@@ -1016,6 +1017,10 @@ export const mockHrService: HrService = {
 
     return success({
       employee: employeeRef(employeeId),
+      userRole: (() => {
+        const role = listDemoAccounts().find((account) => account.employeeId === employeeId)?.primaryRole;
+        return role === 'team_lead' || role === 'hr_manager' ? role : 'employee';
+      })(),
       status: employee.status,
       statusLabel: employee.status === 'active' ? 'Active' : 'Inactive',
       email: employee.email,
@@ -1154,12 +1159,31 @@ export const mockHrService: HrService = {
     if (!input.email.trim()) {
       return invalid('email', 'Enter a work email address.', 'The employee signs in with this address.');
     }
+    const existing = employeeId ? employeeById(employeeId) : undefined;
+    const existingAccount = existing
+      ? listDemoAccounts().find((account) => account.employeeId === existing.id)
+      : undefined;
     const viewer = viewerOf(userId);
-    const requestedRole = input.userRole ?? 'employee';
-    if (requestedRole !== 'employee' && viewer?.primaryRole !== 'super_admin') {
+    const requestedRole = viewer?.primaryRole === 'super_admin'
+      ? input.userRole ?? 'employee'
+      : existingAccount?.primaryRole === 'team_lead' || existingAccount?.primaryRole === 'hr_manager'
+        ? existingAccount.primaryRole
+        : 'employee';
+    if (
+      viewer?.primaryRole !== 'super_admin' &&
+      input.userRole &&
+      input.userRole !== requestedRole
+    ) {
       return denied(
         'Only a Super Administrator can assign Team Lead or HR access.',
         'Ask a Super Administrator to provision this account with the requested role.',
+      );
+    }
+    if (!employeeId && viewer?.primaryRole === 'super_admin' && (input.initialPassword?.length ?? 0) < 12) {
+      return invalid(
+        'initialPassword',
+        'Enter an initial password with at least 12 characters.',
+        'Give the password securely to the user and ask them to change it after signing in.',
       );
     }
     const duplicate = employees.find(
@@ -1176,10 +1200,6 @@ export const mockHrService: HrService = {
       };
     }
 
-    const existing = employeeId ? employeeById(employeeId) : undefined;
-    const existingAccount = existing
-      ? listDemoAccounts().find((account) => account.employeeId === existing.id)
-      : undefined;
     const now = new Date().toISOString();
     const actor = { userId, displayName: actorName(userId) };
     const record: Employee = {
@@ -1230,6 +1250,7 @@ export const mockHrService: HrService = {
         email: record.email,
         primaryDivisionId: input.primaryDivisionId,
         role: requestedRole,
+        password: input.initialPassword ?? DEMO_PASSWORD,
       });
     }
     return success(employeeRow(record));

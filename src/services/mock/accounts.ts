@@ -309,9 +309,14 @@ export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
  * the same account state as the Users screen.
  */
 let accountOverrides = new Map<string, DemoAccount>();
+let accountPasswords = new Map<string, string>();
 
 export function listDemoAccounts(): readonly DemoAccount[] {
-  return DEMO_ACCOUNTS.map((account) => accountOverrides.get(account.userId) ?? account);
+  const seededIds = new Set(DEMO_ACCOUNTS.map((account) => account.userId));
+  return [
+    ...DEMO_ACCOUNTS.map((account) => accountOverrides.get(account.userId) ?? account),
+    ...[...accountOverrides.values()].filter((account) => !seededIds.has(account.userId)),
+  ];
 }
 
 export function updateDemoAccount(
@@ -333,6 +338,7 @@ export function createDemoAccount(input: {
   readonly email: string;
   readonly primaryDivisionId: string;
   readonly role: RoleKey;
+  readonly password: string;
 }): DemoAccount {
   const roles: readonly RoleKey[] = input.role === 'team_lead' ? ['team_lead', 'employee'] : [input.role];
   const account: DemoAccount = {
@@ -354,11 +360,23 @@ export function createDemoAccount(input: {
     demonstrates: 'Created by a Super Administrator',
   };
   accountOverrides.set(account.userId, account);
+  accountPasswords.set(account.userId, input.password);
   return account;
+}
+
+export function passwordForAccount(userId: string): string {
+  return accountPasswords.get(userId) ?? DEMO_PASSWORD;
+}
+
+export function setDemoAccountPassword(userId: string, password: string): boolean {
+  if (!findAccountByUserId(userId)) return false;
+  accountPasswords.set(userId, password);
+  return true;
 }
 
 export function resetDemoAccountState(): void {
   accountOverrides = new Map<string, DemoAccount>();
+  accountPasswords = new Map<string, string>();
 }
 
 export const DEMO_TIMEZONE = TIMEZONE;

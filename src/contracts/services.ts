@@ -97,6 +97,11 @@ export interface AuthService {
   resendTwoFactorCode(): Promise<Result<{ nextResendAvailableAt: string }>>;
   requestPasswordReset(input: { email: string }): Promise<Result<void>>;
   resetPassword(input: { token: string; password: string }): Promise<Result<void>>;
+  changePassword(input: {
+    userId: string;
+    currentPassword: string;
+    newPassword: string;
+  }): Promise<Result<void>>;
   logout(): Promise<Result<void>>;
   /** Development-only demo role switch; absent from production builds. */
   switchDemoAccount?(input: { userId: string }): Promise<Result<SessionUser>>;

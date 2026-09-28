@@ -26,6 +26,7 @@ import {
 } from '@/features/settings/flag-store';
 import { ReportsFallback, ReportsLoading } from '@/features/reports/report-catalogue';
 import { useBranding } from '@/features/settings/use-branding';
+import { PasswordSettings } from '@/features/settings/password-settings';
 
 const WEEKDAY_LABEL = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -77,9 +78,30 @@ function readLogo(file: File): Promise<BrandLogoAsset> {
  * silently discard the change would be worse than showing the truth.
  */
 export function SettingsScreens({
+  initialTab = 'security',
+}: {
+  initialTab?: 'branding' | 'policy' | 'notifications' | 'flags' | 'security';
+}) {
+  const { user } = useSession();
+  if (user?.primaryRole === 'super_admin') {
+    return <AdministratorSettings initialTab={initialTab} />;
+  }
+  return (
+    <PageContainer width="full">
+      <PageHeader
+        title="Settings"
+        description="Manage security for your account."
+        meta={<Badge tone="neutral">Account</Badge>}
+      />
+      <PasswordSettings />
+    </PageContainer>
+  );
+}
+
+function AdministratorSettings({
   initialTab = 'branding',
 }: {
-  initialTab?: 'branding' | 'policy' | 'notifications' | 'flags';
+  initialTab?: 'branding' | 'policy' | 'notifications' | 'flags' | 'security';
 }) {
   const { user } = useSession();
   const toast = useToast();
@@ -222,6 +244,7 @@ export function SettingsScreens({
           { key: 'policy', label: 'Work policy' },
           { key: 'notifications', label: 'Notifications' },
           { key: 'flags', label: 'Feature flags' },
+          { key: 'security', label: 'Security' },
         ]}
         activeKey={tab}
         onChange={(key) => setTab(key as typeof tab)}
@@ -503,6 +526,8 @@ export function SettingsScreens({
           </Card>
         </div>
       )}
+
+      {tab === 'security' && <PasswordSettings />}
     </PageContainer>
   );
 }

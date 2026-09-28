@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { mockHrService, resetHrState } from './hr';
 import { mockStore } from './store';
 import { summaryFor } from './timesheet';
+import { MockAuthService } from './auth';
+import { resetDemoAccountState } from './accounts';
 
 const HR = 'usr-3001';
 const EMPLOYEE = 'usr-1001';
@@ -10,6 +12,7 @@ const ADMIN = 'usr-9001';
 
 beforeEach(() => {
   mockStore.reset();
+  resetDemoAccountState();
   resetHrState();
 });
 
@@ -112,12 +115,22 @@ describe('HR scope', () => {
       skills: [],
       status: 'active' as const,
       userRole: 'team_lead' as const,
+      initialPassword: 'InitialPassphrase!2026',
     };
     const hrDenied = await mockHrService.saveEmployee(HR, base);
     expect(hrDenied.status).toBe('permission_denied');
 
     const created = await mockHrService.saveEmployee(ADMIN, base);
     expect(created.status).toBe('success');
+    const login = await new MockAuthService().login({
+      identifier: base.email,
+      password: base.initialPassword,
+      rememberMe: false,
+    });
+    expect(login.status).toBe('success');
+    if (login.status === 'success') {
+      expect(login.data.user?.primaryRole).toBe('team_lead');
+    }
   });
 });
 

@@ -110,6 +110,7 @@ export interface HrAssignmentView {
 
 export interface HrEmployeeDetailView {
   readonly employee: EmployeeRef;
+  readonly userRole: Extract<RoleKey, 'employee' | 'team_lead' | 'hr_manager'>;
   readonly status: 'active' | 'inactive';
   readonly statusLabel: string;
   readonly email: string;
@@ -188,6 +189,8 @@ export interface EmployeeFormInput {
   readonly status: 'active' | 'inactive';
   /** Account role selected by a Super Administrator when provisioning access. */
   readonly userRole?: Extract<RoleKey, 'employee' | 'team_lead' | 'hr_manager'>;
+  /** Write-only initial credential used only while a Super Administrator creates the account. */
+  readonly initialPassword?: string;
 }
 
 export interface AssignmentFormInput {

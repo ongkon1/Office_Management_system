@@ -17,10 +17,11 @@ import type { AuthService, LoginInput } from '@/contracts/services';
 import { success, type Result } from '@/contracts/results';
 import {
   DEMO_LOCALE,
-  DEMO_PASSWORD,
   DEMO_TIMEZONE,
   findAccountByIdentifier,
   findAccountByUserId,
+  passwordForAccount,
+  setDemoAccountPassword,
   type AccountStatus,
   type DemoAccount,
 } from './accounts';
@@ -117,7 +118,7 @@ export class MockAuthService implements AuthService {
 
     // Unknown identifier and wrong password fail identically, so the form
     // cannot be used to discover which accounts exist.
-    if (!account || input.password !== DEMO_PASSWORD) {
+    if (!account || input.password !== passwordForAccount(account.userId)) {
       const key = input.identifier.trim().toLowerCase();
       const attempts = (failedAttempts.get(key) ?? 0) + 1;
       failedAttempts.set(key, attempts);
@@ -270,6 +271,67 @@ export class MockAuthService implements AuthService {
       };
     }
 
+    return success(undefined);
+  }
+
+  async changePassword(input: {
+    userId: string;
+    currentPassword: string;
+    newPassword: string;
+  }): Promise<Result<void>> {
+    await delay();
+    const account = findAccountByUserId(input.userId);
+    if (!account || account.status !== 'active') {
+      return {
+        status: 'unauthenticated',
+        code: 'UNAUTHENTICATED',
+        message: 'Your account session is no longer active.',
+        reason: 'no_session',
+      };
+    }
+    if (input.currentPassword !== passwordForAccount(account.userId)) {
+      return {
+        status: 'validation_failure',
+        code: 'VALIDATION_FAILED',
+        message: 'The current password is not correct.',
+        focusField: 'currentPassword',
+        fieldErrors: [{
+          field: 'currentPassword',
+          code: 'INVALID_CURRENT_PASSWORD',
+          message: 'The current password is not correct.',
+          guidance: 'Enter the password you currently use to sign in.',
+        }],
+      };
+    }
+    if (input.newPassword.length < 12) {
+      return {
+        status: 'validation_failure',
+        code: 'VALIDATION_FAILED',
+        message: 'The new password is too short.',
+        focusField: 'newPassword',
+        fieldErrors: [{
+          field: 'newPassword',
+          code: 'PASSWORD_TOO_SHORT',
+          message: 'Use at least 12 characters.',
+          guidance: 'A longer passphrase is easier to remember and harder to guess.',
+        }],
+      };
+    }
+    if (input.newPassword === input.currentPassword) {
+      return {
+        status: 'validation_failure',
+        code: 'VALIDATION_FAILED',
+        message: 'Choose a different password.',
+        focusField: 'newPassword',
+        fieldErrors: [{
+          field: 'newPassword',
+          code: 'PASSWORD_UNCHANGED',
+          message: 'The new password matches the current password.',
+          guidance: 'Choose a password you have not just used for this account.',
+        }],
+      };
+    }
+    setDemoAccountPassword(account.userId, input.newPassword);
     return success(undefined);
   }
 
