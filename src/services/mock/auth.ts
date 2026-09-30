@@ -335,6 +335,21 @@ export class MockAuthService implements AuthService {
     return success(undefined);
   }
 
+  async refreshSession(): Promise<Result<SessionUser | null>> {
+    if (!this.currentSession) return success(null);
+    const account = findAccountByUserId(this.currentSession.userId);
+    if (!account || account.status !== 'active') {
+      this.currentSession = null;
+      return success(null);
+    }
+    const refreshed = {
+      ...toSessionUser(account),
+      sessionExpiresAt: this.currentSession.sessionExpiresAt,
+    };
+    this.currentSession = refreshed;
+    return success(refreshed);
+  }
+
   async logout(): Promise<Result<void>> {
     await delay(150);
     this.pendingTwoFactorUserId = null;

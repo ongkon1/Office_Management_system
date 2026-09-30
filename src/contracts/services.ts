@@ -45,6 +45,7 @@ import type {
   WfhRequest,
   WorkloadWeek,
   WorkLocation,
+  WorkMode,
   WorkPolicy,
 } from './domain';
 import type { TaskHistoryView, TaskStatusTransition, TaskTransitionInput } from './task-transition';
@@ -102,6 +103,8 @@ export interface AuthService {
     currentPassword: string;
     newPassword: string;
   }): Promise<Result<void>>;
+  /** Re-reads the signed-in identity after an allowed self-service profile change. */
+  refreshSession(): Promise<Result<SessionUser | null>>;
   logout(): Promise<Result<void>>;
   /** Development-only demo role switch; absent from production builds. */
   switchDemoAccount?(input: { userId: string }): Promise<Result<SessionUser>>;
@@ -239,6 +242,35 @@ export interface TimesheetService {
     reason: string;
   }): Promise<Result<DailySummary>>;
 
+}
+
+export type ProfileDensity = 'comfortable' | 'dense';
+
+/** The signed-in user's self-service view. Employment and access fields are read-only. */
+export interface OwnProfileView {
+  readonly userId: string;
+  readonly employeeCode: string;
+  readonly fullName: string;
+  readonly email: string;
+  readonly phone: string;
+  readonly designation: string;
+  readonly primaryDivisionId: string;
+  readonly divisionCount: number;
+  readonly normalWorkMode: WorkMode;
+  readonly density: ProfileDensity;
+}
+
+export interface UpdateOwnProfileInput {
+  readonly fullName: string;
+  readonly email: string;
+  readonly phone: string;
+  readonly normalWorkMode: WorkMode;
+  readonly density: ProfileDensity;
+}
+
+export interface ProfileService {
+  getOwnProfile(userId: string): Promise<Result<OwnProfileView>>;
+  updateOwnProfile(userId: string, input: UpdateOwnProfileInput): Promise<Result<OwnProfileView>>;
 }
 
 export interface TeamTimesheetService {
@@ -465,6 +497,7 @@ export interface AuditService {
  */
 export interface ServiceRegistry {
   readonly auth: AuthService;
+  readonly profile: ProfileService;
   readonly divisions: DivisionService;
   readonly employees: EmployeeService;
   readonly projects: ProjectService;

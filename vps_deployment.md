@@ -243,13 +243,23 @@ WantedBy=multi-user.target
 Enable and start it:
 
 ```bash
+sudo systemctl restart office-management.service
 sudo systemctl daemon-reload
 sudo systemctl enable --now office-management.service
 sudo systemctl status office-management.service
 curl -I http://127.0.0.1:3000/login
+curl --fail-with-body http://127.0.0.1:3000/api/health
 ```
 
 Next.js receives `SIGTERM` during a restart and is given 30 seconds to finish in-flight work.
+
+The health endpoint runs entirely on the server and does not read browser or mock memory. It verifies the Next.js process, the runtime MySQL connection, access to the core `users`, `employees`, and `user_roles` tables, and the expected database migration. It returns HTTP `200` with `"status":"healthy"` when ready and HTTP `503` with `"status":"unhealthy"` when any required check fails. After Nginx and TLS are configured, monitor:
+
+```text
+https://timesheet.powerinai.com/api/health
+```
+
+The response intentionally omits database hosts, credentials, SQL errors, user data, and protected application records. A healthy response proves server/database readiness; it does not prove every user journey, background worker, external email provider, or object-storage workflow. Redis and worker readiness remain part of pending backend task `BE-0816`.
 
 The BullMQ worker functions exist in the codebase, but there is currently no production worker entry script or `npm run worker` command. Do not invent a systemd worker service yet. Scheduled HR jobs and durable export generation need that backend deployment task completed before they can be operated on the VPS.
 

@@ -505,7 +505,7 @@ Phase 4 evidence and task-to-deliverable mapping: `docs/backend/phase-4/verifica
 - [ ] `BE-0813` Test large exports, job throughput, retry storms, scheduled exception detection, and provider outages.
 - [ ] `BE-0814` Review query plans and add or revise indexes based on measured slow queries rather than assumptions.
 - [ ] `BE-0815` Add safe caching only where authorization, invalidation, verification state, timezone, and policy version remain correct.
-- [ ] `BE-0816` Add health, readiness, dependency, job-queue, and migration-version checks.
+- [~] `BE-0816` Add health, readiness, dependency, job-queue, and migration-version checks. `/api/health` now provides non-cached server, MySQL, core identity-table, and migration `0011` readiness with safe 200/503 responses; Redis/worker queue readiness remains pending.
 
 ### Observability and Operations
 
@@ -933,7 +933,7 @@ The server half of Frontend Phase 12. It answers one authorized question — act
 | Phase 5 - HR, Attendance, WFH, Leave, Workload, and Evaluation | Pending | 0/26 |
 | Phase 6 - Reporting, Finance, and Exports | Pending | 0/19 |
 | Phase 7 - Notifications, Documents, Search, and Integrations | Pending | 0/23 |
-| Phase 8 - Quality, Performance, Backup, and Security Hardening | Pending | 0/23 |
+| Phase 8 - Quality, Performance, Backup, and Security Hardening | In progress (`BE-0816` partial) | 0/23 |
 | Phase 9 - Production Readiness and Frontend Cutover | Pending | 0/18 |
 | Phase 10 - Requisition | Pending | 0/20 |
 | Phase 11 - Conveyance | Pending | 0/22 |

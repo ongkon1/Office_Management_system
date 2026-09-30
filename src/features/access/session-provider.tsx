@@ -26,6 +26,8 @@ interface SessionContextValue {
   ) => Promise<Result<{ requiresTwoFactor: boolean; user: SessionUser | null }>>;
   verifyTwoFactor: (code: string) => Promise<Result<SessionUser>>;
   signOut: () => Promise<void>;
+  /** Refreshes display name/email after the current user edits their profile. */
+  refreshUser: () => Promise<void>;
   /** Development-only role switch. */
   switchDemoAccount?: (userId: string) => Promise<Result<SessionUser>>;
   /** Extends the session from now, as a real server would on activity. */
@@ -118,6 +120,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     applySession(null);
   }, [applySession]);
 
+  const refreshUser = React.useCallback(async () => {
+    const result = await mockAuthService.refreshSession();
+    if (result.status === 'success') applySession(result.data);
+  }, [applySession]);
+
   const switchDemoAccount = React.useCallback(
     async (userId: string) => {
       const result = await mockAuthService.switchDemoAccount({ userId });
@@ -165,6 +172,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       login,
       verifyTwoFactor,
       signOut,
+      refreshUser,
       switchDemoAccount,
       extendSession,
       simulateExpiry,
@@ -175,6 +183,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       login,
       verifyTwoFactor,
       signOut,
+      refreshUser,
       switchDemoAccount,
       extendSession,
       simulateExpiry,

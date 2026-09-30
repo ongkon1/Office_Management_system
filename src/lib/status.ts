@@ -15,6 +15,7 @@ import type {
   RemarkState,
   RequestWorkflowState,
   TaskStatus,
+  WorkMode,
 } from '@/contracts/domain';
 import type { MinuteProcessingStatus } from '@/contracts/meeting-minutes';
 import type { DayStatusView, DurationView } from '@/contracts/view-models';
@@ -212,3 +213,13 @@ export const WORK_LOCATION_LABEL = {
   official_travel: 'Official Travel',
   training_venue: 'Training Venue',
 } as const;
+
+export const WORK_MODE_LABEL: Readonly<Record<WorkMode, string>> = {
+  office: 'Office',
+  wfh: 'WFH',
+  hybrid: 'Hybrid',
+  field_work: 'Field Work',
+  official_travel: 'Official Travel',
+  training: 'Training',
+  client_location: 'Client Location',
+};

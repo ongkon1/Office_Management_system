@@ -324,7 +324,7 @@ Routes navigation links to but a later phase builds resolve to a registered "pla
 - [x] `FE-0342` Build My Divisions with primary/additional assignments, Team Lead, allocation, expected hours, dates, and current status.
 - [x] `FE-0343` Build the employee remarks inbox and remark detail with linked record, correction state, history, and clarification response.
 - [x] `FE-0344` Build correction editing with locked-field guidance, change summary, and successful resubmission state.
-- [x] `FE-0345` Build the employee profile view and editable permitted fields, preferences, work mode, and accessibility settings.
+- [x] `FE-0345` Build the shared profile view for every authenticated role with editable permitted identity/contact fields, preferences, work mode, validation, and live session identity refresh; keep employment and access fields read-only.
 
 ### Phase 3 Exit Criteria
 

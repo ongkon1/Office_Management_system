@@ -1,4 +1,7 @@
-import type { Pool } from 'mysql2/promise';
+import type { Pool, RowDataPacket } from 'mysql2/promise';
+
+/** Must move with every reviewed production migration. */
+export const EXPECTED_DATABASE_MIGRATION = '0011';
 
 export interface DatabaseHealth {
   readonly status: 'healthy' | 'unhealthy';
@@ -12,5 +15,52 @@ export async function checkDatabaseHealth(pool: Pool): Promise<DatabaseHealth> {
     return { status: 'healthy', latencyMs: Math.ceil(performance.now() - startedAt) };
   } catch {
     return { status: 'unhealthy', latencyMs: Math.ceil(performance.now() - startedAt) };
+  }
+}
+
+export interface DatabaseReadiness {
+  readonly status: 'healthy' | 'unhealthy';
+  readonly latencyMs: number;
+  readonly expectedMigration: string;
+  readonly appliedMigration: string | null;
+}
+
+interface MigrationRow extends RowDataPacket {
+  readonly version: string;
+}
+
+/**
+ * Verifies the runtime connection, core identity tables, and migration level.
+ * Error details are deliberately not returned so a public probe cannot expose
+ * hosts, credentials, SQL text, or schema internals.
+ */
+export async function checkDatabaseReadiness(
+  pool: Pool,
+  expectedMigration = EXPECTED_DATABASE_MIGRATION,
+): Promise<DatabaseReadiness> {
+  const startedAt = performance.now();
+  let appliedMigration: string | null = null;
+  try {
+    await pool.query('SELECT 1');
+    await pool.query(
+      'SELECT 1 FROM users u LEFT JOIN employees e ON 1 = 0 LEFT JOIN user_roles ur ON 1 = 0 LIMIT 0',
+    );
+    const [rows] = await pool.query<MigrationRow[]>(
+      'SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1',
+    );
+    appliedMigration = rows[0]?.version ?? null;
+    return {
+      status: appliedMigration === expectedMigration ? 'healthy' : 'unhealthy',
+      latencyMs: Math.ceil(performance.now() - startedAt),
+      expectedMigration,
+      appliedMigration,
+    };
+  } catch {
+    return {
+      status: 'unhealthy',
+      latencyMs: Math.ceil(performance.now() - startedAt),
+      expectedMigration,
+      appliedMigration,
+    };
   }
 }

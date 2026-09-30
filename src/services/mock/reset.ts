@@ -11,6 +11,7 @@ import { resetConveyanceState } from './conveyance';
 import { resetFinanceState } from './finance';
 import { resetHrState } from './hr';
 import { resetMeetingMinutesState } from './meeting-minutes';
+import { resetProfileState } from './profile';
 import { resetReportingState } from './reporting';
 import { resetRequisitionState } from './requisition';
 import { mockStore } from './store';
@@ -24,6 +25,7 @@ export function resetDemoData(): void {
   resetFinanceState();
   resetHrState();
   resetMeetingMinutesState();
+  resetProfileState();
   resetReportingState();
   resetRequisitionState();
   resetTaskReviewState();

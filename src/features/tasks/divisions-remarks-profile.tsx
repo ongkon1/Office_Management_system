@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar } from '@/components/ui/avatar';
 import { Duration } from '@/components/ui/misc';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Field } from '@/components/forms/field';
+import { Field, FormErrorSummary } from '@/components/forms/field';
 import { Input, Select, Textarea } from '@/components/forms/inputs';
 import { Card, CardHeader } from '@/components/feedback/card';
 import { Alert, EmptyState } from '@/components/feedback/alert';
@@ -17,8 +17,10 @@ import { Tabs } from '@/components/feedback/disclosure';
 import { useToast } from '@/components/feedback/toast';
 import { PageContainer, PageHeader, StickyActionBar } from '@/components/layout/page';
 import { mockDivisionsService, mockRemarkService } from '@/services/mock/work';
-import { findAccountByUserId } from '@/services/mock/accounts';
-import { WORK_LOCATION_LABEL } from '@/lib/status';
+import { mockProfileService } from '@/services/mock/profile';
+import { useSession } from '@/features/access/session-provider';
+import type { OwnProfileView, UpdateOwnProfileInput } from '@/contracts/services';
+import { WORK_MODE_LABEL } from '@/lib/status';
 
 /* -------------------------------------------------------------------------- */
 /* My Divisions (FE-0342)                                                     */
@@ -457,20 +459,105 @@ export function RemarkDetail({
 /* -------------------------------------------------------------------------- */
 
 export function ProfileScreen({ userId }: { userId: string }) {
-  const toast = useToast();
-  const account = findAccountByUserId(userId);
+  const { state, reload } = useAsync(() => mockProfileService.getOwnProfile(userId), [userId]);
 
-  const [phone, setPhone] = React.useState('+880 1700 000000');
-  const [workMode, setWorkMode] = React.useState('office');
-  const [density, setDensity] = React.useState('comfortable');
-  const [dirty, setDirty] = React.useState(false);
-
-  if (!account) {
+  if (state.status === 'loading') {
     return (
       <PageContainer width="narrow">
-        <EmptyState variant="no-results" title="Profile not available" />
+        <div role="status" aria-busy>
+          <span className="sr-only">Loading your profile</span>
+          <Skeleton height="2rem" width="10rem" />
+          <Skeleton height="12rem" rounded="md" className="mt-5" />
+          <Skeleton height="24rem" rounded="md" className="mt-5" />
+        </div>
       </PageContainer>
     );
+  }
+
+  if (state.status === 'failure') {
+    return (
+      <PageContainer width="narrow">
+        <EmptyState
+          variant={state.failure.status === 'not_found' ? 'no-results' : 'error'}
+          title="Profile not available"
+          description={state.failure.message}
+          action={{ label: 'Try again', onClick: reload }}
+        />
+      </PageContainer>
+    );
+  }
+
+  return <EditableProfile key={state.data.userId} initialProfile={state.data} />;
+}
+
+function EditableProfile({ initialProfile }: { initialProfile: OwnProfileView }) {
+  const toast = useToast();
+  const { refreshUser } = useSession();
+  const [saved, setSaved] = React.useState(initialProfile);
+  const [fullName, setFullName] = React.useState(initialProfile.fullName);
+  const [email, setEmail] = React.useState(initialProfile.email);
+  const [phone, setPhone] = React.useState(initialProfile.phone);
+  const [workMode, setWorkMode] = React.useState(initialProfile.normalWorkMode);
+  const [density, setDensity] = React.useState(initialProfile.density);
+  const [saving, setSaving] = React.useState(false);
+  const [errors, setErrors] = React.useState<readonly { field: string; message: string }[]>([]);
+  const [failure, setFailure] = React.useState<string | null>(null);
+
+  const dirty =
+    fullName !== saved.fullName ||
+    email !== saved.email ||
+    phone !== saved.phone ||
+    workMode !== saved.normalWorkMode ||
+    density !== saved.density;
+
+  const fieldError = (field: string) => errors.find((error) => error.field === field)?.message;
+
+  function discard() {
+    setFullName(saved.fullName);
+    setEmail(saved.email);
+    setPhone(saved.phone);
+    setWorkMode(saved.normalWorkMode);
+    setDensity(saved.density);
+    setErrors([]);
+    setFailure(null);
+  }
+
+  async function save(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    setFailure(null);
+    setErrors([]);
+    const result = await mockProfileService.updateOwnProfile(saved.userId, {
+      fullName,
+      email,
+      phone,
+      normalWorkMode: workMode,
+      density,
+    });
+    setSaving(false);
+    if (result.status === 'success') {
+      setSaved(result.data);
+      setFullName(result.data.fullName);
+      setEmail(result.data.email);
+      setPhone(result.data.phone);
+      setWorkMode(result.data.normalWorkMode);
+      setDensity(result.data.density);
+      await refreshUser();
+      toast.show({
+        tone: 'success',
+        title: 'Profile updated',
+        description: 'Your personal details and preferences were saved.',
+      });
+      return;
+    }
+    if (result.status === 'validation_failure') {
+      setErrors(result.fieldErrors.map((error) => ({
+        field: error.field,
+        message: `${error.message} ${error.guidance}`,
+      })));
+      return;
+    }
+    setFailure('guidance' in result ? `${result.message} ${result.guidance ?? ''}`.trim() : result.message);
   }
 
   return (
@@ -483,12 +570,12 @@ export function ProfileScreen({ userId }: { userId: string }) {
       <div className="mt-5 flex flex-col gap-5">
         <Card>
           <div className="flex items-center gap-4">
-            <Avatar name={account.fullName} size="lg" />
+            <Avatar name={saved.fullName} size="lg" />
             <div className="min-w-0">
-              <p className="text-h3 text-ink">{account.fullName}</p>
-              <p className="text-body-sm text-ink-muted">{account.designation}</p>
+              <p className="text-h3 text-ink">{saved.fullName}</p>
+              <p className="text-body-sm text-ink-muted">{saved.designation}</p>
               <p className="mt-1 text-caption text-ink-subtle">
-                {account.employeeCode} · {account.email}
+                {saved.employeeCode} · {saved.email}
               </p>
             </div>
           </div>
@@ -503,44 +590,73 @@ export function ProfileScreen({ userId }: { userId: string }) {
           <dl className="mt-3 grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
             <div>
               <dt className="text-caption text-ink-subtle">Employee ID</dt>
-              <dd className="text-body-sm text-ink">{account.employeeCode}</dd>
+              <dd className="text-body-sm text-ink">{saved.employeeCode}</dd>
             </div>
             <div>
               <dt className="text-caption text-ink-subtle">Designation</dt>
-              <dd className="text-body-sm text-ink">{account.designation}</dd>
+              <dd className="text-body-sm text-ink">{saved.designation}</dd>
             </div>
             <div>
               <dt className="text-caption text-ink-subtle">Primary division</dt>
-              <dd className="text-body-sm text-ink">{account.primaryDivisionId.toUpperCase()}</dd>
+              <dd className="text-body-sm text-ink">{saved.primaryDivisionId.toUpperCase()}</dd>
             </div>
             <div>
               <dt className="text-caption text-ink-subtle">Divisions in scope</dt>
-              <dd className="text-body-sm text-ink">{account.scopedDivisionIds.length}</dd>
+              <dd className="text-body-sm text-ink">{saved.divisionCount}</dd>
             </div>
           </dl>
         </Card>
 
         <Card>
           <CardHeader title="Contact and preferences" as="h2" />
-          <div className="mt-3 flex flex-col gap-4">
-            <Field label="Phone" helperText="Visible to your Team Lead and HR.">
+          <form className="mt-3 flex flex-col gap-4" noValidate onSubmit={save}>
+            <FormErrorSummary errors={errors} />
+            {failure && <Alert tone="danger" title="Profile not updated" live>{failure}</Alert>}
+
+            <Field label="Full name" required error={fieldError('fullName')}>
               <Input
-                value={phone}
-                onChange={(event) => {
-                  setPhone(event.target.value);
-                  setDirty(true);
-                }}
+                name="fullName"
+                autoComplete="name"
+                value={fullName}
+                onChange={(event) => setFullName(event.target.value)}
               />
             </Field>
 
-            <Field label="Normal work mode" helperText="The location pre-selected on new entries.">
+            <Field label="Email" required error={fieldError('email')}>
+              <Input
+                name="email"
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+              />
+            </Field>
+
+            <Field
+              label="Phone"
+              helperText="Visible to your Team Lead and HR."
+              error={fieldError('phone')}
+            >
+              <Input
+                name="phone"
+                type="tel"
+                autoComplete="tel"
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
+              />
+            </Field>
+
+            <Field
+              label="Normal work mode"
+              helperText="The location pre-selected on new entries."
+              error={fieldError('normalWorkMode')}
+            >
               <Select
                 value={workMode}
-                onChange={(event) => {
-                  setWorkMode(event.target.value);
-                  setDirty(true);
-                }}
-                options={Object.entries(WORK_LOCATION_LABEL).map(([value, label]) => ({
+                onChange={(event) =>
+                  setWorkMode(event.target.value as UpdateOwnProfileInput['normalWorkMode'])
+                }
+                options={Object.entries(WORK_MODE_LABEL).map(([value, label]) => ({
                   value,
                   label,
                 }))}
@@ -550,39 +666,37 @@ export function ProfileScreen({ userId }: { userId: string }) {
             <Field
               label="Table density"
               helperText="Compact fits more rows without changing touch-target sizes."
+              error={fieldError('density')}
             >
               <Select
                 value={density}
-                onChange={(event) => {
-                  setDensity(event.target.value);
-                  setDirty(true);
-                }}
+                onChange={(event) =>
+                  setDensity(event.target.value as UpdateOwnProfileInput['density'])
+                }
                 options={[
                   { value: 'comfortable', label: 'Comfortable' },
                   { value: 'dense', label: 'Compact' },
                 ]}
               />
             </Field>
-          </div>
-        </Card>
 
-        {dirty && (
-          <StickyActionBar>
-            <Button variant="ghost" onClick={() => setDirty(false)}>
-              Discard
-            </Button>
-            <Button
-              variant="primary"
-              iconLeading={<Check aria-hidden className="size-4" />}
-              onClick={() => {
-                setDirty(false);
-                toast.show({ tone: 'success', title: 'Preferences saved' });
-              }}
-            >
-              Save changes
-            </Button>
-          </StickyActionBar>
-        )}
+            {dirty && (
+              <StickyActionBar>
+                <Button type="button" variant="ghost" onClick={discard} disabled={saving}>
+                  Discard
+                </Button>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  iconLeading={<Check aria-hidden className="size-4" />}
+                  loading={saving}
+                >
+                  Save changes
+                </Button>
+              </StickyActionBar>
+            )}
+          </form>
+        </Card>
       </div>
     </PageContainer>
   );

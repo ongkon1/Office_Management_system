@@ -187,6 +187,7 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 - `REQ-ORG-018`: Every new active employee-division assignment must reference exactly one active department belonging to the same division; migration exceptions must be reported and resolved before cutover.
 - `REQ-ORG-019`: One employee may hold effective Team Lead appointments for multiple departments, including across divisions in which that employee has effective assignments.
 - `REQ-ORG-020`: Employee placement and department leadership must be effective-dated so historical membership, responsibility, and authorization can be reconstructed without rewriting past records.
+- `REQ-ORG-021`: Every active authenticated user must be able to edit their own permitted profile fields, including full name, email, phone, normal work mode, and interface preferences; employee ID, role, designation, division assignments, employment status, and permissions must remain controlled by authorized HR or Super Administrators.
 
 ### 5.2 Projects and Tasks
 
@@ -570,6 +571,7 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 - `REQ-NFR-OPS-002`: The system must provide structured operational logs, error monitoring, job monitoring, and integration-delivery diagnostics without exposing restricted data.
 - `REQ-NFR-OPS-003`: Calculation logic used by work-log views, dashboards, reports, exports, evaluations, and APIs must have a single authoritative implementation or contract.
 - `REQ-NFR-OPS-004`: Public APIs and webhooks must be documented, versioned, authenticated, rate-limited, and backward-compatible within their published version.
+- `REQ-NFR-OPS-005`: The deployed application must expose a non-cached server-side health endpoint that reports application, MySQL connectivity, core-schema, and migration readiness with HTTP 200 for healthy and HTTP 503 for unhealthy, without exposing credentials, connection details, protected data, or browser/mock state.
 
 ## 10. Delivery Phases
 

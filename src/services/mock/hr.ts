@@ -159,6 +159,36 @@ function employeeById(employeeId: string): Employee | undefined {
   return employees.find((employee) => employee.id === employeeId);
 }
 
+/** Self-service profile bridge used by the typed profile adapter. */
+export function getEmployeeSelfProfile(employeeId: string): Pick<
+  Employee,
+  'phone' | 'normalWorkMode'
+> | null {
+  const employee = employeeById(employeeId);
+  return employee
+    ? { phone: employee.phone, normalWorkMode: employee.normalWorkMode }
+    : null;
+}
+
+/** Updates only employee-owned fields; employment and access fields are intentionally unreachable. */
+export function updateEmployeeSelfProfile(
+  employeeId: string,
+  input: Pick<Employee, 'fullName' | 'email' | 'phone' | 'normalWorkMode'>,
+): boolean {
+  const employee = employeeById(employeeId);
+  if (!employee) return false;
+  const now = new Date().toISOString();
+  employees = employees.map((item) => item.id === employeeId
+    ? {
+        ...item,
+        ...input,
+        updatedAt: now,
+        updatedBy: { userId: `self:${employeeId}`, displayName: input.fullName },
+      }
+    : item);
+  return true;
+}
+
 function employeeRef(employeeId: string) {
   const employee = employeeById(employeeId);
   return {
