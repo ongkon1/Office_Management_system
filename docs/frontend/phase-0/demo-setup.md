@@ -2,7 +2,7 @@
 
 Covers `FE-0007` (demo roles and sample accounts) and `FE-0008` (sample organization and demo dataset).
 
-All values below are **development-only fixtures**. They must never be seeded into a production environment, and no fixture password is a real credential.
+All values below are **development-only fixtures**. They must never be seeded into a production environment, and no fixture password is a real credential. The original scenario accounts in section 1 remain test fixtures; after the MySQL cutover, the interactive login picker uses the database accounts listed in section 1.2.
 
 ## 1. Demo Accounts (`FE-0007`)
 
@@ -26,7 +26,7 @@ All values below are **development-only fixtures**. They must never be seeded in
 
 | Item | Value | Purpose |
 |---|---|---|
-| Password, every account | `Demo1234!` | Shown in the demo account picker on `/login`. |
+| Password, every seeded picker account | `Demo1234!` | Applied by `npm run db:seed` and shown in the demo account picker on `/login`. |
 | Two-factor code | `123456` | **No demo account enables 2FA.** Arif Mahmud (Super Administrator) did, until the step proved unusable on a deployed server: the pending challenge is held in module memory, so any hard navigation to `/two-factor` — a bookmark, a refresh, a fresh document from the server — loses it and verification can only report that the attempt expired. The screen and `verifyTwoFactor` still accept this code, and remain in place for the real TOTP cutover. |
 | Failed-attempt lockout | 5 attempts | Demonstrates the lockout path without a fixture account. |
 | Session length | 30 minutes | Long enough to work, short enough to demo. The expiry warning appears at 5 minutes remaining; the demo tools panel can shorten it on demand. |
@@ -35,6 +35,20 @@ All values below are **development-only fixtures**. They must never be seeded in
 | Reset link, invalid | `/reset-password?token=demo-invalid-token` | Invalid or already-used link state. |
 
 Accounts 12 and 13 are additions to the original Phase 0 set. They exist only to make the locked and inactive sign-in screens (`FE-0204`) demonstrable, and they hold no time, task, or request data.
+
+### 1.2 MySQL-Backed Login Picker
+
+These are the usable accounts created by `npm run db:seed` and displayed by the interactive picker. They all use `Demo1234!`.
+
+| Name | Email | Employee ID | Role |
+|---|---|---|---|
+| Amina Rahman | `admin@powerin.ai` | `ADM-001` | Super Administrator |
+| Tanvir Hasan | `lead@powerin.ai` | `TL-001` | Team Lead |
+| Nadia Islam | `employee@powerin.ai` | `EMP-001` | Employee |
+| Farhana Akter | `hr@powerin.ai` | `HR-001` | HR Manager |
+| Rafiq Ahmed | `management@powerin.ai` | `MGT-001` | Management/View-Only |
+
+The historical Finance seed is intentionally omitted because `finance_manager` is no longer an assignable session role. The seed command resets passwords only for its deterministic demo-user IDs; it must never change credentials for users created through the application.
 
 Rules:
 

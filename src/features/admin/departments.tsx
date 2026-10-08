@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import * as React from 'react';
 import { Pencil, Plus, Trash2, UserCog } from 'lucide-react';
@@ -6,7 +6,7 @@ import type {
   DepartmentCatalogueRowView,
   DepartmentCatalogueView,
 } from '@/contracts/organization-hierarchy';
-import { mockDepartmentAdminService } from '@/services/mock/department-admin';
+import { departmentAdminService as mockDepartmentAdminService } from '@/services/runtime/department-admin';
 import { useAsync } from '@/lib/use-async';
 import { useSession } from '@/features/access/session-provider';
 import { useToast } from '@/components/feedback/toast';

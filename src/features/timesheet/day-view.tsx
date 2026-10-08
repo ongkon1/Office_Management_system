@@ -21,7 +21,7 @@ import { Dialog, DropdownMenu } from '@/components/feedback/overlay';
 import { useToast } from '@/components/feedback/toast';
 import { PageContainer, PageHeader } from '@/components/layout/page';
 import { Skeleton } from '@/components/ui/skeleton';
-import { mockTimesheetService } from '@/services/mock/timesheet';
+import { timesheetService as mockTimesheetService } from '@/services/runtime/timesheet';
 import { WorkLogDrawer, type CopiedWorkLogDraft } from './work-log-drawer';
 
 export function DayView({

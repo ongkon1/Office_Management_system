@@ -1,10 +1,10 @@
-'use client';
+﻿'use client';
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { Send } from 'lucide-react';
 import type { RequisitionFormInput, RequisitionKind } from '@/contracts/requisition';
-import { mockRequisitionService } from '@/services/mock/requisition';
+import { requisitionService as mockRequisitionService } from '@/services/runtime/requisition';
 import { useSession } from '@/features/access/session-provider';
 import { useToast } from '@/components/feedback/toast';
 import { PageContainer, PageHeader } from '@/components/layout/page';

@@ -17,6 +17,7 @@ const command = z.discriminatedUnion('operation', [
     z.object({
         operation: z.literal('evaluation.change'), id: z.uuid(), action: z.enum(['save_self', 'submit_self', 'save_scores', 'submit_review', 'publish', 'return']), input: z.unknown().optional(), expectedVersion: z.number().int().positive().optional()
     }),
+    z.object({ operation: z.literal('client.hr'), method: z.enum(['getAttendance','listRequests','listDivisionRequestSummary','listLeaveBalances','decideRequest','listHolidays','saveHoliday','setHolidayActive','listEvaluationPeriods','createEvaluationPeriod','listEvaluations','getEvaluation','sendReminder','publishEvaluation','returnEvaluation']), args: z.array(z.unknown()).max(3) }),
 ]);
 export async function handleHrMutation(request: Request, factory: () => ReturnType<typeof createHrServices>, origin: string) {
     if (request.headers.get('origin') !== new URL(origin).origin)
@@ -43,6 +44,7 @@ export async function handleHrMutation(request: Request, factory: () => ReturnTy
             case 'evaluation.period': return resultResponse(await s.evaluationApplication.createPeriod(c.input));
             case 'evaluation.assign': return resultResponse(await s.evaluationApplication.assign(c.periodId, c.employeeId, c.reviewerEmployeeId));
             case 'evaluation.change': return resultResponse(await s.evaluationApplication.change(c.id, c.action, c.input, c.expectedVersion));
+            case 'client.hr': return resultResponse(await Reflect.apply(Reflect.get(s.hr,c.method),s.hr,c.args));
         }
     }
     catch {

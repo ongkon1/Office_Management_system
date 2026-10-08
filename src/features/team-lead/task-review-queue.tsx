@@ -4,7 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { Check, X } from 'lucide-react';
 import type { TaskReviewRowView } from '@/contracts/task-review';
-import { mockTaskReviewService } from '@/services/mock/task-review';
+import { taskReviewService as mockTaskReviewService } from '@/services/runtime/task-review';
 import { useAsync } from '@/lib/use-async';
 import { useSession } from '@/features/access/session-provider';
 import { useToast } from '@/components/feedback/toast';

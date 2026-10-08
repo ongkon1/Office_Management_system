@@ -26,6 +26,7 @@ export async function GET(request: NextRequest) {
             case 'work-log-history': return resultResponse(await s.timesheets.getWorkLogHistory(query.get('id') ?? ''));
             case 'work-log': return resultResponse(await s.timesheets.getWorkLog(query.get('id') ?? ''));
             case 'work-logs': return resultResponse(await s.timesheets.listWorkLogs({ pagination: { page: Number(query.get('page') ?? 1), pageSize: 25 }, filters: { employeeIds: [employeeId], dateRange: { from: query.get('from') ?? '', to: query.get('to') ?? '' } } }));
+            case 'daily-summaries': return resultResponse(await s.timesheets.getDailySummaries({ employeeId, range: { from: query.get('from') ?? '', to: query.get('to') ?? '' } }));
             case 'period': return resultResponse(await s.periods.getVerificationSummary(query.get('id') ?? ''));
             case 'remarks': return resultResponse(await s.remarks.list({ pagination: { page: Number(query.get('page') ?? 1), pageSize: 25 }, filters: { employeeIds: [employeeId] } }));
             case 'entries': return resultResponse(await s.timesheets.listEntries({ pagination: { page: Number(query.get('page') ?? 1), pageSize: 25 }, filters: { employeeIds: [employeeId], dateRange: { from: query.get('from') ?? '', to: query.get('to') ?? '' } } }));

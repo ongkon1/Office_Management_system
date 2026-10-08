@@ -20,9 +20,23 @@ import type {
 import type { DurationVarianceView } from './work-log';
 import type { TaskReviewStateView } from './task-review';
 
+/** One department of the viewing lead's scope, as a member row reports it. */
+export interface TeamDepartmentRef {
+  readonly id: string;
+  readonly name: string;
+  readonly division: DivisionRef;
+}
+
 export interface TeamMemberView {
   readonly employee: EmployeeRef;
   readonly divisions: readonly DivisionRef[];
+  /**
+   * `OH-FE-0308`. The departments this member is reached through, which is the
+   * intersection of their effective placements and the viewer's own
+   * appointments — never every department the member belongs to, because that
+   * would name departments the viewer has no authority over.
+   */
+  readonly departments: readonly TeamDepartmentRef[];
   readonly attendanceLabel: string;
   readonly active: DurationView;
   readonly status: TeamTimesheetRowView['status'];

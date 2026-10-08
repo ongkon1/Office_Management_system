@@ -11,6 +11,7 @@
  */
 
 import type { PermissionKey, RoleKey, SessionUser } from '@/contracts/domain';
+import { effectiveRoleKeys } from './capabilities';
 import {
   findFlagForRoute,
   isFeatureEnabled,
@@ -198,7 +199,14 @@ export function checkRouteAccess(
   const rule = findRule(pathname);
   if (!rule) return { allowed: true };
 
-  if (rule.roles && !rule.roles.some((role) => user.roles.includes(role))) {
+  /*
+   * `OH-FE-0307`. An effective department appointment is Team Lead capability
+   * without a role grant, so the rule is tested against the roles the session
+   * *effectively* holds today. The appointment's own dates decide: one that has
+   * not started or has ended contributes nothing, and the denied state returns
+   * on its own.
+   */
+  if (rule.roles && !rule.roles.some((role) => effectiveRoleKeys(user).includes(role))) {
     return { allowed: false, reason: 'role' };
   }
 

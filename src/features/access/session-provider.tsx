@@ -4,7 +4,9 @@ import * as React from 'react';
 import type { SessionUser } from '@/contracts/domain';
 import type { LoginInput } from '@/contracts/services';
 import type { Result } from '@/contracts/results';
-import { mockAuthService, SESSION_DURATION_MS } from '@/services/mock/auth';
+import { serverAuthService } from '@/services/server/auth';
+import { serverAdminService } from '@/services/server/admin';
+import { commitBranding, resetBranding } from '@/lib/branding-store';
 import { sessionStore } from './session-store';
 
 /**
@@ -69,11 +71,20 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   const [now, setNow] = React.useState(() => Date.now());
 
-  // Keep the mock service's view of the session aligned with the store. Done
-  // in an effect rather than during render, since it mutates a module.
   React.useEffect(() => {
-    mockAuthService.setRestoredSession(user);
-  }, [user]);
+    let active=true;
+    void serverAuthService.getSession().then((result)=>{
+      if(active) sessionStore.set(result.status==='success' ? result.data : null);
+    });
+    return ()=>{active=false;};
+  }, []);
+
+  React.useEffect(()=>{
+    if(!user){resetBranding();return;}
+    let active=true;
+    void serverAdminService.getBranding(user.userId).then(result=>{if(active&&result.status==='success')commitBranding(result.data);});
+    return()=>{active=false;};
+  },[user?.userId]);
 
   // One tick drives the countdown and enforces expiry. Expiry is applied in
   // the timer callback rather than an effect, so a session cannot outlive its
@@ -83,7 +94,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     const id = window.setInterval(() => {
       const current = sessionStore.getUser();
       if (current && new Date(current.sessionExpiresAt).getTime() <= Date.now()) {
-        mockAuthService.setRestoredSession(null);
         sessionStore.set(null);
         return;
       }
@@ -93,13 +103,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   }, [user]);
 
   const applySession = React.useCallback((session: SessionUser | null) => {
-    mockAuthService.setRestoredSession(session);
     sessionStore.set(session);
   }, []);
 
   const login = React.useCallback<SessionContextValue['login']>(
     async (input) => {
-      const result = await mockAuthService.login(input);
+      const result = await serverAuthService.login(input);
       if (result.status === 'success' && result.data.user) applySession(result.data.user);
       return result;
     },
@@ -108,7 +117,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   const verifyTwoFactor = React.useCallback<SessionContextValue['verifyTwoFactor']>(
     async (code) => {
-      const result = await mockAuthService.verifyTwoFactor({ code });
+      const result = await serverAuthService.verifyTwoFactor({ code });
       if (result.status === 'success') applySession(result.data);
       return result;
     },
@@ -116,30 +125,18 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   );
 
   const signOut = React.useCallback(async () => {
-    await mockAuthService.logout();
+    await serverAuthService.logout();
     applySession(null);
   }, [applySession]);
 
   const refreshUser = React.useCallback(async () => {
-    const result = await mockAuthService.refreshSession();
+    const result = await serverAuthService.refreshSession();
     if (result.status === 'success') applySession(result.data);
   }, [applySession]);
 
-  const switchDemoAccount = React.useCallback(
-    async (userId: string) => {
-      const result = await mockAuthService.switchDemoAccount({ userId });
-      if (result.status === 'success') applySession(result.data);
-      return result;
-    },
-    [applySession],
-  );
-
   const extendSession = React.useCallback(() => {
-    const current = sessionStore.getUser();
-    if (!current) return;
-    applySession({
-      ...current,
-      sessionExpiresAt: new Date(Date.now() + SESSION_DURATION_MS).toISOString(),
+    void serverAuthService.refreshSession().then((result)=>{
+      if(result.status==='success') applySession(result.data);
     });
   }, [applySession]);
 
@@ -173,7 +170,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       verifyTwoFactor,
       signOut,
       refreshUser,
-      switchDemoAccount,
       extendSession,
       simulateExpiry,
     }),
@@ -184,7 +180,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       verifyTwoFactor,
       signOut,
       refreshUser,
-      switchDemoAccount,
       extendSession,
       simulateExpiry,
     ],

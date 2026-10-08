@@ -31,6 +31,7 @@ export type ReportFilterKind =
   | 'date_range'
   | 'employee'
   | 'division'
+  | 'department'
   | 'project'
   | 'task'
   | 'team_lead'
@@ -89,6 +90,8 @@ export interface ReportRunInput {
   readonly to?: IsoDate;
   readonly employeeIds?: readonly string[];
   readonly divisionIds?: readonly string[];
+  /** `OH-BE-0306`. Only departments the viewer may already see are offered. */
+  readonly departmentIds?: readonly string[];
   readonly projectIds?: readonly string[];
   readonly taskIds?: readonly string[];
   readonly teamLeadIds?: readonly string[];
@@ -158,7 +161,7 @@ export interface ReportingService {
     input: ReportExportInput,
   ): Promise<Result<{ readonly job: ExportJobView; readonly note: string }>>;
   listExports(userId: string): Promise<Result<readonly ExportJobView[]>>;
-  /** Moves a mocked job to its next state, so every state is demonstrable. */
+  /** Refreshes a pending job and returns the worker's latest durable state. */
   advanceExport(userId: string, jobId: string): Promise<Result<ExportJobView>>;
   retryExport(userId: string, jobId: string): Promise<Result<ExportJobView>>;
 }

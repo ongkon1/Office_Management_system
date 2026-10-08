@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { CalendarPlus } from 'lucide-react';
 import type { HolidayFormInput, HolidayView } from '@/contracts/hr';
-import { mockHrService } from '@/services/mock/hr';
+import { hrService as mockHrService } from '@/services/runtime/hr';
 import { useAsync } from '@/lib/use-async';
 import { useSession } from '@/features/access/session-provider';
 import { useToast } from '@/components/feedback/toast';

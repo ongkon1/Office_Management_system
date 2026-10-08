@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { Download, Eye, FileText, Lock } from 'lucide-react';
 import type { DocumentItemView } from '@/contracts/workspace';
-import { mockWorkspaceService } from '@/services/mock/workspace';
+import { workspaceService as mockWorkspaceService } from '@/services/runtime/workspace';
 import { useAsync } from '@/lib/use-async';
 import { useSession } from '@/features/access/session-provider';
 import { useToast } from '@/components/feedback/toast';

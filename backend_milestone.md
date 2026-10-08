@@ -534,10 +534,10 @@ Phase 4 evidence and task-to-deliverable mapping: `docs/backend/phase-4/verifica
 
 ### Frontend Integration
 
-- [ ] `BE-0901` Replace frontend mock authentication with real server authentication while preserving approved UI states.
-- [ ] `BE-0902` Replace mock organization, project, task, timesheet, remark, WFH, leave, attendance, workload, evaluation, report, Finance, notification, search, document, and settings adapters incrementally.
-- [ ] `BE-0903` Remove direct fixture dependencies from production paths while retaining deterministic fixtures for tests and demos.
-- [ ] `BE-0904` Verify frontend error, permission, loading, locked, retry, job-progress, and success states against real backend responses.
+- [x] `BE-0901` Replace frontend mock authentication with real server authentication while preserving approved UI states. — Delivered through the MySQL-backed `/api/auth` boundary, HttpOnly session/2FA cookies, the browser server adapter, and the memory-only session view. Evidence: `docs/backend/phase-9/be-0901-verification.md`.
+- [x] `BE-0902` Replace mock organization, project, task, timesheet, remark, WFH, leave, attendance, workload, evaluation, report, Finance, notification, search, document, and settings adapters incrementally. — Production runtime adapters now use authenticated MySQL-backed boundaries for every in-scope frontend contract, including Team Lead/project administration, HR employee/assignment/period/dashboard views, Employee and Management dashboards, and date-aware work-entry choices. Deterministic mocks remain test-only. Evidence: `docs/backend/phase-9/be-0902-progress.md`.
+- [x] `BE-0903` Remove direct fixture dependencies from production paths while retaining deterministic fixtures for tests and demos. — Feature code now resolves only through runtime/server boundaries, pending backend adapters fail explicitly instead of serving fixture records, Vitest injects deterministic mock shims, and `audit:data-boundaries` prevents regression. Evidence: `docs/backend/phase-9/be-0903-verification.md`.
+- [x] `BE-0904` Verify frontend error, permission, loading, locked, retry, job-progress, and success states against real backend responses. — Cross-layer browser tests preserve canonical HTTP results, MySQL integration verifies locked and export lifecycles, and export history now refreshes real worker state, retries server-side, and downloads protected ready artifacts. Evidence: `docs/backend/phase-9/be-0904-verification.md`.
 - [ ] `BE-0905` Reconcile dashboard, timesheet, report, evaluation, and Finance totals for the same seeded scenarios.
 
 ### Data Migration and Release
@@ -934,7 +934,7 @@ The server half of Frontend Phase 12. It answers one authorized question — act
 | Phase 6 - Reporting, Finance, and Exports | Pending | 0/19 |
 | Phase 7 - Notifications, Documents, Search, and Integrations | Pending | 0/23 |
 | Phase 8 - Quality, Performance, Backup, and Security Hardening | In progress (`BE-0816` partial) | 0/23 |
-| Phase 9 - Production Readiness and Frontend Cutover | Pending | 0/18 |
+| Phase 9 - Production Readiness and Frontend Cutover | In progress | 4/18 |
 | Phase 10 - Requisition | Pending | 0/20 |
 | Phase 11 - Conveyance | Pending | 0/22 |
 | Phase 12 - Role Consolidation: Finance into HR | Pending | 0/11 |

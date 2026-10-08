@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import * as React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
@@ -7,14 +7,15 @@ import type { AppShellView } from '@/contracts/view-models';
 import { useFeatureFlags } from '@/features/settings/flag-store';
 import { AppShell } from '@/components/shell/app-shell';
 import { buildNavigation, DEFAULT_ROUTE, ROLE_LABEL } from '@/components/shell/navigation';
+import { navigationRole } from './capabilities';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/feedback/overlay';
 import { Card } from '@/components/feedback/card';
 import { Avatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { formatTimestamp } from '@/lib/format';
-import { findAccountByUserId, listDemoAccounts } from '@/services/mock/accounts';
-import { resetDemoData } from '@/services/mock/reset';
+import { findAccountByUserId, listDemoAccounts } from '@/services/runtime/demo';
+import { resetDemoData } from '@/services/runtime/demo';
 import { resetPresentation } from '@/features/finance/presentation-store';
 import { resetFeatureFlags } from '@/features/settings/flag-store';
 import { SearchPalette } from '@/features/workspace/search';
@@ -256,7 +257,9 @@ export function AppShellHost({ children }: { children: React.ReactNode }) {
         avatarUrl: user.avatarUrl,
       },
       navigation: buildNavigation({
-        role: user.primaryRole,
+        // `OH-FE-0307`: an appointed lead is offered the Team Lead navigation,
+        // which includes employee self-service, while an appointment is in force.
+        role: navigationRole(user),
         flags,
         permissions: user.permissions,
       }),

@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
@@ -8,7 +8,7 @@ import type {
   MeetingMinuteProjectOption,
 } from '@/contracts/meeting-minutes';
 import { success } from '@/contracts/results';
-import { mockMeetingMinutesService } from '@/services/mock/meeting-minutes';
+import { meetingMinutesService as mockMeetingMinutesService } from '@/services/runtime/meeting-minutes';
 import { useAsync } from '@/lib/use-async';
 import { useSession } from '@/features/access/session-provider';
 import { useToast } from '@/components/feedback/toast';

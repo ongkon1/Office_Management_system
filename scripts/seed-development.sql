@@ -44,7 +44,7 @@ INSERT INTO users(id,name,email,email_normalized,employee_identifier,status) VAL
 ('30000000-0000-4000-8000-000000000009','Jannat Noor','jannat@powerin.ai','jannat@powerin.ai','EMP-004','active'),
 ('30000000-0000-4000-8000-000000000010','Arif Hossain','arif@powerin.ai','arif@powerin.ai','EMP-005','active'),
 ('30000000-0000-4000-8000-000000000011','Maliha Sultana','maliha@powerin.ai','maliha@powerin.ai','EMP-006','active')
-ON DUPLICATE KEY UPDATE name=VALUES(name),status=VALUES(status);
+ON DUPLICATE KEY UPDATE name=VALUES(name),email=VALUES(email),email_normalized=VALUES(email_normalized),employee_identifier=VALUES(employee_identifier),status=VALUES(status);
 
 INSERT INTO employees(id,user_id,employee_code,display_name,job_title,hire_date) SELECT CONCAT('40000000-0000-4000-8000-',LPAD(CAST(n AS CHAR),12,'0')),CONCAT('30000000-0000-4000-8000-',LPAD(CAST(n AS CHAR),12,'0')),employee_code,name,CASE WHEN n=2 THEN 'Team Lead' WHEN n=4 THEN 'HR Manager' WHEN n=5 THEN 'Finance Manager' ELSE 'Software Professional' END,'2024-01-01' FROM (SELECT 1 n,'ADM-001' employee_code UNION ALL SELECT 2,'TL-001' UNION ALL SELECT 3,'EMP-001' UNION ALL SELECT 4,'HR-001' UNION ALL SELECT 5,'FIN-001' UNION ALL SELECT 6,'MGT-001' UNION ALL SELECT 7,'EMP-002' UNION ALL SELECT 8,'EMP-003' UNION ALL SELECT 9,'EMP-004' UNION ALL SELECT 10,'EMP-005' UNION ALL SELECT 11,'EMP-006') seed JOIN users u ON u.employee_identifier=seed.employee_code ON DUPLICATE KEY UPDATE display_name=VALUES(display_name),job_title=VALUES(job_title);
 
@@ -117,3 +117,43 @@ INSERT INTO report_definitions(id,report_key,name,module,required_permission,con
 ('c5000000-0000-4000-8000-000000000001','employee-hours','Employee Hours','timesheet',NULL,JSON_OBJECT('groupBy','employee')),
 ('c5000000-0000-4000-8000-000000000002','labour-cost','Labour Cost','finance','finance.cost.view',JSON_OBJECT('groupBy','project'))
 ON DUPLICATE KEY UPDATE name=VALUES(name),configuration=VALUES(configuration);
+
+-- The department hierarchy is seeded last, after every table it references.
+-- `task-work-migration.integration.test.ts` loads the prefix of this file
+-- against a pre-0011 schema by splitting it at the task-transition insert, so
+-- anything depending on a later migration has to live below that line.
+-- OH-BE-0112: the department hierarchy, covering every shape the screens and
+-- the authorization model have to handle — all five divisions, one name shared
+-- by two divisions, an inactive department, an employee holding a different
+-- department in each of three divisions, a closed historical appointment, an
+-- appointment in force, a scheduled future one, and a department with no lead.
+INSERT IGNORE INTO departments(id,division_id,name,code,description,is_active,deactivated_at,deactivation_reason) VALUES
+('22000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000001','Technical','TECH','Engineering and delivery for PowerInAI.',TRUE,NULL,NULL),
+('22000000-0000-4000-8000-000000000002','10000000-0000-4000-8000-000000000001','Sales','SALES','New business for PowerInAI.',TRUE,NULL,NULL),
+('22000000-0000-4000-8000-000000000003','10000000-0000-4000-8000-000000000001','People','PPL','HR operations.',TRUE,NULL,NULL),
+-- Inactive: it keeps its history and accepts no new placement.
+('22000000-0000-4000-8000-000000000004','10000000-0000-4000-8000-000000000001','Legacy Desk','LEGACY','Closed after the 2025 reorganisation.',FALSE,'2026-01-31 04:00:00','Folded into Technical.'),
+('22000000-0000-4000-8000-000000000005','10000000-0000-4000-8000-000000000002','Training','TRN','Course delivery.',TRUE,NULL,NULL),
+('22000000-0000-4000-8000-000000000006','10000000-0000-4000-8000-000000000003','Delivery','DLV','Government project delivery.',TRUE,NULL,NULL),
+('22000000-0000-4000-8000-000000000007','10000000-0000-4000-8000-000000000004','Production','PROD','Publication production.',TRUE,NULL,NULL),
+-- The same name as PowerInAI's, in a different division, on purpose.
+('22000000-0000-4000-8000-000000000008','10000000-0000-4000-8000-000000000005','Sales','SALES','New business for WesternCF.',TRUE,NULL,NULL);
+
+-- Placement belongs to the division assignment, so the multi-division employee
+-- (40000000-…-03) is in Technical in PowerInAI, Delivery in Government
+-- Projects and Sales in WesternCF.
+UPDATE employee_division_assignments SET department_id='22000000-0000-4000-8000-000000000001'
+  WHERE id IN ('70000000-0000-4000-8000-000000000001','70000000-0000-4000-8000-000000000002') AND department_id IS NULL;
+UPDATE employee_division_assignments SET department_id='22000000-0000-4000-8000-000000000006'
+  WHERE id='70000000-0000-4000-8000-000000000003' AND department_id IS NULL;
+UPDATE employee_division_assignments SET department_id='22000000-0000-4000-8000-000000000008'
+  WHERE id='70000000-0000-4000-8000-000000000004' AND department_id IS NULL;
+
+-- Appointments. Technical carries a closed period and the one in force, so
+-- leadership history is demonstrable; WesternCF Sales carries a scheduled
+-- future appointment with nobody in force yet; PowerInAI Sales has no lead.
+INSERT IGNORE INTO department_lead_assignments(id,department_id,lead_employee_id,effective_from,effective_to,reason) VALUES
+('23000000-0000-4000-8000-000000000001','22000000-0000-4000-8000-000000000001','40000000-0000-4000-8000-000000000001','2025-01-01','2025-12-31','Initial demo mapping'),
+('23000000-0000-4000-8000-000000000002','22000000-0000-4000-8000-000000000001','40000000-0000-4000-8000-000000000002','2026-01-01',NULL,'Took over engineering in January'),
+('23000000-0000-4000-8000-000000000003','22000000-0000-4000-8000-000000000006','40000000-0000-4000-8000-000000000003','2026-01-01',NULL,'Leads government delivery'),
+('23000000-0000-4000-8000-000000000004','22000000-0000-4000-8000-000000000008','40000000-0000-4000-8000-000000000003','2026-12-01',NULL,'Scheduled handover');

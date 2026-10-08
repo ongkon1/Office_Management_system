@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { FileChartColumn, Lock, ShieldAlert } from 'lucide-react';
-import { mockReportingService } from '@/services/mock/reporting';
+import { reportingService as mockReportingService } from '@/services/runtime/reporting';
 import { useAsync } from '@/lib/use-async';
 import { useSession } from '@/features/access/session-provider';
 import { PageContainer, PageHeader } from '@/components/layout/page';

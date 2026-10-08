@@ -5,18 +5,15 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/forms/field';
 import { Input } from '@/components/forms/inputs';
-import { Alert, Callout } from '@/components/feedback/alert';
+import { Alert } from '@/components/feedback/alert';
 import { AccordionItem } from '@/components/feedback/disclosure';
 import { DEFAULT_ROUTE } from '@/components/shell/navigation';
-import {
-  mockAuthService,
-  DEMO_TWO_FACTOR_CODE,
-  TWO_FACTOR_RESEND_SECONDS,
-} from '@/services/mock/auth';
-import { isDemoMode } from './demo-mode';
+import { serverAuthService } from '@/services/server/auth';
 import { useSession } from './session-provider';
 
 const CODE_LENGTH = 6;
+const MAX_CODE_LENGTH = 64;
+const TWO_FACTOR_RESEND_SECONDS = 30;
 
 /**
  * FE-0203 — two-factor verification.
@@ -82,7 +79,7 @@ export function TwoFactorForm() {
   }
 
   async function handleResend() {
-    await mockAuthService.resendTwoFactorCode();
+    await serverAuthService.resendTwoFactorCode();
     setSecondsUntilResend(TWO_FACTOR_RESEND_SECONDS);
     setResent(true);
   }
@@ -94,28 +91,26 @@ export function TwoFactorForm() {
       </div>
       <div aria-live="polite">
         {resent && !error && (
-          <Alert tone="info" title="A new code has been sent." />
+          <Alert tone="info" title="You can now use the newest authenticator code." />
         )}
       </div>
 
       <Field
         label="Verification code"
         required
-        helperText={`Enter the ${CODE_LENGTH}-digit code from your authenticator app.`}
+        helperText={`Enter the ${CODE_LENGTH}-digit authenticator code or an unused recovery code.`}
       >
         <Input
           ref={inputRef}
           name="one-time-code"
           type="text"
-          inputMode="numeric"
           autoComplete="one-time-code"
-          maxLength={CODE_LENGTH}
-          pattern="\d*"
+          maxLength={MAX_CODE_LENGTH}
           enterKeyHint="go"
           value={code}
-          onChange={(event) => setCode(event.target.value.replace(/\D/g, ''))}
+          onChange={(event) => setCode(event.target.value.replace(/\s/g, ''))}
           className="text-center text-h2 tracking-[0.4em] tabular"
-          placeholder="000000"
+          placeholder="000000 or recovery code"
         />
       </Field>
 
@@ -125,7 +120,7 @@ export function TwoFactorForm() {
         size="lg"
         fullWidth
         loading={submitting}
-        disabled={code.length !== CODE_LENGTH}
+        disabled={code.length < CODE_LENGTH}
       >
         Verify and sign in
       </Button>
@@ -139,7 +134,7 @@ export function TwoFactorForm() {
         >
           {secondsUntilResend > 0
             ? `Resend code in ${secondsUntilResend}s`
-            : 'Resend code'}
+            : 'Check for a new code'}
         </Button>
         <Button variant="link" size="sm" onClick={() => router.push('/login')}>
           Back to sign in
@@ -155,11 +150,6 @@ export function TwoFactorForm() {
         </AccordionItem>
       </div>
 
-      {isDemoMode() && (
-        <Callout tone="info">
-          Demo: the code is <code className="font-semibold">{DEMO_TWO_FACTOR_CODE}</code>.
-        </Callout>
-      )}
     </form>
   );
 }

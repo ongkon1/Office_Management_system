@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
@@ -13,7 +13,7 @@ import {
   MAX_RECEIPT_BYTES,
   TRAVEL_MODE_OPTIONS,
 } from '@/contracts/conveyance';
-import { mockConveyanceService } from '@/services/mock/conveyance';
+import { conveyanceService as mockConveyanceService } from '@/services/runtime/conveyance';
 import { useAsync } from '@/lib/use-async';
 import { useSession } from '@/features/access/session-provider';
 import { useToast } from '@/components/feedback/toast';

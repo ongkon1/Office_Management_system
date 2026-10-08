@@ -45,8 +45,8 @@ export class HrJobs {
                             recipientIds.add(String(employee.user_id));
                         if (String(job.kind).startsWith('request.') || job.kind === 'attendance.exception')
                             for (const assignment of await tx.assignments(String(job.employee_id), app.today()))
-                                if (assignment.is_primary && assignment.lead_employee_id) {
-                                    const lead = await tx.employee(String(assignment.lead_employee_id));
+                                if (assignment.is_primary && assignment.effective_lead_employee_id) {
+                                    const lead = await tx.employee(String(assignment.effective_lead_employee_id));
                                     if (lead?.user_id)
                                         recipientIds.add(String(lead.user_id));
                                 }

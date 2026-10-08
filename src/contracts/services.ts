@@ -97,7 +97,7 @@ export interface AuthService {
   verifyTwoFactor(input: { code: string }): Promise<Result<SessionUser>>;
   resendTwoFactorCode(): Promise<Result<{ nextResendAvailableAt: string }>>;
   requestPasswordReset(input: { email: string }): Promise<Result<void>>;
-  resetPassword(input: { token: string; password: string }): Promise<Result<void>>;
+  resetPassword(input: { token: string; password: string; identifier?: string }): Promise<Result<void>>;
   changePassword(input: {
     userId: string;
     currentPassword: string;

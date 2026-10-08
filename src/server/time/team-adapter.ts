@@ -18,7 +18,18 @@ export class BackendTeamTimesheetService implements TeamTimesheetService {
         const actor = await this.app.resolveActor(range.from);
         if (!actor)
             return { status: 'unauthenticated' as const, code: 'UNAUTHENTICATED' as const, message: 'Sign in to continue.', reason: 'no_session' as const };
-        const employeeIds = query.filters?.employeeIds ?? [...actor.employeeIds];
+        /*
+         * `OH-BE-0302`, `OH-BE-0307`. The default scope is whoever the actor
+         * leads on the range's first date — which now includes department
+         * appointments — and an explicitly requested id is intersected with it
+         * rather than trusted. Filtering before the loop also keeps one
+         * unauthorized id from turning the whole list into a failure, which
+         * would itself disclose that the id exists.
+         */
+        const reachable = new Set(actor.employeeIds);
+        if (actor.employeeId) reachable.add(actor.employeeId);
+        const wide = actor.roles.includes('hr_manager') || actor.roles.includes('super_admin');
+        const employeeIds = (query.filters?.employeeIds ?? [...reachable]).filter((id) => wide || reachable.has(id));
         const rows: TeamTimesheetRowView[] = [];
         for (const employeeId of employeeIds) {
             const summaries = await this.app.summaries(employeeId, range.from, range.to);

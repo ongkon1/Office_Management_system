@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { Building2, Clock, FileSpreadsheet, TrendingUp } from 'lucide-react';
-import { mockFinanceService } from '@/services/mock/finance';
+import { financeService as mockFinanceService } from '@/services/runtime/finance';
 import { useAsync } from '@/lib/use-async';
 import { useSession } from '@/features/access/session-provider';
 import { DashboardGrid, PageContainer, PageHeader } from '@/components/layout/page';

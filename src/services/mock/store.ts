@@ -31,6 +31,7 @@ import {
 } from '@/fixtures';
 import { REQUISITIONS } from '@/fixtures/requisition';
 import { CONVEYANCE_CLAIMS } from '@/fixtures/conveyance';
+import { runtimeInvalidation } from '@/services/runtime/invalidation';
 
 interface DayReason {
   overtimeReason?: string;
@@ -80,6 +81,7 @@ const listeners = new Set<() => void>();
 
 function notify(): void {
   version += 1;
+  runtimeInvalidation.notify();
   for (const listener of listeners) listener();
 }
 

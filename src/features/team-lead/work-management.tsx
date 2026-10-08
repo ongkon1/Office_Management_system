@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import * as React from 'react';
 import { TaskSourceMinute } from '@/features/meeting-minutes/task-source-minute';
@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Plus, Users } from 'lucide-react';
 import type { ProjectFormInput, TaskFormInput, TeamProjectView, TeamTaskView } from '@/contracts/team-lead';
 import type { Priority } from '@/contracts/domain';
-import { mockTeamLeadService } from '@/services/mock/team-lead';
+import { teamLeadService as mockTeamLeadService } from '@/services/runtime/team-lead';
 import { TaskReviewQueue } from './task-review-queue';
 import {
   TaskDetailTransitions,

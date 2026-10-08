@@ -44,7 +44,11 @@ export class TaskWorkApplication {
         if (task.is_government && !hasPermission(actor, 'organization.government.view')) return { read: false, lead: false, own: false, activeOwn: false };
         const [members] = await db.execute<RowDataPacket[]>('SELECT employee_id FROM task_members WHERE task_id=?', [task.id]);
         const own = actor.employeeId !== null && (actor.employeeId === task.assignee_employee_id || members.some(r => r.employee_id === actor.employeeId));
-        const [leads] = await db.execute<RowDataPacket[]>('SELECT id FROM employee_division_assignments WHERE employee_id=? AND division_id=? AND lead_employee_id=? AND is_active=TRUE AND effective_from<=? AND (effective_to IS NULL OR effective_to>=?)', [task.assignee_employee_id, task.division_id, actor.employeeId, date, date]);
+        const [leads] = await db.execute<RowDataPacket[]>(`SELECT a.id FROM employee_division_assignments a
+         LEFT JOIN departments dept ON dept.id=a.department_id AND dept.is_active=TRUE
+         LEFT JOIN department_lead_assignments dla ON dla.department_id=dept.id
+           AND dla.effective_from<=? AND (dla.effective_to IS NULL OR dla.effective_to>=?)
+         WHERE a.employee_id=? AND a.division_id=? AND COALESCE(dla.lead_employee_id,a.lead_employee_id)=? AND a.is_active=TRUE AND a.effective_from<=? AND (a.effective_to IS NULL OR a.effective_to>=?)`, [date, date, task.assignee_employee_id, task.division_id, actor.employeeId, date, date]);
         const [placements] = await db.execute<RowDataPacket[]>('SELECT id FROM employee_division_assignments WHERE employee_id=? AND division_id=? AND is_active=TRUE AND effective_from<=? AND (effective_to IS NULL OR effective_to>=?)', [actor.employeeId, task.division_id, date, date]);
         const activeOwn = own && placements.length > 0;
         const lead = actor.roles.includes('team_lead') && (leads.length > 0 || activeOwn);
@@ -52,8 +56,12 @@ export class TaskWorkApplication {
         return { read, lead, own, activeOwn };
     }
     private async notify(db: PoolConnection, task: TaskRow, date: string, type: string, eventKey: string) {
-        const [leads] = await db.execute<RowDataPacket[]>('SELECT lead_employee_id FROM employee_division_assignments WHERE employee_id=? AND division_id=? AND is_active=TRUE AND effective_from<=? AND (effective_to IS NULL OR effective_to>=?)', [task.assignee_employee_id, task.division_id, date, date]);
-        await new NotificationService(db).send({ employeeIds: [task.assignee_employee_id, ...leads.map(r => String(r.lead_employee_id))], type, resourceType: 'task', resourceId: task.id, eventKey });
+        const [leads] = await db.execute<RowDataPacket[]>(`SELECT COALESCE(dla.lead_employee_id,a.lead_employee_id) AS lead_employee_id FROM employee_division_assignments a
+         LEFT JOIN departments dept ON dept.id=a.department_id AND dept.is_active=TRUE
+         LEFT JOIN department_lead_assignments dla ON dla.department_id=dept.id
+           AND dla.effective_from<=? AND (dla.effective_to IS NULL OR dla.effective_to>=?)
+         WHERE a.employee_id=? AND a.division_id=? AND a.is_active=TRUE AND a.effective_from<=? AND (a.effective_to IS NULL OR a.effective_to>=?)`, [date, date, task.assignee_employee_id, task.division_id, date, date]);
+        await new NotificationService(db).send({ employeeIds: [task.assignee_employee_id, ...leads.map(r => String(r.lead_employee_id)).filter(Boolean)], type, resourceType: 'task', resourceId: task.id, eventKey });
     }
     async transition(input: TaskTransitionInput): Promise<Result<TaskStatusTransition>> {
         const parsed = transitionInputSchema.safeParse(input);
@@ -95,7 +103,13 @@ export class TaskWorkApplication {
             await time.lockPeriods(); const task = await this.task(db, input.taskId, true); if (!task) return missing();
             const scope = await this.scope(db, actor, task, date); if (!scope.read) return missing();
             if (actor.roles.includes('management') || !(scope.lead || actor.roles.includes('super_admin'))) return denied();
-            const [placements] = await db.execute<RowDataPacket[]>("SELECT a.id FROM employee_division_assignments a JOIN employees e ON e.id=a.employee_id WHERE a.employee_id=? AND a.division_id=? AND e.status='active' AND a.is_active=TRUE AND a.effective_from<=? AND (a.effective_to IS NULL OR a.effective_to>=?) AND (? OR a.lead_employee_id=? OR a.employee_id=?)", [input.assigneeEmployeeId, task.division_id, date, date, actor.roles.includes('super_admin'), actor.employeeId, actor.employeeId]);
+            // `OH-BE-0302`: the assignee must be placed in the division and the
+            // actor must be them, a Super Administrator, or the lead effective
+            // for that placement — department appointment first.
+            const [placements] = await db.execute<RowDataPacket[]>(`SELECT a.id FROM employee_division_assignments a JOIN employees e ON e.id=a.employee_id
+              LEFT JOIN departments dept ON dept.id=a.department_id AND dept.is_active=TRUE
+              LEFT JOIN department_lead_assignments dla ON dla.department_id=dept.id AND dla.effective_from<=? AND (dla.effective_to IS NULL OR dla.effective_to>=?)
+              WHERE a.employee_id=? AND a.division_id=? AND e.status='active' AND a.is_active=TRUE AND a.effective_from<=? AND (a.effective_to IS NULL OR a.effective_to>=?) AND (? OR COALESCE(dla.lead_employee_id,a.lead_employee_id)=? OR a.employee_id=?)`, [date, date, input.assigneeEmployeeId, task.division_id, date, date, actor.roles.includes('super_admin'), actor.employeeId, actor.employeeId]);
             if (!placements.length) return missing();
             const replay = await time.replay(actor.userId, 'task.assign', input.idempotencyKey);
             if (replay) return replay.hash === hash(parsed.data) ? replay.result as Result<{ taskId: string; version: number }> : conflict();

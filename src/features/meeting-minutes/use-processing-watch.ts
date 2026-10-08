@@ -1,9 +1,9 @@
-'use client';
+﻿'use client';
 
 import * as React from 'react';
 import type { MinuteProcessingStatus } from '@/contracts/meeting-minutes';
 import { isProcessingInFlight } from '@/contracts/meeting-minutes';
-import { mockMeetingMinutesService } from '@/services/mock/meeting-minutes';
+import { meetingMinutesService as mockMeetingMinutesService } from '@/services/runtime/meeting-minutes';
 
 /** How often a queued or running minute is checked. */
 export const PROCESSING_POLL_MS = 2000;

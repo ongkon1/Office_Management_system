@@ -4,7 +4,7 @@ import { AuthenticationService, type AuthenticationStore } from './service';
 import { TwoFactorService } from './two-factor';
 
 function store(account: Awaited<ReturnType<AuthenticationStore['findAccount']>>): AuthenticationStore {
-  return { findAccount:vi.fn().mockResolvedValue(account),recordAttempt:vi.fn(),recordSecurityEvent:vi.fn(),registerFailure:vi.fn(),clearFailures:vi.fn(),createSession:vi.fn(),findSession:vi.fn().mockResolvedValue(null),touchSession:vi.fn(),revokeSession:vi.fn(),revokeAllSessions:vi.fn(),saveReset:vi.fn(),consumeReset:vi.fn().mockResolvedValue(true) };
+  return { findAccount:vi.fn().mockResolvedValue(account),findAccountByUserId:vi.fn().mockResolvedValue(account),recordAttempt:vi.fn(),recordSecurityEvent:vi.fn(),registerFailure:vi.fn(),clearFailures:vi.fn(),createSession:vi.fn(),findSession:vi.fn().mockResolvedValue(null),touchSession:vi.fn(),revokeSession:vi.fn(),revokeAllSessions:vi.fn(),saveReset:vi.fn(),consumeReset:vi.fn().mockResolvedValue(true),changePassword:vi.fn() };
 }
 describe('BE-0201..0206 and BE-0225 authentication behavior', () => {
   it.each(['super_admin','team_lead','employee','hr_manager','management'])('authenticates the seeded %s role account',async(role)=>{
@@ -31,7 +31,7 @@ describe('BE-0201..0206 and BE-0225 authentication behavior', () => {
   it('validates, expires, and rotates database sessions', async () => {
     const s=store(null); const now=new Date('2026-09-06T00:00:00Z'); const auth=new AuthenticationService(s,()=>now);
     vi.mocked(s.findSession).mockResolvedValue({id:'s1',userId:'u',expiresAt:new Date('2026-09-06T01:00:00Z'),revokedAt:null,lastSeenAt:now});
-    await expect(auth.validateSession('old')).resolves.toEqual({status:'success',data:{userId:'u',sessionId:'s1'}});
+    await expect(auth.validateSession('old')).resolves.toEqual({status:'success',data:{userId:'u',sessionId:'s1',expiresAt:'2026-09-06T01:00:00.000Z'}});
     expect(s.touchSession).toHaveBeenCalledWith('s1',now);
     const rotated=await auth.rotateSession('old','origin'); expect(rotated.status).toBe('success');
     expect(s.revokeSession).toHaveBeenCalledWith(secretHash('old'));
@@ -40,6 +40,15 @@ describe('BE-0201..0206 and BE-0225 authentication behavior', () => {
   it('uses a non-enumerating reset response and single-use store operation', async () => {
     const s=store(null); const auth=new AuthenticationService(s); expect(await auth.requestPasswordReset('nobody@test')).toEqual({status:'success',data:{message:'If the account exists, reset instructions will be sent.'}});
     expect((await auth.resetPassword('user@test','token','short')).status).toBe('validation_failure');
+  });
+  it('returns the approved blocked-account route only after a valid password', async () => {
+    const account={userId:'u',state:'inactive' as const,passwordHash:await hashPassword('correct-password'),failedCount:0,lockedUntil:null,twoFactorEnabled:false};
+    await expect(new AuthenticationService(store(account)).login('known@test','correct-password','ip')).resolves.toEqual(expect.objectContaining({status:'permission_denied',guidance:'/account-inactive'}));
+  });
+  it('changes a password, revokes old sessions in the store, and issues a replacement session', async () => {
+    const account={userId:'u',state:'active' as const,passwordHash:await hashPassword('correct-password'),failedCount:0,lockedUntil:null,twoFactorEnabled:false};
+    const s=store(account); const result=await new AuthenticationService(s).changePassword('u','correct-password','a-different-password','ip');
+    expect(result.status).toBe('success'); expect(s.changePassword).toHaveBeenCalledWith('u',expect.any(String)); expect(s.createSession).toHaveBeenCalled();
   });
   it('hashes recovery codes and consumes each through the store', async () => {
     const twoStore={saveEnrollment:vi.fn(),load:vi.fn(),consumeRecoveryCode:vi.fn().mockResolvedValue(true),disable:vi.fn()};

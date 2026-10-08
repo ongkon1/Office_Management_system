@@ -6,6 +6,7 @@ export type AccountState = 'active' | 'inactive' | 'locked';
 export interface AuthAccount { readonly userId: string; readonly state: AccountState; readonly passwordHash: string; readonly failedCount: number; readonly lockedUntil: Date | null; readonly twoFactorEnabled: boolean }
 export interface AuthenticationStore {
   findAccount(identifierNormalized: string): Promise<AuthAccount | null>;
+  findAccountByUserId(userId: string): Promise<AuthAccount | null>;
   recordAttempt(input: { userId: string | null; identifierHash: string; outcome: string; originHash: string; correlationId: string }): Promise<void>;
   recordSecurityEvent(input: { userId: string | null; eventType: string; identifierHash?: string | null; originHash?: string | null; correlationId: string }): Promise<void>;
   registerFailure(userId: string, lockedUntil: Date | null): Promise<void>;
@@ -17,6 +18,7 @@ export interface AuthenticationStore {
   revokeAllSessions(userId: string): Promise<void>;
   saveReset(input: { identifierHash: string; tokenHash: string; expiresAt: Date }): Promise<void>;
   consumeReset(identifierHash: string, tokenHash: string, passwordHash: string): Promise<boolean>;
+  changePassword(userId: string, passwordHash: string): Promise<void>;
 }
 
 const genericLoginFailure = { status: 'unauthenticated' as const, code: 'UNAUTHENTICATED' as const, message: 'Invalid sign-in details.', reason: 'no_session' as const };
@@ -35,14 +37,18 @@ export class AuthenticationService {
     if (limited?.status === 'error') return limited;
     const account = await this.store.findAccount(normalized);
     const valid = await verifyPassword(password, account?.passwordHash ?? await dummyPasswordHash);
-    if (!account || !valid || account.state !== 'active' || (account.lockedUntil && account.lockedUntil > this.now())) {
+    if (!account || !valid) {
       if (account?.state === 'active') await this.store.registerFailure(account.userId, account.failedCount + 1 >= 5 ? new Date(this.now().getTime() + 15 * 60_000) : null);
       await this.store.recordAttempt({ userId: account?.userId ?? null, identifierHash, outcome: 'failed', originHash, correlationId });
       return genericLoginFailure;
     }
+    if (account.state !== 'active' || (account.lockedUntil && account.lockedUntil > this.now())) {
+      await this.store.recordAttempt({ userId: account.userId, identifierHash, outcome: 'blocked', originHash, correlationId });
+      return { status: 'permission_denied' as const, code: 'FORBIDDEN' as const, message: account.state === 'inactive' ? 'This account is no longer active.' : 'This account is locked.', guidance: account.state === 'inactive' ? '/account-inactive' : '/account-locked' };
+    }
     await this.store.clearFailures(account.userId);
     await this.store.recordAttempt({ userId: account.userId, identifierHash, outcome: 'success', originHash, correlationId });
-    if (account.twoFactorEnabled) return { status: 'unauthenticated' as const, code: 'UNAUTHENTICATED' as const, message: 'Two-factor verification required.', reason: 'two_factor_required' as const };
+    if (account.twoFactorEnabled) return { status: 'unauthenticated' as const, code: 'UNAUTHENTICATED' as const, message: 'Two-factor verification required.', reason: 'two_factor_required' as const, pendingUserId: account.userId };
     return this.issueSession(account.userId, originHash, null);
   }
 
@@ -50,7 +56,7 @@ export class AuthenticationService {
     const token = randomOpaqueToken();
     await this.store.createSession({ id: randomUUID(), userId, tokenHash: secretHash(token), expiresAt: new Date(this.now().getTime() + 8 * 60 * 60_000), originHash, rotatedFrom });
     await this.store.recordSecurityEvent({userId,eventType:rotatedFrom?'session_rotated':'session_created',originHash,correlationId:randomUUID()});
-    return { status: 'success' as const, data: { token, expiresAt: new Date(this.now().getTime() + 8 * 60 * 60_000).toISOString() } };
+    return { status: 'success' as const, data: { token, userId, expiresAt: new Date(this.now().getTime() + 8 * 60 * 60_000).toISOString() } };
   }
 
   async validateSession(token: string) {
@@ -62,7 +68,7 @@ export class AuthenticationService {
       return { status: 'unauthenticated' as const, reason: 'session_expired' as const };
     }
     await this.store.touchSession(session.id, this.now());
-    return { status: 'success' as const, data: { userId: session.userId, sessionId: session.id } };
+    return { status: 'success' as const, data: { userId: session.userId, sessionId: session.id, expiresAt: session.expiresAt.toISOString() } };
   }
 
   async rotateSession(token: string, origin: string) {
@@ -87,5 +93,17 @@ export class AuthenticationService {
     if (password.length < 12) return { status: 'validation_failure' as const, code: 'VALIDATION_FAILED' as const, message: 'Password does not meet policy.', fieldErrors: [{ field: 'password', code: 'PASSWORD_TOO_SHORT', message: 'Use at least 12 characters.', guidance: 'Choose a longer unique password.' }] };
     const consumed = await this.store.consumeReset(secretHash(identifier.trim().toLowerCase()), secretHash(token), await hashPassword(password));
     return consumed ? { status: 'success' as const, data: undefined } : genericLoginFailure;
+  }
+
+  async changePassword(userId: string, currentPassword: string, newPassword: string, origin = 'unknown') {
+    const account = await this.store.findAccountByUserId(userId);
+    if (!account || account.state !== 'active' || !(await verifyPassword(currentPassword, account.passwordHash))) {
+      return { status: 'validation_failure' as const, code: 'VALIDATION_FAILED' as const, message: 'Password was not changed.', fieldErrors: [{ field: 'currentPassword', code: 'INVALID_CURRENT_PASSWORD', message: 'The current password is not correct.', guidance: 'Enter the password you currently use to sign in.' }], focusField: 'currentPassword' as const };
+    }
+    if (newPassword.length < 12) return { status: 'validation_failure' as const, code: 'VALIDATION_FAILED' as const, message: 'Password does not meet policy.', fieldErrors: [{ field: 'newPassword', code: 'PASSWORD_TOO_SHORT', message: 'Use at least 12 characters.', guidance: 'Choose a longer unique password.' }], focusField: 'newPassword' as const };
+    if (await verifyPassword(newPassword, account.passwordHash)) return { status: 'validation_failure' as const, code: 'VALIDATION_FAILED' as const, message: 'Password was not changed.', fieldErrors: [{ field: 'newPassword', code: 'PASSWORD_UNCHANGED', message: 'The new password matches the current password.', guidance: 'Choose a different password.' }], focusField: 'newPassword' as const };
+    await this.store.changePassword(userId, await hashPassword(newPassword));
+    await this.store.recordSecurityEvent({ userId, eventType: 'password_changed', originHash: secretHash(origin), correlationId: randomUUID() });
+    return this.issueSession(userId, secretHash(origin), null);
   }
 }

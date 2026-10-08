@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import type { Result } from '@/contracts/results';
-import { mockStore } from '@/services/mock/store';
+import { runtimeInvalidation } from '@/services/runtime/invalidation';
 
 /**
  * Runs a service call and exposes the loading phase a `Result` cannot carry.
@@ -101,7 +101,11 @@ export function useAsync<T>(
   return { state, previous, reload };
 }
 
-/** Re-renders when the mock store mutates. */
+/** Re-renders when the active service composition reports a mutation. */
 export function useStoreVersion(): number {
-  return React.useSyncExternalStore(mockStore.subscribe, mockStore.getVersion, () => 0);
+  return React.useSyncExternalStore(
+    runtimeInvalidation.subscribe,
+    runtimeInvalidation.getVersion,
+    () => 0,
+  );
 }

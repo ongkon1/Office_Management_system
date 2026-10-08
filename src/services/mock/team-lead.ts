@@ -38,7 +38,20 @@ import { actualProjectMinutes, actualTaskMinutes } from './organization';
 import { buildDayView, summaryFor } from './timesheet';
 import { mockStore } from './store';
 import { toReviewStateView } from './task-review';
-import { departmentLeadEmployeeIds, departmentLeadScopes } from './organization-hierarchy';
+import type { DepartmentLeadScope } from '@/contracts/domain';
+import type { TeamLeadScopeView } from '@/contracts/view-models';
+import type { TeamDepartmentRef } from '@/contracts/team-lead';
+import {
+  assignmentIsEffective,
+  departmentLeadEmployeeIds,
+  departmentLeadScopes,
+  departmentMembers,
+} from './organization-hierarchy';
+import {
+  departmentById,
+  departmentLeadAssignments,
+  type DepartmentRecord,
+} from './department-store';
 import { notifyEmployee } from './notification-store';
 
 const WAIT_MS = 120;
@@ -92,6 +105,100 @@ function scopedEmployees(userId: string): readonly string[] {
   return leadScopes.length > 0
     ? departmentLeadEmployeeIds(viewer.employeeId)
     : viewer.scopedEmployeeIds;
+}
+
+/**
+ * The departments the viewer leads today, with the division each belongs to and
+ * how many members it reaches.
+ *
+ * Restricted divisions are included only for a viewer who may see them, so a
+ * department scope can never become a way around the government rule
+ * (`OH-FE-0311`).
+ */
+function leadScopeView(userId: string): TeamLeadScopeView {
+  const viewer = account(userId);
+  if (!viewer) {
+    return { departments: [], divisionCount: 0, fromAppointmentOnly: false, scheduled: [] };
+  }
+  const visible = (divisionId: string) => inDivisionScope(userId, divisionId);
+  const departments = departmentLeadScopes(viewer.employeeId)
+    .map((scope) => ({ scope, record: departmentById(scope.departmentId) }))
+    .filter((entry): entry is { scope: DepartmentLeadScope; record: DepartmentRecord } =>
+      entry.record !== undefined && visible(entry.record.divisionId))
+    .map(({ scope, record }) => ({
+      id: record.id,
+      name: record.name,
+      divisionId: record.divisionId,
+      divisionName: divisionRef(record.divisionId).name,
+      isRestricted: divisionRef(record.divisionId).isRestricted,
+      effectiveFromLabel: formatDate(scope.effectiveFrom),
+      memberCount: departmentMembers(record.id, DEMO_TODAY)
+        .filter((assignment) => assignment.employeeId !== viewer.employeeId).length,
+    }))
+    .sort((left, right) =>
+      left.divisionName.localeCompare(right.divisionName) || left.name.localeCompare(right.name));
+
+  /*
+   * `OH-FE-0312`. An appointment that starts later grants nothing yet, which is
+   * why the screens must say so rather than show an unexplained empty team.
+   */
+  const scheduled = departments.length === 0
+    ? departmentLeadAssignments()
+      .filter((assignment) =>
+        assignment.leadEmployeeId === viewer.employeeId && assignment.effectiveFrom > DEMO_TODAY)
+      .map((assignment) => ({ assignment, record: departmentById(assignment.departmentId) }))
+      .filter((entry) => entry.record !== undefined && visible(entry.record.divisionId))
+      .map(({ assignment, record }) => ({
+        name: record!.name,
+        divisionName: divisionRef(record!.divisionId).name,
+        effectiveFromLabel: formatDate(assignment.effectiveFrom),
+      }))
+    : [];
+
+  return {
+    departments,
+    divisionCount: new Set(departments.map((department) => department.divisionId)).size,
+    fromAppointmentOnly: viewer.primaryRole !== 'team_lead' && departments.length > 0,
+    scheduled,
+  };
+}
+
+/** The departments a member is reached through — the viewer's, not all of theirs. */
+function memberDepartments(userId: string, employeeId: string): readonly TeamDepartmentRef[] {
+  const scope = new Set(leadScopeView(userId).departments.map((department) => department.id));
+  return mockStore
+    .assignments()
+    .filter((assignment) =>
+      assignment.employeeId === employeeId &&
+      assignmentIsEffective(assignment, DEMO_TODAY) &&
+      scope.has(assignment.departmentId) &&
+      inDivisionScope(userId, assignment.divisionId))
+    .map((assignment) => {
+      const record = departmentById(assignment.departmentId);
+      return {
+        id: assignment.departmentId,
+        name: record?.name ?? assignment.departmentId,
+        division: divisionRef(assignment.divisionId),
+      };
+    });
+}
+
+/**
+ * `OH-FE-0310`. Project authority stays separate from department leadership.
+ *
+ * A department appointment grants Team Lead capability **over the people placed
+ * in that department** — never over a project. Project mutation therefore needs
+ * the project's own manager, or a role that carries project management
+ * (Team Lead, HR, Super Administrator); a division scope that exists only
+ * because of an appointment is not enough. Reading projects in a division the
+ * viewer works in is unchanged.
+ */
+function canManageProject(userId: string, divisionId: string, projectId?: string): boolean {
+  const viewer = account(userId);
+  if (!viewer || !inDivisionScope(userId, divisionId)) return false;
+  const project = projectId ? projects.find((item) => item.id === projectId) : undefined;
+  if (project && project.managerEmployeeId === viewer.employeeId) return true;
+  return ['team_lead', 'hr_manager', 'super_admin'].includes(viewer.primaryRole);
 }
 
 function hasLeadScope(userId: string): boolean {
@@ -350,6 +457,7 @@ export const mockTeamLeadService: TeamLeadService = {
       return {
         employee: row.employee,
         divisions,
+        departments: memberDepartments(userId, employeeId),
         attendanceLabel: ATTENDANCE_LABEL[summaryFor(employeeId, DEMO_TODAY).attendance],
         active: row.active,
         status: row.status,
@@ -378,6 +486,7 @@ export const mockTeamLeadService: TeamLeadService = {
     const tasks = mockStore.tasks().filter((task) => inDivisionScope(userId, task.divisionId));
     const assigned = membersResult.data.length || 1;
     return success({
+      leadScope: leadScopeView(userId),
       assignedHeadcount: membersResult.data.length,
       workingToday: todayRows.filter((row) => row.active.minutes > 0).length,
       attendanceBreakdown: ['Office', 'WFH', 'Field Duty', 'Official Travel', 'Approved leave'].map((label) => ({
@@ -548,7 +657,7 @@ export const mockTeamLeadService: TeamLeadService = {
 
   async saveProject(userId, input, id) {
     await delay();
-    if (!inDivisionScope(userId, input.divisionId)) return denied();
+    if (!canManageProject(userId, input.divisionId, id)) return denied();
     if (!input.name.trim() || !input.code.trim()) return {
       status: 'validation_failure', code: 'VALIDATION_FAILED', message: 'Complete the required project fields.', focusField: !input.name.trim() ? 'name' : 'code',
       fieldErrors: [{ field: !input.name.trim() ? 'name' : 'code', code: 'REQUIRED', message: 'This field is required.', guidance: 'Enter a value before saving.' }],

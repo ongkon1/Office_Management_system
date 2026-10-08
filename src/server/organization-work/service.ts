@@ -74,10 +74,19 @@ export class OrganizationWorkService {
     if (row.primary && existing.some((item)=>item.id!==row.id && item.primary && item.isActive && rangesOverlap(item,row))) return conflict('The employee already has a primary division for this period.','End the current primary assignment or make this assignment secondary.');
     const concurrent = existing.filter((item)=>item.id!==row.id && item.isActive && rangesOverlap(item,row)).reduce((sum,item)=>sum+item.allocationPercent,0)+row.allocationPercent;
     const before = await this.repository.getAssignment(row.id);
-    const saved = await this.repository.saveAssignment(row,expectedVersion);
+    /*
+     * `OH-BE-0111`. `lead_employee_id` is legacy and frozen: department
+     * leadership is an effective-dated appointment, not a field on an
+     * assignment. An update therefore keeps whatever is stored and ignores the
+     * submitted value, which is also why no employee save can supply an
+     * authoritative Team Lead. Migration 0013's trigger is the backstop for
+     * writers that do not come through here.
+     */
+    const row_ = before ? { ...row, leadEmployeeId: before.leadEmployeeId } : row;
+    const saved = await this.repository.saveAssignment(row_,expectedVersion);
     if (!saved) return conflict('The assignment changed before this update was saved.','Reload and review the latest version.');
-    await this.effects.audit({actorUserId:actor.userId,action:before?'assignment.update':'assignment.create',resourceType:'employee_division_assignment',resourceId:row.id,before,after:row});
-    return success(row, concurrent===100 ? undefined : [{code:'ALLOCATION_NOT_100',field:'allocationPercent',message:`Concurrent allocation totals ${concurrent} percent; review the plan.`}]);
+    await this.effects.audit({actorUserId:actor.userId,action:before?'assignment.update':'assignment.create',resourceType:'employee_division_assignment',resourceId:row.id,before,after:row_});
+    return success(row_, concurrent===100 ? undefined : [{code:'ALLOCATION_NOT_100',field:'allocationPercent',message:`Concurrent allocation totals ${concurrent} percent; review the plan.`}]);
   }
 
   async saveProject(actor: ActorPolicyContext, row: ProjectRow, expectedVersion?: number): Promise<Result<ProjectRow & {actualMinutes:number}>> {

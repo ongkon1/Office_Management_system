@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import * as React from 'react';
 import Link from 'next/link';
@@ -10,7 +10,7 @@ import {
   UserPlus,
   Users,
 } from 'lucide-react';
-import { mockHrService } from '@/services/mock/hr';
+import { hrService as mockHrService } from '@/services/runtime/hr';
 import { useAsync } from '@/lib/use-async';
 import { useSession } from '@/features/access/session-provider';
 import { DashboardGrid, PageContainer, PageHeader } from '@/components/layout/page';

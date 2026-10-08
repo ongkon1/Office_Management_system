@@ -10,4 +10,5 @@ describe('reporting HTTP boundary', () => {
         expect(factory).not.toHaveBeenCalled();
     } });
     it('returns private safe errors for dependency failures', async () => { const r = await handleReportingMutation(new Request(origin, { method: 'POST', headers: { origin }, body: JSON.stringify({ operation: 'report.run', reportKey: 'employee-hours', query: {} }) }), () => { throw new Error('database password secret'); }, origin); expect(await r.text()).not.toContain('password'); expect(r.headers.get('cache-control')).toContain('no-store'); });
+    it('forwards only allowlisted browser view methods to the authenticated service',async()=>{const listPeriods=vi.fn().mockResolvedValue({status:'success',data:[]});const response=await handleReportingMutation(new Request(origin,{method:'POST',headers:{origin},body:JSON.stringify({operation:'client.finance',method:'listPeriods',userId:'user-1',args:[]})}),()=>({financeViews:{listPeriods}} as never),origin);expect(response.status).toBe(200);expect(listPeriods).toHaveBeenCalledWith('user-1');});
 });

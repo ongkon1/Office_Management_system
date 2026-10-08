@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { Eye, EyeOff, KeyRound } from 'lucide-react';
-import { mockAuthService } from '@/services/mock/auth';
+import { serverAuthService } from '@/services/server/auth';
 import { useSession } from '@/features/access/session-provider';
 import { useToast } from '@/components/feedback/toast';
 import { Card, CardHeader } from '@/components/feedback/card';
@@ -49,7 +49,7 @@ export function PasswordSettings() {
     if (localErrors.length > 0 || !user) return;
 
     setSaving(true);
-    const result = await mockAuthService.changePassword({
+    const result = await serverAuthService.changePassword({
       userId: user.userId,
       currentPassword,
       newPassword,

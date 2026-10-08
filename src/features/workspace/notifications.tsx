@@ -4,7 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { BellOff, CheckCheck, Circle } from 'lucide-react';
 import type { NotificationItemView } from '@/contracts/workspace';
-import { mockWorkspaceService } from '@/services/mock/workspace';
+import { workspaceService as mockWorkspaceService } from '@/services/runtime/workspace';
 import { useAsync } from '@/lib/use-async';
 import { useSession } from '@/features/access/session-provider';
 import { useToast } from '@/components/feedback/toast';

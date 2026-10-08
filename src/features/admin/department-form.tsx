@@ -1,11 +1,11 @@
-'use client';
+﻿'use client';
 
 import * as React from 'react';
 import type {
   DepartmentCatalogueRowView,
   DepartmentInput,
 } from '@/contracts/organization-hierarchy';
-import { mockDepartmentAdminService } from '@/services/mock/department-admin';
+import { departmentAdminService as mockDepartmentAdminService } from '@/services/runtime/department-admin';
 import { Dialog } from '@/components/feedback/overlay';
 import { Alert, Callout } from '@/components/feedback/alert';
 import { Field, FormErrorSummary } from '@/components/forms/field';

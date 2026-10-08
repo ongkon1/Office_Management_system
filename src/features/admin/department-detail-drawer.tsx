@@ -1,9 +1,9 @@
-'use client';
+﻿'use client';
 
 import * as React from 'react';
 import { CalendarClock, Pencil, Trash2, UserCog } from 'lucide-react';
 import type { DepartmentCatalogueRowView } from '@/contracts/organization-hierarchy';
-import { mockDepartmentAdminService } from '@/services/mock/department-admin';
+import { departmentAdminService as mockDepartmentAdminService } from '@/services/runtime/department-admin';
 import { useAsync } from '@/lib/use-async';
 import { formatDate } from '@/lib/format';
 import { Drawer } from '@/components/feedback/overlay';

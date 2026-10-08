@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import * as React from 'react';
 import Link from 'next/link';
@@ -7,7 +7,7 @@ import { Plus } from 'lucide-react';
 import type { MeetingMinuteListView, MeetingMinuteSummaryView } from '@/contracts/meeting-minutes';
 import { MINUTE_PROCESSING_STATUSES } from '@/contracts/meeting-minutes';
 import { success } from '@/contracts/results';
-import { mockMeetingMinutesService } from '@/services/mock/meeting-minutes';
+import { meetingMinutesService as mockMeetingMinutesService } from '@/services/runtime/meeting-minutes';
 import { formatDate, formatDateRange } from '@/lib/format';
 import { describeMinuteProcessingStatus } from '@/lib/status';
 import { useAsync } from '@/lib/use-async';

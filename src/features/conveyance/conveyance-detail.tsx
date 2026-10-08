@@ -1,9 +1,9 @@
-'use client';
+﻿'use client';
 
 import * as React from 'react';
 import { Check, FileText, Undo2, X } from 'lucide-react';
 import type { ConveyanceDetailView } from '@/contracts/conveyance';
-import { mockConveyanceService } from '@/services/mock/conveyance';
+import { conveyanceService as mockConveyanceService } from '@/services/runtime/conveyance';
 import { useAsync } from '@/lib/use-async';
 import { useSession } from '@/features/access/session-provider';
 import { useToast } from '@/components/feedback/toast';

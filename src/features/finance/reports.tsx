@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { FileSpreadsheet, RotateCcw } from 'lucide-react';
-import { mockFinanceService } from '@/services/mock/finance';
+import { financeService as mockFinanceService } from '@/services/runtime/finance';
 import { useAsync } from '@/lib/use-async';
 import { useSession } from '@/features/access/session-provider';
 import { useToast } from '@/components/feedback/toast';

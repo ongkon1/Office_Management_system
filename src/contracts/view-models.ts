@@ -380,7 +380,35 @@ export interface LeaveBalanceView {
 /* Team Lead dashboard (`REQ-DASH-004`, `REQ-DASH-005`)                      */
 /* ------------------------------------------------------------------------- */
 
+/**
+ * `OH-FE-0309`. What the viewer's leadership actually covers, so a person
+ * leading several departments can be told so and can narrow the view, and a
+ * person whose appointment has not started or has ended is told that instead of
+ * seeing an unexplained empty screen (`OH-FE-0312`).
+ */
+export interface TeamLeadScopeView {
+  readonly departments: readonly {
+    readonly id: string;
+    readonly name: string;
+    readonly divisionId: string;
+    readonly divisionName: string;
+    readonly isRestricted: boolean;
+    readonly effectiveFromLabel: string;
+    readonly memberCount: number;
+  }[];
+  readonly divisionCount: number;
+  /** True when the viewer holds Team Lead reach only through appointments. */
+  readonly fromAppointmentOnly: boolean;
+  /** An appointment that starts later, when the viewer has none in force. */
+  readonly scheduled: readonly {
+    readonly name: string;
+    readonly divisionName: string;
+    readonly effectiveFromLabel: string;
+  }[];
+}
+
 export interface TeamLeadDashboardView {
+  readonly leadScope: TeamLeadScopeView;
   readonly assignedHeadcount: number;
   readonly workingToday: number;
   readonly attendanceBreakdown: readonly AttendanceCountView[];

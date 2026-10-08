@@ -22,4 +22,5 @@ describe('HR HTTP boundary', () => {
         expect(await r.text()).not.toContain('private connection details');
         expect(r.headers.get('cache-control')).toBe('private, no-store');
     });
+    it('forwards an allowlisted browser view through the server identity-aware service',async()=>{const listHolidays=vi.fn().mockResolvedValue({status:'success',data:[]});const response=await handleHrMutation(new Request('http://localhost:3000/api/hr',{method:'POST',headers:{origin:'http://localhost:3000'},body:JSON.stringify({operation:'client.hr',method:'listHolidays',args:['user-1']})}),()=>({hr:{listHolidays}} as never),'http://localhost:3000');expect(response.status).toBe(200);expect(listHolidays).toHaveBeenCalledWith('user-1');});
 });

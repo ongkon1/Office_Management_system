@@ -1,19 +1,19 @@
-'use client';
+﻿'use client';
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { AlertTriangle, ArrowRight, MapPin, MessageSquareText, Users } from 'lucide-react';
 import type { TeamTimesheetRowView } from '@/contracts/view-models';
 import type { TeamMemberView } from '@/contracts/team-lead';
-import { mockTeamLeadService } from '@/services/mock/team-lead';
-import { mockRequisitionService } from '@/services/mock/requisition';
-import { mockConveyanceService } from '@/services/mock/conveyance';
-import { mockTaskReviewService } from '@/services/mock/task-review';
+import { teamLeadService as mockTeamLeadService } from '@/services/runtime/team-lead';
+import { requisitionService as mockRequisitionService } from '@/services/runtime/requisition';
+import { conveyanceService as mockConveyanceService } from '@/services/runtime/conveyance';
+import { taskReviewService as mockTaskReviewService } from '@/services/runtime/task-review';
 import { useAsync } from '@/lib/use-async';
 import { useSession } from '@/features/access/session-provider';
 import { PageContainer, PageHeader, DashboardGrid, SectionHeader } from '@/components/layout/page';
 import { Card, CardHeader, MetricCard } from '@/components/feedback/card';
-import { Alert, EmptyState } from '@/components/feedback/alert';
+import { Alert, Callout, EmptyState } from '@/components/feedback/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Button, LinkButton } from '@/components/ui/button';
@@ -21,6 +21,7 @@ import { Duration } from '@/components/ui/misc';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import { ProgressBar } from '@/components/ui/progress';
 import { DataTable, type DataTableColumn } from '@/components/data/data-table';
+import type { TeamLeadScopeView } from '@/contracts/view-models';
 import { FilterBar, MultiSelectFilter, type AppliedFilter } from '@/components/data/filters';
 import { Field } from '@/components/forms/field';
 import { Checkbox, SearchInput, Select, Textarea } from '@/components/forms/inputs';
@@ -43,6 +44,52 @@ function LoadingPage({ label }: { label: string }) {
 
 function ScopeBadge() {
   return <Badge tone="accent" icon={<Users aria-hidden className="size-3.5" />}>Assigned team scope</Badge>;
+}
+
+/**
+ * `OH-FE-0309`, `OH-FE-0312`. The viewer's own scope, stated in words.
+ *
+ * Three cases a Team Lead screen has to distinguish, and which an empty table
+ * alone cannot: leading several departments (so the selector means something),
+ * leading one, and holding only an appointment that starts later — which grants
+ * nothing today and needs saying, or the screen reads as a defect.
+ */
+function LeadScopePanel({ scope }: { scope: TeamLeadScopeView }) {
+  if (scope.departments.length === 0) {
+    if (scope.scheduled.length === 0) return null;
+    const next = scope.scheduled[0]!;
+    return (
+      <Alert className="mt-5" tone="info" title="Your appointment has not started yet">
+        You lead {next.name} in {next.divisionName} from {next.effectiveFromLabel}. Until then this
+        screen shows no team, and your own work is unaffected.
+      </Alert>
+    );
+  }
+
+  if (scope.departments.length === 1) {
+    const only = scope.departments[0]!;
+    return (
+      <p className="mt-5 text-body-sm text-ink-muted">
+        You lead {only.name} in {only.divisionName}, effective from {only.effectiveFromLabel}.
+        {scope.fromAppointmentOnly
+          ? ' Your Team Lead access comes from that appointment and ends with it.'
+          : ''}
+      </p>
+    );
+  }
+
+  return (
+    <Callout className="mt-5" tone="info">
+      You lead {scope.departments.length} departments across {scope.divisionCount}{' '}
+      {scope.divisionCount === 1 ? 'division' : 'divisions'}: {scope.departments
+        .map((department) => `${department.name} (${department.divisionName})`)
+        .join(', ')}
+      . Use the department filter to work on one at a time.
+      {scope.fromAppointmentOnly
+        ? ' Your Team Lead access comes from those appointments and ends with them.'
+        : ''}
+    </Callout>
+  );
 }
 
 export function TeamLeadDashboard() {
@@ -114,6 +161,7 @@ export function TeamLeadDashboard() {
   return (
     <PageContainer>
       <PageHeader title="Team Lead dashboard" description="Today’s team status, exceptions, delivery, requests, and capacity." meta={<ScopeBadge />} />
+      <LeadScopePanel scope={view.leadScope} />
       <DashboardGrid className="mt-5">
         {metricTiles.map((tile) => <MetricCard key={tile.key} tile={tile} />)}
       </DashboardGrid>
@@ -245,8 +293,20 @@ export function TeamMembers() {
   const { user } = useSession();
   const [query, setQuery] = React.useState('');
   const [divisionId, setDivisionId] = React.useState('all');
+  const [departmentId, setDepartmentId] = React.useState('all');
   const [status, setStatus] = React.useState('all');
   const { state } = useAsync(() => mockTeamLeadService.listMembers(user?.userId ?? ''), [user?.userId]);
+  /*
+   * `OH-FE-0309`. The scope comes from the dashboard read rather than being
+   * derived here: the service decides which departments the viewer leads, and a
+   * screen that recomputed it could disagree with the rows it is filtering.
+   */
+  const scopeRequest = useAsync(
+    () => mockTeamLeadService.getDashboard(user?.userId ?? ''),
+    [user?.userId],
+  );
+  const scope: TeamLeadScopeView | null =
+    scopeRequest.state.status === 'success' ? scopeRequest.state.data.leadScope : null;
   if (state.status === 'loading') return <LoadingPage label="assigned employees" />;
   if (state.status !== 'success') return <PageContainer><EmptyState variant="error" title="Team unavailable" /></PageContainer>;
 
@@ -260,6 +320,18 @@ export function TeamMembers() {
   const statusOptions = [
     ...new Map(members.map((member) => [member.status.status, member.status.label])).entries(),
   ].sort((a, b) => a[1].localeCompare(b[1]));
+  /* `OH-FE-0308`: only the departments the viewer is reaching these members
+     through, which the service already intersected with their appointments. */
+  const departmentOptions = [
+    ...new Map(
+      members.flatMap((member) =>
+        member.departments.map((department) => [
+          department.id,
+          { id: department.id, label: `${department.name} · ${department.division.name}` },
+        ]),
+      ),
+    ).values(),
+  ].sort((a, b) => a.label.localeCompare(b.label));
   const rows = members
     .filter((member) => {
       const matchesQuery =
@@ -270,13 +342,16 @@ export function TeamMembers() {
       const matchesDivision =
         divisionId === 'all' || member.divisions.some((division) => division.id === divisionId);
       const matchesStatus = status === 'all' || member.status.status === status;
-      return matchesQuery && matchesDivision && matchesStatus;
+      const matchesDepartment =
+        departmentId === 'all' || member.departments.some((department) => department.id === departmentId);
+      return matchesQuery && matchesDivision && matchesStatus && matchesDepartment;
     })
     .sort((a, b) => a.employee.fullName.localeCompare(b.employee.fullName));
 
   const clearFilters = () => {
     setQuery('');
     setDivisionId('all');
+    setDepartmentId('all');
     setStatus('all');
   };
   const applied: AppliedFilter[] = [];
@@ -289,6 +364,14 @@ export function TeamMembers() {
       label: 'Division',
       value: divisionOptions.find((division) => division.id === divisionId)?.name ?? divisionId,
       onRemove: () => setDivisionId('all'),
+    });
+  }
+  if (departmentId !== 'all') {
+    applied.push({
+      key: 'department',
+      label: 'Department',
+      value: departmentOptions.find((department) => department.id === departmentId)?.label ?? departmentId,
+      onRemove: () => setDepartmentId('all'),
     });
   }
   if (status !== 'all') {
@@ -357,9 +440,10 @@ export function TeamMembers() {
     <PageContainer>
       <PageHeader
         title="My Team"
-        description="Employees explicitly assigned to your Team Lead scope."
+        description="Employees placed in the departments you lead."
         meta={<span className="flex flex-wrap gap-2"><ScopeBadge /><Badge tone="neutral">{rows.length} of {members.length}</Badge></span>}
       />
+      {scope && <LeadScopePanel scope={scope} />}
       <FilterBar
         className="mt-5"
         applied={applied}
@@ -384,6 +468,18 @@ export function TeamMembers() {
           ]}
           className="min-w-44"
         />
+        {departmentOptions.length > 1 && (
+          <Select
+            aria-label="Filter team by department"
+            value={departmentId}
+            onChange={(event) => setDepartmentId(event.target.value)}
+            options={[
+              { value: 'all', label: 'All departments' },
+              ...departmentOptions.map((department) => ({ value: department.id, label: department.label })),
+            ]}
+            className="min-w-56"
+          />
+        )}
         <Select
           aria-label="Filter team by today status"
           value={status}
@@ -406,7 +502,7 @@ export function TeamMembers() {
           title: applied.length > 0 ? 'No matching team members' : 'No team members assigned',
           description: applied.length > 0
             ? 'Clear or change the filters to see assigned employees.'
-            : 'Department assignments determine which employees appear here.',
+            : 'Employees appear here once they are placed in a department you lead. A department with no placements yet shows none.',
           action: applied.length > 0 ? { label: 'Clear filters', onClick: clearFilters } : undefined,
         }}
         renderMobileCard={(member) => (

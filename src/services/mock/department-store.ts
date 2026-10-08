@@ -57,6 +57,20 @@ function seedLeadAssignments(): DepartmentLeadAssignment[] {
     'lead-dept-pia-technical-history', 'dept-pia-technical', 'emp-1001',
     '2024-01-01', '2024-12-31',
   ));
+  /*
+   * `OH-FE-0312`. A scheduled hand-over, seeded the way `appointLead` would
+   * write it: the outgoing period is closed the day before the new one starts,
+   * so WesternCF Sales has a lead today and a different one from 1 December.
+   * It gives the demo a future appointment to show, and `emp-1004` an
+   * appointment that grants nothing yet.
+   */
+  const outgoing = records.findIndex((record) => record.id === 'lead-dept-wcf-sales-current');
+  if (outgoing >= 0) {
+    records[outgoing] = { ...records[outgoing]!, effectiveTo: '2026-11-30' };
+  }
+  records.push(leadSeed(
+    'lead-dept-wcf-sales-scheduled', 'dept-wcf-sales', 'emp-1004', '2026-12-01',
+  ));
   return records;
 }
 

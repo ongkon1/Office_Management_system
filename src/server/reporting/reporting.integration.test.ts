@@ -216,6 +216,64 @@ describe('Phase 6 database reports and protected exports', () => {
         actor=authorized;
     });
 
+
+    it('lets a department lead report on their own team, filters by department, and leaks nothing else (OH-BE-0303, OH-BE-0306, OH-BE-0307)', async () => {
+        /*
+         * The seeded hierarchy places EMP-001 in PowerInAI Technical, led by
+         * TL-001. The lead's stored role grants no company-wide reach, and an
+         * appointment deliberately never widens `divisionIds` — so this is the
+         * case that used to return nothing at all, because report visibility
+         * tested the division rather than the reach.
+         */
+        const technical = '22000000-0000-4000-8000-000000000001';
+        const previous = actor;
+        actor = {
+            userId: '30000000-0000-4000-8000-000000000002',
+            employeeId: '40000000-0000-4000-8000-000000000002',
+            roles: ['team_lead'],
+            permissions: new Set(['report.read']),
+            divisionIds: new Set<string>(),
+            employeeIds: new Set([eid, '40000000-0000-4000-8000-000000000002']),
+            projectIds: new Set<string>(),
+            teamIds: new Set<string>(),
+            departmentIds: new Set([technical]),
+            departmentLeadScopes: [
+                { departmentId: technical, divisionId: division, effectiveFrom: '2026-01-01', effectiveTo: null },
+            ],
+        };
+        try {
+            const mine = data(await reports.run('employee-hours', query, true));
+            expect(mine.totalItems).toBeGreaterThan(0);
+
+            /* The department filter narrows to the same placement. */
+            const filtered = data(await reports.run('employee-hours', { ...query, departmentIds: [technical] }, true));
+            expect(filtered.totalItems).toBe(mine.totalItems);
+
+            /* A department the lead does not hold yields nothing rather than an error. */
+            const elsewhere = data(await reports.run('employee-hours', { ...query, departmentIds: ['22000000-0000-4000-8000-000000000006'] }, true));
+            expect(elsewhere.totalItems).toBe(0);
+            expect(elsewhere.activeMinutes).toBe(0);
+
+            /* An employee outside the department is absent, not refused: the
+               count and the rows answer as though the record does not exist. */
+            const outside = data(await reports.run('employee-hours', { ...query, employeeIds: ['40000000-0000-4000-8000-000000000001'] }, true));
+            expect(outside.totalItems).toBe(0);
+
+            /* The offered filter options disclose only what the lead can see. */
+            const definition = data(
+                await new BackendReportingService(reports, exports).getReport(actor.userId, 'employee-hours'),
+            );
+            const departments = definition.filters.find((filter) => filter.kind === 'department');
+            expect(departments?.options.map((option) => option.value)).toEqual([technical]);
+            const employees = definition.filters.find((filter) => filter.kind === 'employee');
+            expect(employees?.options.map((option) => option.value).sort()).toEqual(
+                [eid, '40000000-0000-4000-8000-000000000002'].sort(),
+            );
+        } finally {
+            actor = previous;
+        }
+    });
+
     it('audits scheduler cleanup and terminates queued work for an inactive requester',async()=>{
         const job=data(await exports.request({reportKey:'employee-hours',format:'csv',query,idempotencyKey:randomUUID()}));
         await repo.execute("UPDATE users SET status='inactive' WHERE id=?",[authorized.userId]);

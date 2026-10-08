@@ -45,6 +45,7 @@ import { COST_RATES } from '@/fixtures/finance';
 import { EMPLOYEES } from '@/fixtures/hr';
 import { DIVISIONS, findAccountByUserId } from './accounts';
 import { mockStore } from './store';
+import { departmentRecords } from './department-store';
 import { summaryFor } from './timesheet';
 
 const LATENCY_MS = 180;
@@ -107,6 +108,42 @@ const PROJECT_OPTIONS = PROJECTS.map((project) => ({
   label: `${project.code} · ${project.name}`,
 }));
 
+/**
+ * `OH-BE-0306`. Departments that an employee is actually placed in, labelled
+ * with their division because a name is unique only inside one. Built from the
+ * store rather than a constant, so a department created in administration
+ * appears here without a second source of truth.
+ */
+const departmentOptions = () => {
+  const placed = new Set(
+    mockStore.assignments().filter((assignment) => assignment.isActive).map((assignment) => assignment.departmentId),
+  );
+  return departmentRecords()
+    .filter((department) => placed.has(department.id))
+    .map((department) => ({
+      value: department.id,
+      label: `${DIVISIONS[department.divisionId as keyof typeof DIVISIONS]?.name ?? department.divisionId} · ${department.name}`,
+    }));
+};
+
+/** Whether the employee's effective placement on `date` is one of `departmentIds`. */
+function placedInDepartment(
+  employeeId: string,
+  date: IsoDate,
+  departmentIds: readonly string[],
+): boolean {
+  return mockStore
+    .assignments()
+    .some(
+      (assignment) =>
+        assignment.employeeId === employeeId &&
+        assignment.isActive &&
+        assignment.startDate <= date &&
+        (assignment.endDate === null || assignment.endDate >= date) &&
+        departmentIds.includes(assignment.departmentId),
+    );
+}
+
 const TEAM_LEAD_OPTIONS = [
   { value: 'emp-2001', label: 'Imran Hossain' },
   { value: 'emp-2002', label: 'Farhana Islam' },
@@ -143,6 +180,7 @@ const FILTERS: Readonly<Record<string, ReportFilterDefinition>> = {
   },
   employee: { kind: 'employee', label: 'Employee', options: EMPLOYEE_OPTIONS, multiple: true },
   division: { kind: 'division', label: 'Division', options: DIVISION_OPTIONS, multiple: true },
+  department: { kind: 'department', label: 'Department', options: [], multiple: true },
   project: { kind: 'project', label: 'Project', options: PROJECT_OPTIONS, multiple: true },
   task: { kind: 'task', label: 'Task', options: [], multiple: true },
   team_lead: { kind: 'team_lead', label: 'Team Lead', options: TEAM_LEAD_OPTIONS, multiple: true },
@@ -169,7 +207,10 @@ const FILTERS: Readonly<Record<string, ReportFilterDefinition>> = {
 };
 
 function filtersFor(kinds: readonly string[]): readonly ReportFilterDefinition[] {
-  return kinds.map((kind) => FILTERS[kind]).filter(Boolean);
+  return kinds
+    .map((kind) => FILTERS[kind])
+    .filter(Boolean)
+    .map((filter) => (filter.kind === 'department' ? { ...filter, options: departmentOptions() } : filter));
 }
 
 /* -------------------------------------------------------------------------- */
@@ -218,7 +259,7 @@ const REPORT_SPECS: readonly ReportSpec[] = [
     title: 'Timesheet detail',
     description: 'Every recorded day with active time, break, total and classification.',
     category: 'timesheet',
-    filters: ['date_range', 'employee', 'division', 'project', 'work_location', 'status', 'overtime'],
+    filters: ['date_range', 'employee', 'division', 'department', 'project', 'work_location', 'status', 'overtime'],
     roles: ['team_lead', 'hr_manager', 'management', 'super_admin'],
   },
   {
@@ -234,7 +275,7 @@ const REPORT_SPECS: readonly ReportSpec[] = [
     title: 'Overtime summary',
     description: 'Days above eight hours, with the recorded reason and classification.',
     category: 'timesheet',
-    filters: ['date_range', 'employee', 'division', 'status'],
+    filters: ['date_range', 'employee', 'division', 'department', 'status'],
     roles: ['team_lead', 'hr_manager', 'management', 'super_admin'],
   },
   {
@@ -242,7 +283,7 @@ const REPORT_SPECS: readonly ReportSpec[] = [
     title: 'Headcount and assignments',
     description: 'Active employees, division assignments, Team Lead and profile completeness.',
     category: 'hr',
-    filters: ['division', 'team_lead', 'employment_type'],
+    filters: ['division', 'department', 'team_lead', 'employment_type'],
     roles: ['hr_manager', 'management', 'super_admin'],
   },
   {
@@ -268,7 +309,7 @@ const REPORT_SPECS: readonly ReportSpec[] = [
     title: 'Attendance register',
     description: 'Daily attendance state per employee, including explained non-working days.',
     category: 'attendance',
-    filters: ['date_range', 'employee', 'division', 'work_location'],
+    filters: ['date_range', 'employee', 'division', 'department', 'work_location'],
     roles: ['team_lead', 'hr_manager', 'management', 'super_admin'],
   },
   {
@@ -276,7 +317,7 @@ const REPORT_SPECS: readonly ReportSpec[] = [
     title: 'Work-from-home register',
     description: 'WFH requests, decisions and the work recorded on approved days.',
     category: 'wfh',
-    filters: ['date_range', 'employee', 'division'],
+    filters: ['date_range', 'employee', 'division', 'department'],
     roles: ['team_lead', 'hr_manager', 'management', 'super_admin'],
   },
   {
@@ -284,7 +325,7 @@ const REPORT_SPECS: readonly ReportSpec[] = [
     title: 'Evaluation progress',
     description: 'Evaluation state per employee for the open periods.',
     category: 'evaluation',
-    filters: ['employee', 'division'],
+    filters: ['employee', 'division', 'department'],
     roles: ['hr_manager', 'management', 'super_admin'],
   },
   {
@@ -292,7 +333,7 @@ const REPORT_SPECS: readonly ReportSpec[] = [
     title: 'Workload and capacity',
     description: 'Weekly capacity against actual recorded time.',
     category: 'workload',
-    filters: ['date_range', 'employee', 'division'],
+    filters: ['date_range', 'employee', 'division', 'department'],
     roles: ['team_lead', 'hr_manager', 'management', 'super_admin'],
   },
   {
@@ -384,6 +425,7 @@ function collectDays(input: ReportRunInput): readonly DayRow[] {
           continue;
         }
       }
+      if (input.departmentIds?.length && !placedInDepartment(employeeId, date, input.departmentIds)) continue;
       rows.push({ employeeId, date, summary });
     }
   }

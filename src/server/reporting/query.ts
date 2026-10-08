@@ -4,7 +4,7 @@ import { dateSchema } from '@/server/time/validation';
 const ids = z.array(z.string().min(1).max(36)).max(100);
 export const reportQuerySchema = z.object({
     dateRange: z.object({ from: dateSchema, to: dateSchema }).optional(), periodId: z.string().max(36).optional(),
-    employeeIds: ids.optional(), divisionIds: ids.optional(), projectIds: ids.optional(), taskIds: ids.optional(), teamLeadIds: ids.optional(),
+    employeeIds: ids.optional(), divisionIds: ids.optional(), departmentIds: ids.optional(), projectIds: ids.optional(), taskIds: ids.optional(), teamLeadIds: ids.optional(),
     employmentTypes: z.array(z.enum(['full_time', 'part_time', 'contract', 'intern', 'consultant'])).optional(),
     workLocations: z.array(z.enum(['office', 'wfh', 'hybrid', 'field_work', 'client_office', 'official_travel', 'training_venue'])).optional(),
     dayStatuses: z.array(z.enum(['missing', 'under_time', 'complete', 'overtime', 'critical'])).optional(),

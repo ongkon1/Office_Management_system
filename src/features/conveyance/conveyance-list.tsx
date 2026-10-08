@@ -1,10 +1,10 @@
-'use client';
+﻿'use client';
 
 import * as React from 'react';
 import Link from 'next/link';
 import { Paperclip, Plus } from 'lucide-react';
 import type { ConveyanceRowView } from '@/contracts/conveyance';
-import { mockConveyanceService } from '@/services/mock/conveyance';
+import { conveyanceService as mockConveyanceService } from '@/services/runtime/conveyance';
 import { useAsync } from '@/lib/use-async';
 import { useSession } from '@/features/access/session-provider';
 import { PageContainer, PageHeader } from '@/components/layout/page';

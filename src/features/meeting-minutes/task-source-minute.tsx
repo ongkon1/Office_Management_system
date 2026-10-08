@@ -1,9 +1,9 @@
-'use client';
+﻿'use client';
 
 import * as React from 'react';
 import Link from 'next/link';
 import { Sparkles } from 'lucide-react';
-import { mockMeetingMinutesService } from '@/services/mock/meeting-minutes';
+import { meetingMinutesService as mockMeetingMinutesService } from '@/services/runtime/meeting-minutes';
 import { useAsync } from '@/lib/use-async';
 import { useSession } from '@/features/access/session-provider';
 import { Callout } from '@/components/feedback/alert';

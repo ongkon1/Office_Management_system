@@ -4,7 +4,7 @@ import * as React from 'react';
 import { ImageIcon, Plug, RotateCcw, Settings2, ShieldCheck, Trash2 } from 'lucide-react';
 import type { BrandLogoAsset } from '@/contracts/admin';
 import { FEATURE_FLAGS, type FeatureFlagKey } from '@/contracts/feature-flags';
-import { mockAdminService } from '@/services/mock/admin';
+import { adminService as mockAdminService } from '@/services/runtime/admin';
 import { useAsync } from '@/lib/use-async';
 import { useSession } from '@/features/access/session-provider';
 import { useToast } from '@/components/feedback/toast';
@@ -26,6 +26,7 @@ import {
 } from '@/features/settings/flag-store';
 import { ReportsFallback, ReportsLoading } from '@/features/reports/report-catalogue';
 import { useBranding } from '@/features/settings/use-branding';
+import { commitBranding } from '@/lib/branding-store';
 import { PasswordSettings } from '@/features/settings/password-settings';
 
 const WEEKDAY_LABEL = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -186,6 +187,7 @@ function AdministratorSettings({
     const result = await mockAdminService.updateBranding(user?.userId ?? '', draftLogo);
     setSavingBranding(false);
     if (result.status === 'success') {
+      commitBranding(result.data);
       setDraftLogo(null);
       toast.show({
         tone: 'success',
@@ -205,6 +207,7 @@ function AdministratorSettings({
     const result = await mockAdminService.updateBranding(user?.userId ?? '', null);
     setSavingBranding(false);
     if (result.status === 'success') {
+      commitBranding(result.data);
       setDraftLogo(null);
       toast.show({
         tone: 'info',

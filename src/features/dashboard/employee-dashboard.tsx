@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import * as React from 'react';
 import Link from 'next/link';
@@ -21,7 +21,7 @@ import {
   PageHeader,
   SplitPanel,
 } from '@/components/layout/page';
-import { mockDashboardService } from '@/services/mock/work';
+import { employeeDashboardService as mockDashboardService } from '@/services/runtime/dashboard';
 import { DEMO_TODAY } from '@/lib/demo-context';
 import { ATTENDANCE_LABEL } from '@/lib/status';
 

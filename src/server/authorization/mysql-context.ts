@@ -1,10 +1,12 @@
 import type { Pool, RowDataPacket } from 'mysql2/promise';
 import { localParts } from '@/lib/calculation/instants';
-import type { RoleKey } from '@/contracts/domain';
+import type { DepartmentLeadScope, RoleKey } from '@/contracts/domain';
 import type { ActorPolicyContext } from './policy';
 
 interface IdentityRow extends RowDataPacket { user_id:string; employee_id:string|null; role_key:RoleKey|null; permission_key:string|null }
 interface ScopeRow extends RowDataPacket { division_id:string|null; employee_id:string|null; project_id:string|null; team_id:string|null }
+interface LeadScopeRow extends RowDataPacket { department_id:string; division_id:string; effective_from:string|Date; effective_to:string|Date|null }
+const isoDate=(value:string|Date)=>value instanceof Date?value.toISOString().slice(0,10):String(value).slice(0,10);
 
 /** Loads only grants and assignments effective on the requested local business date. */
 export async function loadActorPolicyContext(pool: Pick<Pool, 'execute'>, userId: string, localDate: string): Promise<ActorPolicyContext | null> {
@@ -30,5 +32,24 @@ export async function loadActorPolicyContext(pool: Pick<Pool, 'execute'>, userId
   // Only unscoped grants are global capabilities. A division/project grant
   // must not accidentally grant that permission over every record.
   const [personalGrants]=await pool.execute<(RowDataPacket & {permission_key:string})[]>(`SELECT p.permission_key FROM scoped_grants g JOIN permissions p ON p.id=g.permission_id WHERE g.user_id=? AND g.division_id IS NULL AND g.project_id IS NULL AND g.effective_from<=? AND (g.effective_to IS NULL OR g.effective_to>=?)`,[userId,authorizationDate,authorizationDate]);
-  return {userId,employeeId,roles:[...new Set(identity.map(row=>row.role_key).filter((v):v is RoleKey=>v!==null))],permissions:new Set([...identity.map(row=>row.permission_key).filter((v):v is string=>v!==null),...personalGrants.map(row=>row.permission_key)]),divisionIds:collect('division_id'),employeeIds,projectIds:collect('project_id'),teamIds:collect('team_id')};
+  /*
+   * `OH-BE-0207`–`OH-BE-0209`. Department leadership effective on the requested
+   * date, and the employees it reaches. Loaded here with every other grant, so
+   * an appointment that has not started or has ended contributes nothing and no
+   * cache has to be purged when one changes. The division is deliberately *not*
+   * added to `divisionIds`: the appointment grants a department scope, not
+   * division-wide visibility.
+   */
+  const [leadScopeRows]=employeeId?await pool.execute<LeadScopeRow[]>(`SELECT dla.department_id,d.division_id,dla.effective_from,dla.effective_to
+    FROM department_lead_assignments dla JOIN departments d ON d.id=dla.department_id AND d.is_active=TRUE
+    WHERE dla.lead_employee_id=? AND dla.effective_from<=? AND (dla.effective_to IS NULL OR dla.effective_to>=?)`,[employeeId,localDate,localDate]):[[] as LeadScopeRow[]];
+  const departmentLeadScopes:readonly DepartmentLeadScope[]=leadScopeRows.map((row)=>({departmentId:row.department_id,divisionId:row.division_id,effectiveFrom:isoDate(row.effective_from),effectiveTo:row.effective_to===null?null:isoDate(row.effective_to)}));
+  const departmentIds=new Set(departmentLeadScopes.map((scope)=>scope.departmentId));
+  if(departmentIds.size>0){
+    const placeholders=[...departmentIds].map(()=>'?').join(',');
+    const [members]=await pool.execute<(RowDataPacket&{employee_id:string})[]>(`SELECT DISTINCT employee_id FROM employee_division_assignments
+      WHERE department_id IN (${placeholders}) AND is_active=TRUE AND effective_from<=? AND (effective_to IS NULL OR effective_to>=?)`,[...departmentIds,localDate,localDate]);
+    for(const row of members) employeeIds.add(row.employee_id);
+  }
+  return {userId,employeeId,departmentLeadScopes,departmentIds,roles:[...new Set(identity.map(row=>row.role_key).filter((v):v is RoleKey=>v!==null))],permissions:new Set([...identity.map(row=>row.permission_key).filter((v):v is string=>v!==null),...personalGrants.map(row=>row.permission_key)]),divisionIds:collect('division_id'),employeeIds,projectIds:collect('project_id'),teamIds:collect('team_id')};
 }

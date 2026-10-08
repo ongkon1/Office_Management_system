@@ -7,6 +7,7 @@ import { describeDayStatus, ATTENDANCE_LABEL, REQUEST_STATE_LABEL, REMARK_STATE_
 import { localParts } from '@/lib/calculation/instants';
 import { costOfRatedMinutes, storedMoney, subtractMoney, sumMoney } from '@/lib/money';
 import { hasPermission, indistinguishableNotFound, type ActorPolicyContext } from '@/server/authorization/policy';
+import { reachesEmployee } from '@/server/organization/department-authority';
 import { TimeApplication } from '@/server/time/application';
 import { HrRepository, date } from '@/server/hr/repository';
 import { RequestApplication } from '@/server/hr/requests';
@@ -68,11 +69,19 @@ export class ReportApplication {
     today() { return localParts(this.requests.now(), 'Asia/Dhaka').date; }
     async actor() { return this.requests.resolveActor(this.today()); }
     async catalogue() { const actor = await this.actor(); return actor ? success(REPORTS.filter(s => canRun(actor, s))) : denied; }
+    /**
+     * `OH-BE-0303`, `OH-BE-0307`. Visibility is decided before any row is
+     * counted, and it accepts the two routes that exist: a division-scoped
+     * lead relationship, and an effective department appointment. The division
+     * test alone excluded every department lead from their own team's reports,
+     * because an appointment deliberately never widens `divisionIds`. The
+     * government restriction stays a separate, unconditional check.
+     */
     async employeeVisible(repo: HrRepository, actor: ActorPolicyContext, id: string, on: string) {
         if (!(actor.employeeId === id || actor.roles.includes('hr_manager') || actor.roles.includes('super_admin') || actor.employeeIds.has(id)))
             return false;
         const assignments = await repo.assignments(id, on);
-        return assignments.some(a => (!a.is_government || hasPermission(actor, 'organization.government.view')) && (actor.employeeId === id || actor.roles.includes('hr_manager') || actor.roles.includes('super_admin') || actor.divisionIds.has(String(a.division_id))));
+        return assignments.some(a => (!a.is_government || hasPermission(actor, 'organization.government.view')) && reachesEmployee(actor, { employeeId: id, divisionId: String(a.division_id) }));
     }
     async resolveQuery(raw: unknown, spec: ReportSpec, actor: ActorPolicyContext): Promise<Result<ReportQuery>> {
         const p = reportQuerySchema.safeParse(raw);
@@ -113,9 +122,13 @@ export class ReportApplication {
                 if (!await this.employeeVisible(repo, actor, id, on))
                     continue;
                 const assignments = (await repo.assignments(id, on)).filter(a => !a.is_government || hasPermission(actor, 'organization.government.view'));
-                if (q.teamLeadIds && !assignments.some(a => matches(q.teamLeadIds, String(a.lead_employee_id))))
+                // `OH-BE-0306`: the Team Lead filter matches the lead effective on
+                // the report date, and the department filter the placement.
+                if (q.teamLeadIds && !assignments.some(a => matches(q.teamLeadIds, String(a.effective_lead_employee_id))))
                     continue;
                 if (q.divisionIds && !assignments.some(a => matches(q.divisionIds, String(a.division_id))))
+                    continue;
+                if (q.departmentIds && !assignments.some(a => matches(q.departmentIds, a.department_id ? String(a.department_id) : null)))
                     continue;
                 if (++examined > 20000)
                     return invalid('dateRange', 'Limit this report to 20,000 employee days; split larger ranges or employee groups.');
@@ -338,7 +351,7 @@ export class ReportApplication {
                     if (seen.has(key))
                         continue;
                     seen.add(key);
-                    push(key, { employee: d.employee, division: String(a.division_id), lead: a.lead_employee_id ? String(a.lead_employee_id) : 'Not recorded', from: formatDate(date(a.effective_from)), to: a.effective_to ? formatDate(date(a.effective_to)) : 'Not recorded' });
+                    push(key, { employee: d.employee, division: String(a.division_id), lead: a.effective_lead_employee_id ? String(a.effective_lead_employee_id) : 'Not recorded', from: formatDate(date(a.effective_from)), to: a.effective_to ? formatDate(date(a.effective_to)) : 'Not recorded' });
                 }
         }
         else if (spec.key === 'workload-capacity') {

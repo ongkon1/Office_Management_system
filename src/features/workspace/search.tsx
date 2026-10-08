@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Clock, CornerDownLeft, Search as SearchIcon } from 'lucide-react';
 import type { SearchEntityKind, SearchResultView } from '@/contracts/workspace';
-import { mockWorkspaceService } from '@/services/mock/workspace';
+import { workspaceService as mockWorkspaceService } from '@/services/runtime/workspace';
 import { useAsync } from '@/lib/use-async';
 import { useSession } from '@/features/access/session-provider';
 import { PageContainer, PageHeader } from '@/components/layout/page';

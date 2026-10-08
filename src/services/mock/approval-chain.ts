@@ -25,7 +25,9 @@ import {
 } from '@/contracts/approval';
 import { formatTimestamp } from '@/lib/format';
 import { EMPLOYEES } from '@/fixtures/hr';
-import { findAccountByUserId } from './accounts';
+import { DEMO_DATE, findAccountByUserId } from './accounts';
+import { mockStore } from './store';
+import { assignmentIsEffective, effectiveLeadForAssignment } from './organization-hierarchy';
 
 export function viewerOf(userId: string) {
   return findAccountByUserId(userId);
@@ -35,9 +37,30 @@ export function employeeName(employeeId: string): string {
   return EMPLOYEES.find((employee) => employee.id === employeeId)?.fullName ?? employeeId;
 }
 
-/** The Team Lead recorded against an employee, or null when none is assigned. */
+/**
+ * The Team Lead who reviews for an employee, or null when nobody does.
+ *
+ * `OH-BE-0301`, `OH-BE-0305`. Resolved from the employee's **primary effective
+ * placement** — the department appointment in force today — with the legacy
+ * employee-level field as the fallback for a placement the hierarchy has not
+ * mapped yet. The server resolves routing the same way
+ * (`src/server/organization/department-authority.ts`), so the demo and the
+ * database do not disagree about who approves a requisition, a conveyance claim
+ * or an employee-raised task.
+ */
 export function teamLeadOf(employeeId: string): string | null {
-  return EMPLOYEES.find((employee) => employee.id === employeeId)?.teamLeadEmployeeId ?? null;
+  const assignments = mockStore
+    .assignments()
+    .filter(
+      (assignment) => assignment.employeeId === employeeId && assignmentIsEffective(assignment, DEMO_DATE),
+    )
+    .sort((left, right) => Number(right.isPrimary) - Number(left.isPrimary));
+  for (const assignment of assignments) {
+    const appointed = effectiveLeadForAssignment(assignment, DEMO_DATE);
+    if (appointed && appointed !== employeeId) return appointed;
+  }
+  const legacy = EMPLOYEES.find((employee) => employee.id === employeeId)?.teamLeadEmployeeId ?? null;
+  return legacy === employeeId ? null : legacy;
 }
 
 /**

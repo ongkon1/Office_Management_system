@@ -2,6 +2,10 @@ import { defineConfig } from 'vitest/config';
 import { fileURLToPath } from 'node:url';
 
 const alias = {
+  // Next's build-time client/server guard has no Node implementation; the stub
+  // lets a `server-only` module be unit- and integration-tested without
+  // dropping the protection it declares in production.
+  'server-only': fileURLToPath(new URL('./src/server/test/server-only-stub.ts', import.meta.url)),
   '@': fileURLToPath(new URL('./src', import.meta.url)),
 };
 

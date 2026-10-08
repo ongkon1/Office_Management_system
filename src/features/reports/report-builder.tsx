@@ -4,7 +4,7 @@ import * as React from 'react';
 import { Download, Play, Printer, RotateCcw } from 'lucide-react';
 import type { ReportRunInput } from '@/contracts/reporting';
 import type { ExportFormat } from '@/contracts/domain';
-import { mockReportingService } from '@/services/mock/reporting';
+import { reportingService as mockReportingService } from '@/services/runtime/reporting';
 import { useAsync } from '@/lib/use-async';
 import { useSession } from '@/features/access/session-provider';
 import { useToast } from '@/components/feedback/toast';
@@ -63,6 +63,7 @@ export function ReportBuilder({ reportKey }: { reportKey: string }) {
       from,
       to,
       employeeIds: selections.employee,
+      departmentIds: selections.department,
       divisionIds: selections.division,
       projectIds: selections.project,
       taskIds: selections.task,

@@ -16,6 +16,18 @@ import type {
 import type { Failure } from '@/contracts/results';
 import { success } from '@/contracts/results';
 import { addDays, formatDate } from '@/lib/format';
+import {
+  alreadyLeadsFailure,
+  describeDepartmentConflict,
+  duplicateDepartmentFailure,
+  inactiveDepartmentFailure,
+  ineligibleLeadFailure,
+  membersRemainWarning,
+  scheduledAppointmentWarning,
+  validateAppointmentShape,
+  validateDepartmentShape,
+  validateStatusReason,
+} from '@/lib/department-hierarchy';
 import { EMPLOYEES } from '@/fixtures/hr';
 import { DEMO_DATE, DIVISIONS, findAccountByUserId } from './accounts';
 import {
@@ -62,10 +74,6 @@ const delay = () => new Promise((resolve) => setTimeout(resolve, LATENCY_MS));
 
 const SYSTEM_ACTOR = { userId: 'usr-system', displayName: 'System' };
 
-const NAME_MAX = 60;
-const CODE_PATTERN = /^[A-Za-z0-9-]{2,12}$/;
-const DESCRIPTION_MAX = 240;
-const REASON_MAX = 200;
 
 function notFound(): Failure {
   return {
@@ -115,45 +123,11 @@ function invalid(...failures: readonly DepartmentValidationView[]): Failure {
   };
 }
 
-/**
- * The conflicts the hierarchy can raise, written once.
- *
- * Exported because the tests and the screen must not restate this wording — a
- * second copy is how a refusal and the guidance for fixing it drift apart.
+/*
+ * Conflict wording, field failures, shape validation and warning text all come
+ * from `src/lib/department-hierarchy.ts`, which the MySQL application service
+ * imports as well. A user is entitled to the same answer from both.
  */
-export function describeDepartmentConflict(
-  code: DepartmentConflictView['code'],
-  subject: string,
-): DepartmentConflictView {
-  switch (code) {
-    case 'duplicate_name':
-      return {
-        code,
-        message: `${subject} already has a department with this name.`,
-        guidance: 'Use a name that is unique inside this division.',
-      };
-    case 'duplicate_code':
-      return {
-        code,
-        message: `${subject} already has a department with this code.`,
-        guidance: 'Use a code that is unique inside this division.',
-      };
-    case 'lead_period_overlap':
-      return {
-        code,
-        message: `${subject} already has an appointment starting on or after that date.`,
-        guidance:
-          'Choose a later effective date, or leave the existing appointment in place. Leadership history is never rewritten.',
-      };
-    case 'referenced':
-      return {
-        code,
-        message: `${subject} is referenced by employee placements or leadership history.`,
-        guidance:
-          'Deactivate it instead. Deactivating blocks new placements while keeping historical records readable.',
-      };
-  }
-}
 
 function conflictOf(code: DepartmentConflictView['code'], subject: string): Failure {
   const view = describeDepartmentConflict(code, subject);
@@ -356,47 +330,15 @@ function validateInput(
       guidance: 'Select one of the five divisions.',
     });
   }
-  if (name.length === 0) {
-    failures.push({
-      field: 'name',
-      message: 'Enter a department name.',
-      guidance: 'Use the name employees in this division recognize, such as Technical.',
-    });
-  } else if (name.length > NAME_MAX) {
-    failures.push({
-      field: 'name',
-      message: `The name is longer than ${NAME_MAX} characters.`,
-      guidance: `Shorten it to ${NAME_MAX} characters or fewer.`,
-    });
-  }
-  if (code.length === 0) {
-    failures.push({
-      field: 'code',
-      message: 'Enter a department code.',
-      guidance: 'Use a short code such as TECH: 2 to 12 letters, numbers or hyphens.',
-    });
-  } else if (!CODE_PATTERN.test(code)) {
-    failures.push({
-      field: 'code',
-      message: 'The code may use 2 to 12 letters, numbers or hyphens.',
-      guidance: 'Remove spaces and punctuation, for example PROMPT or CLIENT-SVC.',
-    });
-  }
-  if (input.description.trim().length > DESCRIPTION_MAX) {
-    failures.push({
-      field: 'description',
-      message: `The description is longer than ${DESCRIPTION_MAX} characters.`,
-      guidance: `Shorten it to ${DESCRIPTION_MAX} characters or fewer.`,
-    });
-  }
+  failures.push(...validateDepartmentShape(input));
 
   /*
-   * Uniqueness is scoped to the division, so the message names the division it
-   * was checked against — otherwise "already exists" reads as company-wide and
-   * an administrator renames a department that did not need renaming.
+   * Uniqueness needs rows, so it is checked here and worded by the shared
+   * module — which always names the division it was checked against, because
+   * "already exists" reads as company-wide and two divisions may each have a
+   * Sales department.
    */
   if (failures.length === 0) {
-    const divisionName = divisionRef(input.divisionId).name;
     const clash = departmentRecords().find(
       (record) =>
         record.id !== existing?.id &&
@@ -405,16 +347,12 @@ function validateInput(
           record.code.toLowerCase() === code.toLowerCase()),
     );
     if (clash) {
-      const duplicateName = clash.name.toLowerCase() === name.toLowerCase();
-      const view = describeDepartmentConflict(
-        duplicateName ? 'duplicate_name' : 'duplicate_code',
-        divisionName,
+      failures.push(
+        duplicateDepartmentFailure(
+          clash.name.toLowerCase() === name.toLowerCase() ? 'name' : 'code',
+          divisionRef(input.divisionId).name,
+        ),
       );
-      failures.push({
-        field: duplicateName ? 'name' : 'code',
-        message: view.message,
-        guidance: view.guidance,
-      });
     }
   }
 
@@ -551,21 +489,8 @@ export const mockDepartmentAdminService: DepartmentAdministrationService = {
       };
     }
 
-    const reason = input.reason.trim();
-    if (!input.isActive && reason.length === 0) {
-      return invalid({
-        field: 'reason',
-        message: 'Say why the department is being deactivated.',
-        guidance: 'A short reason is kept with the department so the change stays explainable.',
-      });
-    }
-    if (reason.length > REASON_MAX) {
-      return invalid({
-        field: 'reason',
-        message: `The reason is longer than ${REASON_MAX} characters.`,
-        guidance: `Shorten it to ${REASON_MAX} characters or fewer.`,
-      });
-    }
+    const reasonFailure = validateStatusReason({ isActive: input.isActive, reason: input.reason });
+    if (reasonFailure) return invalid(reasonFailure);
 
     saveDepartmentRecord({
       ...record,
@@ -588,10 +513,7 @@ export const mockDepartmentAdminService: DepartmentAdministrationService = {
       detail,
       !input.isActive && remaining > 0
         ? [
-            {
-              code: 'MEMBERS_REMAIN',
-              message: `${remaining} employee${remaining === 1 ? '' : 's'} keep their placement in ${record.name}. No new placement can be made into it while it is inactive.`,
-            },
+            { code: 'MEMBERS_REMAIN', message: membersRemainWarning(record.name, remaining) },
           ]
         : undefined,
     );
@@ -659,43 +581,23 @@ export const mockDepartmentAdminService: DepartmentAdministrationService = {
     const record = departmentById(input.departmentId);
     if (!record) return notFound();
 
-    if (!record.isActive) {
-      return invalid({
-        field: 'departmentId',
-        message: `${record.name} is inactive, so it cannot be given a lead.`,
-        guidance: 'Reactivate the department first, then appoint its lead.',
-      });
-    }
+    if (!record.isActive) return invalid(inactiveDepartmentFailure(record.name));
 
-    const failures: DepartmentValidationView[] = [];
     const effectiveFrom = input.effectiveFrom;
-    const wellFormed = /^\d{4}-\d{2}-\d{2}$/.test(effectiveFrom);
-    if (!wellFormed) {
-      failures.push({
-        field: 'effectiveFrom',
-        message: 'Choose the date the appointment takes effect.',
-        guidance: `Use today, ${formatDate(DEMO_DATE)}, for an appointment in force now, or a later date to schedule it.`,
-      });
-    } else if (effectiveFrom < DEMO_DATE) {
-      failures.push({
-        field: 'effectiveFrom',
-        message: 'An appointment cannot start in the past.',
-        guidance: `Choose ${formatDate(DEMO_DATE)} or later. Past leadership is never rewritten.`,
-      });
-    }
-    if (input.reason.trim().length > REASON_MAX) {
-      failures.push({
-        field: 'reason',
-        message: `The reason is longer than ${REASON_MAX} characters.`,
-        guidance: `Shorten it to ${REASON_MAX} characters or fewer.`,
-      });
-    }
+    const failures: DepartmentValidationView[] = [
+      ...validateAppointmentShape({
+        effectiveFrom,
+        reason: input.reason,
+        today: DEMO_DATE,
+        todayLabel: formatDate(DEMO_DATE),
+      }),
+    ];
 
-    /* Eligibility is answered by the F1 helper, on the date being appointed. */
-    const candidate = wellFormed
-      ? validateLeadCandidate(input.departmentId, input.leadEmployeeId, effectiveFrom)
-      : null;
-    if (candidate) failures.push(candidate);
+    /* Eligibility needs rows: the F1 helper answers it on the date appointed. */
+    const wellFormed = !failures.some((failure) => failure.field === 'effectiveFrom');
+    if (wellFormed && validateLeadCandidate(input.departmentId, input.leadEmployeeId, effectiveFrom)) {
+      failures.push(ineligibleLeadFailure());
+    }
 
     if (failures.length > 0) return invalid(...failures);
 
@@ -714,11 +616,13 @@ export const mockDepartmentAdminService: DepartmentAdministrationService = {
       (assignment) => assignment.effectiveTo === null && assignment.effectiveFrom < effectiveFrom,
     );
     if (open && open.leadEmployeeId === input.leadEmployeeId) {
-      return invalid({
-        field: 'leadEmployeeId',
-        message: `${employeeRef(open.leadEmployeeId).fullName} already leads ${record.name} from ${formatDate(open.effectiveFrom)}.`,
-        guidance: 'Choose a different employee to change who leads this department.',
-      });
+      return invalid(
+        alreadyLeadsFailure(
+          employeeRef(open.leadEmployeeId).fullName,
+          formatDate(open.effectiveFrom),
+          record.name,
+        ),
+      );
     }
 
     const by = actorStamp(userId);
@@ -755,7 +659,11 @@ export const mockDepartmentAdminService: DepartmentAdministrationService = {
         ? [
             {
               code: 'APPOINTMENT_SCHEDULED',
-              message: `${employeeRef(input.leadEmployeeId).fullName} takes over on ${formatDate(effectiveFrom)}. Until then ${detail.currentLead?.fullName ?? 'nobody'} remains the effective lead.`,
+              message: scheduledAppointmentWarning(
+                employeeRef(input.leadEmployeeId).fullName,
+                formatDate(effectiveFrom),
+                detail.currentLead?.fullName ?? null,
+              ),
             },
           ]
         : undefined,

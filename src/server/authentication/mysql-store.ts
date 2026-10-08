@@ -9,8 +9,12 @@ export class MysqlAuthenticationStore implements AuthenticationStore, RateLimitS
   constructor(private readonly pool: Pool) {}
   async findAccount(identifierNormalized: string): Promise<AuthAccount | null> {
     const [rows] = await this.pool.execute<AccountRow[]>(`SELECT u.id user_id,u.status,a.password_hash,u.failed_login_count,u.locked_until,u.two_factor_enabled
-      FROM users u JOIN auth_accounts a ON a.user_id=u.id AND a.provider_id='credential' WHERE u.email_normalized=? LIMIT 1`, [identifierNormalized]);
+      FROM users u JOIN auth_accounts a ON a.user_id=u.id AND a.provider_id='credential' WHERE u.email_normalized=? OR LOWER(u.employee_identifier)=? LIMIT 1`, [identifierNormalized,identifierNormalized]);
     const row = rows[0]; return row ? { userId: row.user_id, state: row.status, passwordHash: row.password_hash, failedCount: row.failed_login_count, lockedUntil: row.locked_until, twoFactorEnabled: Boolean(row.two_factor_enabled) } : null;
+  }
+  async findAccountByUserId(userId: string): Promise<AuthAccount | null> {
+    const [rows] = await this.pool.execute<AccountRow[]>(`SELECT u.id user_id,u.status,a.password_hash,u.failed_login_count,u.locked_until,u.two_factor_enabled FROM users u JOIN auth_accounts a ON a.user_id=u.id AND a.provider_id='credential' WHERE u.id=? LIMIT 1`, [userId]);
+    const row=rows[0]; return row ? {userId:row.user_id,state:row.status,passwordHash:row.password_hash,failedCount:row.failed_login_count,lockedUntil:row.locked_until,twoFactorEnabled:Boolean(row.two_factor_enabled)} : null;
   }
   async recordAttempt(input: { userId: string | null; identifierHash: string; outcome: string; originHash: string; correlationId: string }) {
     await this.pool.execute(`INSERT INTO login_history(user_id,identifier_hash,outcome,ip_address) VALUES(?,?,?,?)`, [input.userId,input.identifierHash,input.outcome,input.originHash]);
@@ -33,6 +37,13 @@ export class MysqlAuthenticationStore implements AuthenticationStore, RateLimitS
       await connection.execute(`UPDATE auth_sessions s JOIN users u ON u.id=s.user_id SET s.revoked_at=COALESCE(s.revoked_at,UTC_TIMESTAMP(6)) WHERE SHA2(u.email_normalized,256)=?`, [identifierHash]);
       await connection.commit(); return true;
     } catch (error) { await connection.rollback(); throw error; } finally { connection.release(); }
+  }
+  async changePassword(userId: string, passwordHash: string): Promise<void> {
+    const connection=await this.pool.getConnection(); try { await connection.beginTransaction();
+      await connection.execute(`UPDATE auth_accounts SET password_hash=? WHERE user_id=? AND provider_id='credential'`,[passwordHash,userId]);
+      await connection.execute(`UPDATE auth_sessions SET revoked_at=COALESCE(revoked_at,UTC_TIMESTAMP(6)) WHERE user_id=?`,[userId]);
+      await connection.commit();
+    } catch(error){await connection.rollback();throw error;} finally {connection.release();}
   }
   async increment(key: string, action: string, windowSeconds: number, maximum: number, now: Date) {
     const scope = key.length === 64 ? key : (await import('@/server/security/crypto')).secretHash(key);

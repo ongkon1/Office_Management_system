@@ -1,9 +1,9 @@
-'use client';
+﻿'use client';
 
 import * as React from 'react';
 import { Sparkles } from 'lucide-react';
 import type { MeetingMinuteDetailView } from '@/contracts/meeting-minutes';
-import { mockMeetingMinutesService } from '@/services/mock/meeting-minutes';
+import { meetingMinutesService as mockMeetingMinutesService } from '@/services/runtime/meeting-minutes';
 import { useToast } from '@/components/feedback/toast';
 import { Callout } from '@/components/feedback/alert';
 import { Button } from '@/components/ui/button';

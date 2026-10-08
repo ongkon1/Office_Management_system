@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import type { FinanceHoursRowView, FinanceOvertimeRowView } from '@/contracts/finance';
-import { mockFinanceService } from '@/services/mock/finance';
+import { financeService as mockFinanceService } from '@/services/runtime/finance';
 import { useAsync } from '@/lib/use-async';
 import { useSession } from '@/features/access/session-provider';
 import { PageContainer, PageHeader } from '@/components/layout/page';

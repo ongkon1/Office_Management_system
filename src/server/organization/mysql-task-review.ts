@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Pool, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 import type { RaisedTask, TaskReviewRepository } from './task-review';
+import { primaryLeadOfEmployee } from './department-authority';
 
 interface TaskRow extends RowDataPacket {
   id: string;
@@ -25,17 +26,27 @@ export class MysqlTaskReviewRepository implements TaskReviewRepository {
         is_team_lead: number;
       })[]
     >(
-      `SELECT e.id,a.lead_employee_id,a.division_id,
-       EXISTS(
+      `SELECT e.id,COALESCE(dla.lead_employee_id,a.lead_employee_id) AS lead_employee_id,a.division_id,
+       (EXISTS(
          SELECT 1 FROM user_roles ur JOIN roles r ON r.id=ur.role_id
          WHERE ur.user_id=e.user_id AND r.role_key='team_lead'
            AND ur.effective_from<=? AND (ur.effective_to IS NULL OR ur.effective_to>=?)
-       ) AS is_team_lead
+       ) OR EXISTS(
+         -- OH-BE-0207: an effective department appointment is Team Lead
+         -- capability in its own right, with no role row behind it.
+         SELECT 1 FROM department_lead_assignments own
+         JOIN departments od ON od.id=own.department_id AND od.is_active=TRUE
+         WHERE own.lead_employee_id=e.id
+           AND own.effective_from<=? AND (own.effective_to IS NULL OR own.effective_to>=?)
+       )) AS is_team_lead
        FROM employees e
        LEFT JOIN employee_division_assignments a ON a.employee_id=e.id AND a.is_active=TRUE
          AND a.effective_from<=? AND(a.effective_to IS NULL OR a.effective_to>=?)
+       LEFT JOIN departments dept ON dept.id=a.department_id AND dept.is_active=TRUE
+       LEFT JOIN department_lead_assignments dla ON dla.department_id=dept.id
+         AND dla.effective_from<=? AND (dla.effective_to IS NULL OR dla.effective_to>=?)
        WHERE e.user_id=? AND e.status='active'`,
-      [date, date, date, date, userId],
+      [date, date, date, date, date, date, date, date, userId],
     );
     if (!rows[0]) return null;
     return {
@@ -46,15 +57,9 @@ export class MysqlTaskReviewRepository implements TaskReviewRepository {
     };
   }
 
+  /** `OH-BE-0302`: the lead effective today, department appointment first. */
   async currentLeadForEmployee(id: string) {
-    const date = this.today();
-    const [rows] = await this.pool.execute<(RowDataPacket & { lead_employee_id: string })[]>(
-      `SELECT lead_employee_id FROM employee_division_assignments
-       WHERE employee_id=? AND is_active=TRUE AND is_primary=TRUE
-         AND effective_from<=? AND(effective_to IS NULL OR effective_to>=?) LIMIT 1`,
-      [id, date, date],
-    );
-    return rows[0]?.lead_employee_id ?? null;
+    return primaryLeadOfEmployee(this.pool, id, this.today());
   }
 
   async projectAvailable(id: string, employeeId: string, divisionIds: readonly string[]) {

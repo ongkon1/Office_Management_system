@@ -11,14 +11,14 @@ describe('database readiness', () => {
     const query = vi.fn()
       .mockResolvedValueOnce([[]])
       .mockResolvedValueOnce([[]])
-      .mockResolvedValueOnce([[{ version: '0011' }]]);
+      .mockResolvedValueOnce([[{ version: '0013' }]]);
 
     const result = await checkDatabaseReadiness(poolWith(query));
 
     expect(result).toMatchObject({
       status: 'healthy',
-      expectedMigration: '0011',
-      appliedMigration: '0011',
+      expectedMigration: '0013',
+      appliedMigration: '0013',
     });
     expect(query).toHaveBeenCalledTimes(3);
   });
@@ -33,7 +33,7 @@ describe('database readiness', () => {
 
     expect(result).toMatchObject({
       status: 'unhealthy',
-      expectedMigration: '0011',
+      expectedMigration: '0013',
       appliedMigration: '0010',
     });
   });

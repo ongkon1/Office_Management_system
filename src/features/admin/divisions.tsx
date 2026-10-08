@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { Building2, Pencil, Plus, TriangleAlert } from 'lucide-react';
 import type { DivisionAdminView, DivisionFormInput } from '@/contracts/admin';
-import { mockAdminService } from '@/services/mock/admin';
+import { adminService as mockAdminService } from '@/services/runtime/admin';
 import { useAsync } from '@/lib/use-async';
 import { useSession } from '@/features/access/session-provider';
 import { useToast } from '@/components/feedback/toast';

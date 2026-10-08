@@ -59,8 +59,25 @@ export class HrRepository {
     async employee(id: string) {
         return (await this.rows('SELECT * FROM employees WHERE id=?', [id]))[0] ?? null;
     }
+    /**
+     * `OH-BE-0301`, `OH-BE-0304`. Effective assignments with the authority that
+     * applies on `on`: the department appointment where the placement has one,
+     * the frozen legacy lead where the Phase B1 backfill could not place the
+     * assignment. Routing reads `effective_lead_employee_id`; `lead_employee_id`
+     * is still selected because it is still stored, not because anything routes
+     * on it.
+     */
     async assignments(id: string, on: string) {
-        return this.rows('SELECT a.*,d.is_government FROM employee_division_assignments a JOIN divisions d ON d.id=a.division_id WHERE a.employee_id=? AND a.is_active=TRUE AND a.effective_from<=? AND (a.effective_to IS NULL OR a.effective_to>=?)', [id, on, on]);
+        return this.rows(`SELECT a.*,d.is_government,
+            COALESCE(dla.lead_employee_id,a.lead_employee_id) AS effective_lead_employee_id,
+            dla.lead_employee_id IS NOT NULL AS lead_from_department
+          FROM employee_division_assignments a
+          JOIN divisions d ON d.id=a.division_id
+          LEFT JOIN departments dept ON dept.id=a.department_id AND dept.is_active=TRUE
+          LEFT JOIN department_lead_assignments dla ON dla.department_id=dept.id
+            AND dla.effective_from<=? AND (dla.effective_to IS NULL OR dla.effective_to>=?)
+          WHERE a.employee_id=? AND a.is_active=TRUE AND a.effective_from<=? AND (a.effective_to IS NULL OR a.effective_to>=?)`,
+          [on, on, id, on, on]);
     }
     async requests(kind: RequestKind) {
         return (await this.rows(`SELECT r.*,e.user_id${kind === 'leave' ? ',lt.type_key' : ''} FROM ${table(kind)} r JOIN employees e ON e.id=r.employee_id ${kind === 'leave' ? 'JOIN leave_types lt ON lt.id=r.leave_type_id' : ''}`)).map(r => this.requestFrom(kind, r));

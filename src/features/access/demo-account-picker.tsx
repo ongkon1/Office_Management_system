@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
@@ -6,9 +6,9 @@ import { ChevronDown, FlaskConical } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { Badge } from '@/components/ui/badge';
 import { Avatar } from '@/components/ui/avatar';
-import { Callout } from '@/components/feedback/alert';
+import { Alert, Callout } from '@/components/feedback/alert';
 import { DEFAULT_ROUTE, ROLE_LABEL } from '@/components/shell/navigation';
-import { DEMO_ACCOUNTS, DEMO_PASSWORD } from '@/services/mock/accounts';
+import { DEMO_ACCOUNTS, DEMO_PASSWORD } from '@/services/runtime/demo';
 import { isDemoMode } from './demo-mode';
 import { useSession } from './session-provider';
 
@@ -25,11 +25,13 @@ export function DemoAccountPicker() {
   const { login } = useSession();
   const [open, setOpen] = React.useState(false);
   const [busyUserId, setBusyUserId] = React.useState<string | null>(null);
+  const [signInError, setSignInError] = React.useState<string | null>(null);
 
   if (!isDemoMode()) return null;
 
   async function signInAs(email: string, userId: string) {
     setBusyUserId(userId);
+    setSignInError(null);
     const result = await login({ identifier: email, password: DEMO_PASSWORD, rememberMe: false });
     setBusyUserId(null);
 
@@ -45,7 +47,14 @@ export function DemoAccountPicker() {
 
     if (result.status === 'permission_denied' && result.guidance?.startsWith('/')) {
       router.push(result.guidance);
+      return;
     }
+
+    setSignInError(
+      result.status === 'validation_failure'
+        ? 'This demo account does not match the seeded database. Run npm run db:seed, then try again.'
+        : result.message,
+    );
   }
 
   return (
@@ -76,6 +85,12 @@ export function DemoAccountPicker() {
             Every account uses the password <code className="font-semibold">{DEMO_PASSWORD}</code>.
             Selecting one signs in through the normal flow.
           </Callout>
+
+          {signInError && (
+            <Alert tone="danger" title="Demo sign-in failed" live>
+              {signInError}
+            </Alert>
+          )}
 
           <ul className="flex max-h-96 flex-col gap-1.5 overflow-y-auto">
             {DEMO_ACCOUNTS.map((account) => (

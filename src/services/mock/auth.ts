@@ -63,10 +63,14 @@ export function toSessionUser(account: DemoAccount): SessionUser {
     roles: account.roles,
     primaryRole: account.primaryRole,
     permissions: account.permissions,
-    scopedDivisionIds: [...new Set([
-      ...account.scopedDivisionIds,
-      ...leadScopes.map((scope) => scope.divisionId),
-    ])],
+    /*
+     * `OH-FE-0311`. An appointment grants a *department* scope, never
+     * division-wide visibility, so the lead's divisions are exactly the ones
+     * they are assigned to. The server resolves it the same way
+     * (`src/server/authorization/mysql-context.ts`); widening it here would
+     * make the demo prove something the database does not allow.
+     */
+    scopedDivisionIds: [...account.scopedDivisionIds],
     scopedEmployeeIds: leadScopes.length > 0
       ? departmentLeadEmployeeIds(account.employeeId)
       : account.scopedEmployeeIds,

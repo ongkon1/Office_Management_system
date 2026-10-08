@@ -2,7 +2,7 @@
 
 Durable context for anyone — human or AI — picking up this codebase. It records what the plan files don't: why things are the way they are, what's decided versus assumed, and the rules that are easy to break by accident.
 
-Last updated: **21 September 2026** (Modify Phase B3 is complete: versioned task transitions, authorized history and derived actuals, shared transactional notifications and audits. B1 HR sign-off and B4 browser/production cutover remain pending).
+Last updated: **8 October 2026** (Backend `BE-0902` is complete: all in-scope production frontend contracts now use authenticated MySQL-backed service boundaries; later standalone modules remain in their own milestones).
 
 ---
 
@@ -16,7 +16,7 @@ A centralized, responsive web application for tracking employee time and work ac
 | Roles | Super Administrator, Team Lead, Employee, HR Manager, Management/View-Only. Finance Manager is retired for new assignments; its stored value remains valid for history. |
 | Framework | Next.js 16 (App Router) + TypeScript |
 | Styling | Tailwind CSS v4 with semantic tokens |
-| Database | MySQL (backend milestone only — not yet connected) |
+| Database | MySQL — connected through authenticated production service boundaries |
 | Business timezone | Asia/Dhaka |
 | Currency | BDT |
 
@@ -155,7 +155,7 @@ Environment: Windows + WAMP, PowerShell. **Not currently a git repository.**
 
 **Mock state the calculation reads lives in the store.** Assignments, holidays and payroll periods are held in `src/services/mock/store.ts` rather than as fixture constants, because HR mutates them and the daily calculation reads them. Adding an assignment must immediately widen which divisions accept time; verifying a period must immediately lock its dates. `mockStore.isDateLocked` is the single lock check.
 
-**Department placement is service-owned and belongs to EmployeeDivisionAssignment.** The approved model requires `Department` and effective-dated `DepartmentLeadAssignment` records. Department names/codes are unique within a division, the same name may exist elsewhere, and the service validates every assignment's division/department relationship. A lead appointment produces a bounded authorization scope rather than a global role. Department administration is now delivered against that model (Phase F2): `DepartmentAdministrationService` with `src/services/mock/department-admin.ts`, and the prototype's `AdminService` department operations and `DepartmentAdminView` are removed. The remaining transitional pieces are the `employees.department` string and the direct employee/assignment Team Lead fields, removed through Phase F3.
+**Department placement is service-owned and belongs to EmployeeDivisionAssignment.** The approved model requires `Department` and effective-dated `DepartmentLeadAssignment` records. Department names/codes are unique within a division, the same name may exist elsewhere, and the service validates every assignment's division/department relationship. A lead appointment produces a bounded authorization scope rather than a global role. Department administration is now delivered against that model (Phase F2): `DepartmentAdministrationService` with `src/services/mock/department-admin.ts`, and the prototype's `AdminService` department operations and `DepartmentAdminView` are removed. Phase B1 put the model in MySQL (migration `0013`): division-scoped uniqueness on generated normalized columns, effective-dated appointments with one open period per department, placement whose foreign key is `(department_id, division_id)`, a reviewable backfill with a reconciliation `CHECK`, and a rehearsed recovery. Evidence: `docs/backend/organization-hierarchy/phase-b1-verification.md`, `phase-b2-verification.md` and `phase-b3-verification.md`. Phase B3 routes every existing workflow, report, notification and search result through `src/server/organization/department-authority.ts`, on the business date that matters. Phase B2 added the MySQL application service behind the same contract the mock implements, department-scoped Team Lead capability derived per request (no role row, no cache to purge), audit rows with before/after values, a verified-period guard on appointments, and exposure through the existing `/api/admin` envelope. Phase F3 finished the frontend: placement is a per-assignment control with division-dependent options and a `readonly` effective lead, `src/features/hr/placement-history.ts` distinguishes current, scheduled and ended placements and names a department transfer, and `src/features/access/capabilities.ts` turns an effective appointment into Team Lead navigation and route access without writing a role. Evidence: `docs/frontend/organization-hierarchy/phase-f3-verification.md`. The remaining transitional pieces are the `employees.department` string and the per-assignment `lead_employee_id`, both frozen now and removed only in Phase V1, after HR signs the reconciliation report.
 
 **Money arithmetic is exact and centralised.** `src/lib/money.ts` is the only place a money value is computed — `bigint` minor units, rounded half-up once at the end, never per row, never `number`. Cost reaches the UI as `RedactableMoneyView`, whose restricted variant carries no value at all, so redaction is enforced by the type rather than by a component remembering to hide something.
 
@@ -193,9 +193,10 @@ Environment: Windows + WAMP, PowerShell. **Not currently a git repository.**
 | Backend | 2 — Authentication, authorization, and audit | Done (23/23) |
 | Backend | 3 — Organization, projects, and tasks | Done (27/27) |
 | Backend | 4 — Timesheet calculation and correction | Done (33/33) |
-| Backend | 5 — HR workflows | Implementation done (26/26); browser cutover gate pending Phase 9 |
-| Backend | 6 — Reporting, Finance and exports | Implementation done (19/19); browser cutover gate pending Phase 9 |
-| Backend | 7–9 | Pending |
+| Backend | 5 — HR workflows | Done (26/26); browser cutover completed by `BE-0902` |
+| Backend | 6 — Reporting, Finance and exports | Done (19/19); browser cutover completed by `BE-0902` |
+| Backend | 7–8 | Pending |
+| Backend | 9 — Production readiness and frontend cutover | In progress (4/18; `BE-0901`–`BE-0904` done) |
 | Backend | 10 — Requisition | Pending (0/20) — new milestone |
 | Backend | 11 — Conveyance | Pending (0/22) — new milestone, depends on 10 |
 | Backend | 12 — Role consolidation: Finance into HR | Pending (0/11); `BE-1203` keeps cost access per-user, superseded by Phase 14 |
@@ -207,7 +208,11 @@ Environment: Windows + WAMP, PowerShell. **Not currently a git repository.**
 | Organization hierarchy | 0 — Product rules and architecture | Done (10/10) |
 | Organization hierarchy | F1 — Frontend contracts and mock model | Done (12/12) |
 | Organization hierarchy | F2 — Department administration | Done (11/11) |
-| Organization hierarchy | F3 — Employee placement and department lead experience | Next (0/14) |
+| Organization hierarchy | F3 — Employee placement and department lead experience | Done (13/14; `OH-FE-0314` still requires its dedicated cutover verification) |
+| Organization hierarchy | V1 — Cutover and quality gates | Next (0/14) |
+| Organization hierarchy | B1 — MySQL schema and migration | Done (14/15; `OH-BE-0115` deferred by design) |
+| Organization hierarchy | B2 — Services, authorization, and audit | Done (16/16) |
+| Organization hierarchy | B3 — Workflow and reporting integration | Done (12/14; `OH-BE-0305`, `OH-BE-0310` blocked on Backend Phases 10, 11, 13) |
 
 Gate results: contrast 48/48, accessibility 279/279, content-stress 73/73, role journeys 41/41, performance 16/16, Phase 2–7 flows 16/18/20/51/40/55, requisition 45/45, conveyance 45/45. Modify Phase F3 passes route type generation, TypeScript, ESLint with zero warnings, contrast 48/48, all 579 frontend/shared tests across 35 files, every Phase 3 browser flow, all 316 responsive route/width combinations, and a 62-route production build. Detailed evidence is in `docs/frontend/modify/phase-f3-verification.md`; the dedicated task-work browser gate remains an F4 deliverable.
 
@@ -242,6 +247,10 @@ Later phases harden screens and fixtures around these assumptions, so the cost o
 
 | Date | Decision | Rationale |
 |---|---|---|
+| 7 Oct 2026 | An appointment reaches the frontend as capability, and the demo never grants more than the database | `src/features/access/capabilities.ts` adds Team Lead navigation and route access from `departmentLeadScopes` without writing a role, so access tracks the appointment's own dates with nothing to revoke. Two scope rules came out of it: the mock session must not widen a lead's `scopedDivisionIds` (the server never has), and project mutation needs the project's manager or a role that carries project management, because an appointment grants authority over people, not over a project. |
+| 6 Oct 2026 | Workflow routing resolves authority per assignment, through one resolver | A placed assignment routes to its department appointment and an unplaced one keeps its frozen legacy lead, so the rows Phase B1 could not map do not lose routing mid-compatibility. WFH and leave keep a single reviewer — the primary placement's lead — rather than widening approval to every division an employee works in, and a reviewer who no longer leads an employee receives the not-found answer rather than a denial. Department leadership is the default; project, assigned-reviewer, HR-override and period-verification authority stay explicit. |
+| 4 Oct 2026 | Hierarchy rules a person reads live in one shared module, and a department appointment grants bounded capability rather than a role | `src/lib/department-hierarchy.ts` is imported by both the mock and the MySQL service, so a screen built against fixtures cannot contradict the server once connected. An effective appointment grants the Team Lead capability set only for the departments appointed; the policy's employee self-only rule has a narrow exception for those departments, without which the capability had nothing to act on. |
+| 4 Oct 2026 | The legacy department and assignment-lead columns are frozen rather than dropped at migration time | Routing for HR requests, evaluations, notifications and task review still reads `lead_employee_id`, so removing it with the schema change would break live workflows. Migration `0013` preserves both columns with coercing triggers, the services ignore a submitted lead, every disagreement is listed as `legacy_lead_disagrees`, and removal waits for Phase B3 plus HR sign-off on the reconciliation report. |
 | 27 Sep 2026 | Department administration runs on its own typed service, and "referenced" means *ever* referenced | Phase F2 replaced the preliminary `AdminService` department operations with `DepartmentAdministrationService`. A department named by any placement or appointment, current or historical, can be deactivated but never deleted or moved to another division; appointing a lead closes the open period the day before the new one and appends a row, so no recorded period is ever rewritten, and an appointment may not start in the past. |
 | 16 Sep 2026 | Department placement belongs to every EmployeeDivisionAssignment; effective lead appointment grants scoped capability | Preserves correct organization structure for employees working across several divisions. Any eligible active employee may lead multiple departments without receiving unrelated company-wide access, and effective dates preserve historical responsibility. Delivery is tracked in `organization_hierarchy_milestone.md`. |
 | 16 Sep 2026 | One administrator-managed organization logo feeds a shared `BrandLogo` component | Removes hardcoded marks from authentication, desktop and mobile chrome. The current mock frontend persists a validated PNG/JPEG/WebP asset (maximum 1 MB) in browser storage and updates every mounted logo immediately; production-wide persistence and private object storage remain part of backend/browser cutover. |

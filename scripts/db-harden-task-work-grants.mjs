@@ -65,6 +65,9 @@ try {
       } else if (
         table !== 'timer_sessions' &&
         !table.startsWith('task_work_migration_') &&
+        // Migration 0013's review and reconciliation record is migration
+        // output: the application reads it in a report and must never write it.
+        !table.startsWith('department_migration_') &&
         table !== 'time_capture_cutovers' &&
         table !== 'schema_migrations'
       ) {

@@ -49,7 +49,7 @@ export class RequestApplication {
             return false;
         if (!divisionId && assignments.some(a => a.is_government) && !hasPermission(actor, 'organization.government.view'))
             return false;
-        return actor.employeeId === employeeId || this.isHr(actor) || (hasPermission(actor, 'request.decide') && assignments.some(a => a.is_primary && a.lead_employee_id === actor.employeeId));
+        return actor.employeeId === employeeId || this.isHr(actor) || (hasPermission(actor, 'request.decide') && assignments.some(a => a.is_primary && a.effective_lead_employee_id === actor.employeeId));
     }
     range(r: HrRequest) {
         return 'wfhDate' in r ? { from: r.wfhDate, to: r.wfhDate } : { from: r.startDate, to: r.endDate };
@@ -202,7 +202,10 @@ export class RequestApplication {
             }
             else {
                 const assignments = await tx.assignments(before.employeeId, range.from);
-                if (self || !hasPermission(actor, 'request.decide') || !assignments.some(a => a.is_primary && a.lead_employee_id === actor.employeeId))
+                // `OH-BE-0301`: resolved on the request date, so a transfer or a
+                // lead change after the request still routes to whoever led the
+                // employee's primary placement on the day being requested.
+                if (self || !hasPermission(actor, 'request.decide') || !assignments.some(a => a.is_primary && a.effective_lead_employee_id === actor.employeeId))
                     return denied;
                 if (before.state !== 'pending')
                     return conflict('Only a pending request can be decided.');

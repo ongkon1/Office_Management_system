@@ -1,9 +1,9 @@
-'use client';
+﻿'use client';
 
 import * as React from 'react';
 import Link from 'next/link';
 import { Eye } from 'lucide-react';
-import { mockManagementService } from '@/services/mock/finance';
+import { managementService as mockManagementService } from '@/services/runtime/dashboard';
 import { useAsync } from '@/lib/use-async';
 import { useSession } from '@/features/access/session-provider';
 import { DashboardGrid, PageContainer, PageHeader } from '@/components/layout/page';

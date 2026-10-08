@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
@@ -10,7 +10,7 @@ import type {
   HrEmployeeRowView,
 } from '@/contracts/hr';
 import type { Employee } from '@/contracts/domain';
-import { mockHrService } from '@/services/mock/hr';
+import { hrService as mockHrService } from '@/services/runtime/hr';
 import { useAsync } from '@/lib/use-async';
 import { useSession } from '@/features/access/session-provider';
 import { useToast } from '@/components/feedback/toast';
@@ -28,6 +28,12 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar } from '@/components/ui/avatar';
 import { Duration, RestrictedValue } from '@/components/ui/misc';
 import { StatusIndicator } from '@/components/ui/status-indicator';
+import { DEMO_TODAY } from '@/lib/demo-context';
+import {
+  PLACEMENT_STATE_LABEL,
+  describeCurrentPlacements,
+  placementHistory,
+} from './placement-history';
 import {
   CompanyScope,
   DIVISION_OPTIONS,
@@ -887,7 +893,14 @@ function AssignmentsPanel({
   const [open, setOpen] = React.useState(false);
 
   const current = assignments.filter((assignment) => assignment.isEffectiveToday);
-  const historical = assignments.filter((assignment) => !assignment.isEffectiveToday);
+  /*
+   * `OH-FE-0306`. Everything that is not effective today, with its real state:
+   * a placement that has not started is **scheduled**, not ended — the section
+   * previously labelled both the same way — and a placement that replaced
+   * another inside one division says so, with the date the move took effect.
+   */
+  const history = placementHistory(assignments, DEMO_TODAY).filter((row) => row.state !== 'current');
+  const currentHistory = placementHistory(assignments, DEMO_TODAY).filter((row) => row.state === 'current');
 
   return (
     <div className="space-y-5">
@@ -916,6 +929,9 @@ function AssignmentsPanel({
           </Alert>
         )}
 
+        <p className="mt-3 text-body-sm text-ink-muted">
+          {describeCurrentPlacements(assignments, DEMO_TODAY)}
+        </p>
         <ul className="mt-4 space-y-3">
           {current.map((assignment) => (
             <li key={assignment.id} className="rounded-md border border-border p-3">
@@ -932,6 +948,14 @@ function AssignmentsPanel({
                     {assignment.effectiveTeamLead?.fullName ?? 'not appointed'} ·{' '}
                     {assignment.roleInDivision ?? 'No division role'}
                   </p>
+                  {currentHistory
+                    .filter((row) => row.assignment.id === assignment.id && row.transferredFrom)
+                    .map((row) => (
+                      <p key={row.assignment.id} className="text-caption text-ink-subtle">
+                        Transferred from {row.transferredFrom!.departmentName} on{' '}
+                        {row.transferredFrom!.onDateLabel}.
+                      </p>
+                    ))}
                 </div>
                 <Button
                   variant="ghost"
@@ -977,11 +1001,11 @@ function AssignmentsPanel({
 
       <Card>
         <CardHeader
-          title="Assignment history"
-          description="Ended and inactive assignments stay visible so past time records remain explainable."
+          title="Placement history"
+          description="Ended, scheduled and inactive placements stay visible so past time records and future moves remain explainable."
         />
         <ol className="mt-4 space-y-3">
-          {historical.map((assignment) => (
+          {history.map(({ assignment, state, transferredFrom }) => (
             <li key={assignment.id} className="flex gap-3">
               <span
                 aria-hidden
@@ -995,18 +1019,25 @@ function AssignmentsPanel({
                       Temporary
                     </Badge>
                   )}
-                  <Badge tone="neutral">Ended</Badge>
+                  <Badge tone={state === 'scheduled' ? 'accent' : 'neutral'}>
+                    {PLACEMENT_STATE_LABEL[state]}
+                  </Badge>
                 </p>
                 <p className="text-caption text-ink-muted">
                   {assignment.startDateLabel} – {assignment.endDateLabel ?? 'no end date'} ·{' '}
                   {assignment.allocationPercent}% · {assignment.department.name} · Team Lead{' '}
                   {assignment.effectiveTeamLead?.fullName ?? 'not appointed'}
                 </p>
+                {transferredFrom && (
+                  <p className="text-caption text-ink-subtle">
+                    Transferred from {transferredFrom.departmentName} on {transferredFrom.onDateLabel}.
+                  </p>
+                )}
               </div>
             </li>
           ))}
-          {historical.length === 0 && (
-            <li className="text-body-sm text-ink-muted">No historical assignments.</li>
+          {history.length === 0 && (
+            <li className="text-body-sm text-ink-muted">No earlier or scheduled placements.</li>
           )}
         </ol>
       </Card>

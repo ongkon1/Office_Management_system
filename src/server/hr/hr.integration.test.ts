@@ -7,6 +7,7 @@ import { createIsolatedDatabase } from '@/server/test/database-builder';
 import type { ActorPolicyContext } from '@/server/authorization/policy';
 import type { Result } from '@/contracts/results';
 import { HrRepository } from './repository';
+import { MysqlDepartmentRepository } from '@/server/organization/departments';
 import { RequestApplication } from './requests';
 import { AttendanceApplication } from './attendance';
 import { HolidayApplication } from './holidays';
@@ -24,6 +25,18 @@ const lead: ActorPolicyContext = {
 const hr: ActorPolicyContext = {
     ...employee, userId: '30000000-0000-4000-8000-000000000004', employeeId: '40000000-0000-4000-8000-000000000004', roles: ['hr_manager'], permissions: new Set(['organization.government.view', 'evaluation.private.view', 'evaluation.weight.manage', 'hr.jobs.run'])
 };
+/**
+ * `OH-BE-0301`, `OH-BE-0304`. The administrator account, used below as a
+ * department lead appointed over the seeded Technical department. Its stored
+ * role is irrelevant to the test: what is being checked is that an appointment
+ * routes the workflow, and that the frozen legacy column no longer does.
+ */
+const appointedLeadId = '40000000-0000-4000-8000-000000000001';
+const appointedLead: ActorPolicyContext = {
+    ...employee, userId: '30000000-0000-4000-8000-000000000001', employeeId: appointedLeadId, roles: ['team_lead'],
+    permissions: new Set(['organization.government.view']),
+};
+const TECHNICAL_DEPARTMENT = '22000000-0000-4000-8000-000000000001';
 let db: Awaited<ReturnType<typeof createIsolatedDatabase>>, pool: Pool, repo: HrRepository, self: RequestApplication, review: RequestApplication, admin: RequestApplication;
 let now = '2026-09-02T03:00:00Z';
 function data<T>(r: Result<T>): T {
@@ -261,6 +274,72 @@ describe('Phase 5 real database workflows', () => {
         expect((await new EvaluationApplication(self).change(e.id, 'save_self', {}, e.version)).status).toBe('conflict');
         expect(data(await app.setPeriodOpen(period.id, true)).isOpen).toBe(true);
     });
+    it('routes WFH approval and the evaluation reviewer through the effective department appointment', async () => {
+        /*
+         * `OH-BE-0301`, `OH-BE-0304`. The seeded hierarchy places EMP-001 in
+         * PowerInAI Technical, led by TL-001. Appointing somebody else from
+         * today must move the decision with it — while
+         * `employee_division_assignments.lead_employee_id` keeps saying TL-001,
+         * because it is frozen. That gap is the whole point: if the workflow
+         * still read the column, this test would pass for the wrong reason.
+         */
+        now = '2026-09-02T03:00:00Z';
+        /* A lead must be an active employee assigned to the department's own
+           division, so the appointee is placed there first — the same order an
+           administrator would work in. */
+        await pool.execute(
+            `INSERT INTO employee_division_assignments(id,employee_id,division_id,department_id,effective_from,
+               allocation_percent_basis_points,expected_weekly_minutes,is_primary,is_active)
+             VALUES(?,?,?,?,?,?,?,FALSE,TRUE)`,
+            [randomUUID(), appointedLeadId, division, TECHNICAL_DEPARTMENT, '2026-01-01', 5000, 2100],
+        );
+        const appointment = await new MysqlDepartmentRepository(pool).appointLead(
+            {
+                id: randomUUID(),
+                departmentId: TECHNICAL_DEPARTMENT,
+                leadEmployeeId: appointedLeadId,
+                effectiveFrom: '2026-09-02',
+                reason: 'Phase B3 routing test',
+            },
+            appointedLead.userId,
+        );
+        expect(appointment.status).toBe('appointed');
+
+        const [legacy] = await pool.query<RowDataPacket[]>(
+            'SELECT lead_employee_id FROM employee_division_assignments WHERE employee_id=? AND is_primary=TRUE LIMIT 1',
+            [eid],
+        );
+        expect(String(legacy[0].lead_employee_id)).toBe(leadId);
+
+        const request = data(await self.save('wfh', wfh('2026-09-24')));
+        data(await self.transition('wfh', request.id, 'submit'));
+
+        /*
+         * The previous lead no longer decides — and cannot even see the
+         * request, because they no longer reach the employee on its date. The
+         * answer is therefore the not-found-equivalent one rather than a
+         * denial, which would confirm that the request exists.
+         */
+        const refused = await review.transition('wfh', request.id, 'approved', 'Fine by me');
+        expect(refused.status).toBe('not_found');
+
+        /* The appointed lead does. */
+        const appointedReview = new RequestApplication(repo, async () => appointedLead, () => now);
+        expect(data(await appointedReview.transition('wfh', request.id, 'approved', 'Approved')).state).toBe('approved');
+
+        /* The same resolution decides the evaluation reviewer default. */
+        const evaluations = new EvaluationApplication(admin);
+        const period = data(await evaluations.createPeriod({
+            /* After the weighting version this suite made effective, and after
+               the appointment, so the reviewer resolves on the period end. */
+            name: 'B3 review', type: 'probation', startDate: '2026-11-16', endDate: '2026-11-20',
+            dueDate: '2026-11-27', weightingVersion: 2, isOpen: true,
+        }));
+        const staleReviewer = await evaluations.assign(period.id, eid, leadId);
+        expect(staleReviewer.status).toBe('validation_failure');
+        expect(data(await evaluations.assign(period.id, eid, appointedLeadId)).employeeId).toBe(eid);
+    });
+
     it('scheduled detection is repeatable without duplicate notifications or leave/holiday missing exceptions', async () => {
         now = '2026-10-10T03:00:00Z';
         const jobs = new HrJobs(new AttendanceApplication(admin));

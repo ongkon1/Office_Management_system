@@ -51,9 +51,37 @@ for (const required of [
   }
 }
 
+const departmentMigration = readFileSync(join(root, '0013_department_hierarchy.sql'), 'utf8');
+for (const required of [
+  'uq_departments_division_name',
+  'uq_departments_division_code',
+  'uq_departments_id_division',
+  'uq_department_lead_start',
+  'uq_department_single_open_period',
+  'fk_assignments_department FOREIGN KEY(department_id,division_id)',
+  'department_migration_review',
+  'department_migration_reconciliation',
+  'mapped_assignment_count + unmapped_assignment_count = active_assignment_count',
+  'employees_legacy_department_read_only',
+  'assignment_legacy_lead_read_only',
+]) {
+  if (!departmentMigration.includes(required)) {
+    throw new Error(`Migration 0013 is missing required invariant: ${required}`);
+  }
+}
+if (/ALTER TABLE employees[\s\S]*?DROP COLUMN department/i.test(departmentMigration)) {
+  throw new Error('Migration 0013 must keep the legacy employee department column (OH-BE-0115 removes it later).');
+}
+if (/UUID\(\)/i.test(departmentMigration.replace(/^\s*--.*$/gm, ''))) {
+  throw new Error('Migration 0013 must derive deterministic ids so a rehearsal can be compared to the real run.');
+}
+
 const grantHardener = readFileSync(join(process.cwd(), 'scripts', 'db-harden-task-work-grants.mjs'), 'utf8');
 if (!grantHardener.includes("table === 'task_status_transitions'") || !grantHardener.includes("table !== 'timer_sessions'")) {
   throw new Error('Runtime grant hardener must keep transitions insert-only and timers read-only.');
+}
+if (!grantHardener.includes("table.startsWith('department_migration_')")) {
+  throw new Error('Runtime grant hardener must keep the department migration review tables read-only.');
 }
 
 console.log(`Migration validation passed: ${migrations.length} forward migration(s) and matching recovery scripts checked.`);

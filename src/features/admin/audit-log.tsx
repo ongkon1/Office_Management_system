@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { ChevronDown, Lock, ScrollText } from 'lucide-react';
 import type { AuditEventView } from '@/contracts/admin';
-import { mockAdminService } from '@/services/mock/admin';
+import { adminService as mockAdminService } from '@/services/runtime/admin';
 import { useAsync } from '@/lib/use-async';
 import { useSession } from '@/features/access/session-provider';
 import { PageContainer, PageHeader } from '@/components/layout/page';

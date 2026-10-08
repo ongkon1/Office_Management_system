@@ -1,8 +1,9 @@
 'use client';
 
 import * as React from 'react';
-import { ChevronRight, Download, Lock, RotateCcw } from 'lucide-react';
-import { mockReportingService } from '@/services/mock/reporting';
+import { Download, Lock, RefreshCw, RotateCcw } from 'lucide-react';
+import type { ReportingService } from '@/contracts/reporting';
+import { reportingService as mockReportingService } from '@/services/runtime/reporting';
 import { useAsync } from '@/lib/use-async';
 import { useSession } from '@/features/access/session-provider';
 import { useToast } from '@/components/feedback/toast';
@@ -24,18 +25,18 @@ function stateTone(state: string): BadgeTone {
 /**
  * FE-0705 — export history.
  *
- * Every state an export can be in is present, including the ones people
- * actually get stuck on. `Advance` walks a queued job through processing to
- * ready so the lifecycle is demonstrable without a backend worker; it exists
- * because a history that only ever shows `Ready` teaches nothing about what to
- * do when a job is not.
+ * Every durable worker state is rendered from the backend. Pending jobs can be
+ * refreshed, failed jobs can be retried, and ready artifacts use the protected
+ * download route returned by the server.
  */
-export function ExportHistory() {
+export function ExportHistory({ service = mockReportingService }: { service?: ReportingService }) {
   const { user } = useSession();
   const toast = useToast();
+  const [refreshingJobId, setRefreshingJobId] = React.useState<string | null>(null);
+  const [retryingJobId, setRetryingJobId] = React.useState<string | null>(null);
   const { state, reload } = useAsync(
-    () => mockReportingService.listExports(user?.userId ?? ''),
-    [user?.userId],
+    () => service.listExports(user?.userId ?? ''),
+    [service, user?.userId],
   );
 
   if (state.status === 'loading') return <ReportsLoading label="export history" />;
@@ -44,23 +45,28 @@ export function ExportHistory() {
   }
   const jobs = state.data;
 
-  async function advance(id: string) {
-    const result = await mockReportingService.advanceExport(user?.userId ?? '', id);
+  async function refreshStatus(id: string) {
+    setRefreshingJobId(id);
+    const result = await service.advanceExport(user?.userId ?? '', id);
+    setRefreshingJobId(null);
     if (result.status === 'success') {
       reload();
       toast.show({
         tone: 'info',
         title: `Export is now ${result.data.stateLabel.toLowerCase()}`,
-        description:
-          result.data.state === 'ready'
-            ? 'The job record is complete. No file is produced during the frontend milestone.'
-            : 'Advance again to move it to the next state.',
+        description: result.data.state === 'ready'
+          ? 'The protected file is ready to download.'
+          : 'The export worker is still processing this request.',
       });
+      return;
     }
+    toast.show({ tone: 'error', title: 'Status could not be refreshed', description: result.message });
   }
 
   async function retry(id: string) {
-    const result = await mockReportingService.retryExport(user?.userId ?? '', id);
+    setRetryingJobId(id);
+    const result = await service.retryExport(user?.userId ?? '', id);
+    setRetryingJobId(null);
     if (result.status === 'success') {
       reload();
       toast.show({
@@ -68,7 +74,9 @@ export function ExportHistory() {
         title: 'Export requeued',
         description: 'The job returns to the queued state with your name as the requester.',
       });
+      return;
     }
+    toast.show({ tone: 'error', title: 'Export could not be retried', description: result.message });
   }
 
   return (
@@ -88,9 +96,8 @@ export function ExportHistory() {
       />
 
       <Callout tone="info" className="mt-5">
-        No export produces a file during the frontend milestone. The job record, its states and
-        the permission rules around downloading are real; file generation arrives with the backend
-        export worker.
+        Exports are generated securely in the background. Refresh a pending job to see its latest
+        state; ready files remain permission-checked when downloaded.
       </Callout>
 
       <Card className="mt-5">
@@ -126,21 +133,14 @@ export function ExportHistory() {
 
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 {job.canDownload && (
-                  <Button
+                  <LinkButton
                     variant="ghost"
                     size="sm"
+                    href={job.downloadUrl ?? `/api/reporting?view=download&id=${job.id}`}
                     iconLeading={<Download aria-hidden className="size-4" />}
-                    onClick={() =>
-                      toast.show({
-                        tone: 'info',
-                        title: 'Download not available yet',
-                        description:
-                          'The job record is real; file delivery arrives with the backend export worker.',
-                      })
-                    }
                   >
                     Download
-                  </Button>
+                  </LinkButton>
                 )}
                 {job.state === 'ready' && !job.canDownload && (
                   <span className="inline-flex min-h-6 items-center gap-1 text-caption text-ink-muted">
@@ -152,16 +152,18 @@ export function ExportHistory() {
                   <Button
                     variant="secondary"
                     size="sm"
-                    iconLeading={<ChevronRight aria-hidden className="size-4" />}
-                    onClick={() => advance(job.id)}
+                    loading={refreshingJobId === job.id}
+                    iconLeading={<RefreshCw aria-hidden className="size-4" />}
+                    onClick={() => refreshStatus(job.id)}
                   >
-                    Advance state
+                    Refresh status
                   </Button>
                 )}
                 {job.canRetry && (
                   <Button
                     variant="secondary"
                     size="sm"
+                    loading={retryingJobId === job.id}
                     iconLeading={<RotateCcw aria-hidden className="size-4" />}
                     onClick={() => retry(job.id)}
                   >

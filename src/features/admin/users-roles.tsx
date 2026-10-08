@@ -9,7 +9,7 @@ import type {
   UserAdminView,
 } from '@/contracts/admin';
 import type { RoleKey } from '@/contracts/domain';
-import { mockAdminService } from '@/services/mock/admin';
+import { adminService as mockAdminService } from '@/services/runtime/admin';
 import { useAsync } from '@/lib/use-async';
 import { useSession } from '@/features/access/session-provider';
 import { useToast } from '@/components/feedback/toast';

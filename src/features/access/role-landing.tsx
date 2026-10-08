@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import * as React from 'react';
 import Link from 'next/link';
@@ -9,7 +9,7 @@ import { Card } from '@/components/feedback/card';
 import { Alert } from '@/components/feedback/alert';
 import { PageContainer, PageHeader } from '@/components/layout/page';
 import { formatDateWithWeekday, formatTimestamp } from '@/lib/format';
-import { DEMO_DATE, findAccountByUserId } from '@/services/mock/accounts';
+import { DEMO_DATE, findAccountByUserId } from '@/services/runtime/demo';
 import { useSession } from './session-provider';
 
 /**

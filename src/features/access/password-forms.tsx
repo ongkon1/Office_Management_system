@@ -1,16 +1,14 @@
 'use client';
 
 import * as React from 'react';
-import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { CircleCheck, Eye, EyeOff } from 'lucide-react';
 import { Button, IconButton } from '@/components/ui/button';
 import { Field } from '@/components/forms/field';
 import { Input } from '@/components/forms/inputs';
-import { Alert, Callout } from '@/components/feedback/alert';
+import { Alert } from '@/components/feedback/alert';
 import { EmptyState } from '@/components/feedback/alert';
-import { mockAuthService, DEMO_RESET_TOKENS } from '@/services/mock/auth';
-import { isDemoMode } from './demo-mode';
+import { serverAuthService } from '@/services/server/auth';
 
 /* -------------------------------------------------------------------------- */
 /* Forgot password (FE-0202)                                                  */
@@ -24,7 +22,7 @@ export function ForgotPasswordForm() {
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setSubmitting(true);
-    await mockAuthService.requestPasswordReset({ email });
+    await serverAuthService.requestPasswordReset({ email });
     setSubmitting(false);
     setSent(true);
   }
@@ -45,33 +43,6 @@ export function ForgotPasswordForm() {
         <p className="text-body-sm text-ink-muted">
           Nothing arrived? Check your spam folder, or try again in a few minutes.
         </p>
-
-        {isDemoMode() && (
-          <Callout tone="info">
-            Demo: open a{' '}
-            <Link
-              className="underline underline-offset-2"
-              href={`/reset-password?token=${DEMO_RESET_TOKENS.valid}`}
-            >
-              valid link
-            </Link>
-            ,{' '}
-            <Link
-              className="underline underline-offset-2"
-              href={`/reset-password?token=${DEMO_RESET_TOKENS.expired}`}
-            >
-              expired link
-            </Link>
-            , or{' '}
-            <Link
-              className="underline underline-offset-2"
-              href={`/reset-password?token=${DEMO_RESET_TOKENS.invalid}`}
-            >
-              invalid link
-            </Link>
-            .
-          </Callout>
-        )}
 
         <Button variant="secondary" fullWidth onClick={() => setSent(false)}>
           Use a different address
@@ -117,6 +88,7 @@ export function ResetPasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get('token') ?? '';
+  const identifier = searchParams.get('email') ?? '';
 
   const [password, setPassword] = React.useState('');
   const [confirm, setConfirm] = React.useState('');
@@ -125,12 +97,12 @@ export function ResetPasswordForm() {
   const [fieldErrors, setFieldErrors] = React.useState<Record<string, string>>({});
   const [outcome, setOutcome] = React.useState<'done' | 'expired' | 'invalid' | null>(null);
 
-  if (!token) {
+  if (!token || !identifier) {
     return (
       <EmptyState
         variant="error"
         title="This link is incomplete"
-        description="The reset link is missing its token. Request a new one from the forgot-password page."
+        description="The reset link is incomplete. Request a new one from the forgot-password page."
       />
     );
   }
@@ -194,7 +166,7 @@ export function ResetPasswordForm() {
     if (Object.keys(errors).length > 0) return;
 
     setSubmitting(true);
-    const result = await mockAuthService.resetPassword({ token, password });
+    const result = await serverAuthService.resetPassword({ token, password, identifier });
     setSubmitting(false);
 
     if (result.status === 'success') setOutcome('done');

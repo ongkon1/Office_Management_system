@@ -1,4 +1,5 @@
 import { loadActorPolicyContext } from '@/server/authorization/mysql-context';
+import { leadsOfEmployee, reachesEmployee } from '@/server/organization/department-authority';
 import { hasPermission } from '@/server/authorization/policy';
 import { localParts } from '@/lib/calculation/instants';
 import { createHash, randomUUID } from 'node:crypto';
@@ -31,13 +32,19 @@ export class NotificationService {
         }
     }
     async timeEvent(type: string, eventKey: string, employeeId: string, date: string) {
-        const [rows] = await this.db.execute<RowDataPacket[]>(`SELECT DISTINCT e.id FROM employees e WHERE e.id=? OR e.id IN (SELECT lead_employee_id FROM employee_division_assignments WHERE employee_id=? AND is_active=TRUE AND effective_from<=? AND (effective_to IS NULL OR effective_to>=?)) OR EXISTS (SELECT 1 FROM user_roles ur JOIN roles r ON r.id=ur.role_id WHERE ur.user_id=e.user_id AND r.role_key='hr_manager' AND ur.effective_from<=? AND (ur.effective_to IS NULL OR ur.effective_to>=?))`, [employeeId, employeeId, date, date, date, date]);
+        // `OH-BE-0308`. Candidates: the employee, whoever leads them on that
+        // date through either route, and HR. Every candidate is still
+        // authorized individually below, so widening this set cannot widen who
+        // actually receives the notification.
+        const leads = await leadsOfEmployee(this.db, employeeId, date);
+        const leadPlaceholders = leads.length > 0 ? leads.map(() => '?').join(',') : null;
+        const [rows] = await this.db.execute<RowDataPacket[]>(`SELECT DISTINCT e.id FROM employees e WHERE e.id=?${leadPlaceholders ? ` OR e.id IN (${leadPlaceholders})` : ''} OR EXISTS (SELECT 1 FROM user_roles ur JOIN roles r ON r.id=ur.role_id WHERE ur.user_id=e.user_id AND r.role_key='hr_manager' AND ur.effective_from<=? AND (ur.effective_to IS NULL OR ur.effective_to>=?))`, [employeeId, ...leads, date, date]);
         const [entries] = await this.db.execute<RowDataPacket[]>("SELECT DISTINCT t.division_id,d.is_government FROM time_entries t JOIN divisions d ON d.id=t.division_id WHERE t.employee_id=? AND t.work_date=? AND t.is_active=TRUE AND t.status<>'draft'", [employeeId, date]);
         const recipients: string[] = [];
         for (const row of rows) {
             const [users] = await this.db.execute<RowDataPacket[]>('SELECT user_id FROM employees WHERE id=?', [row.id]);
             const actor = users[0] ? await loadActorPolicyContext(this.db, String(users[0].user_id), date) : null;
-            if (!actor || entries.some(e => (e.is_government && !hasPermission(actor, 'organization.government.view')) || !(actor.employeeId === employeeId || actor.roles.includes('super_admin') || actor.roles.includes('hr_manager') || (actor.employeeIds.has(employeeId) && actor.divisionIds.has(String(e.division_id)))))) continue;
+            if (!actor || entries.some(e => (e.is_government && !hasPermission(actor, 'organization.government.view')) || !reachesEmployee(actor, { employeeId, divisionId: String(e.division_id) }))) continue;
             recipients.push(String(row.id));
         }
         await this.send({ employeeIds: recipients, type, resourceType: 'timesheet', resourceId: employeeId, eventKey });

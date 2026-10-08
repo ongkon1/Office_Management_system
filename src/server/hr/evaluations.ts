@@ -200,7 +200,11 @@ export class EvaluationApplication {
                 return indistinguishableNotFound();
             if (!period.isOpen || employee.status !== 'active' || reviewer.status !== 'active' || employeeId === reviewerEmployeeId || employee.hire_date && date(employee.hire_date) > period.endDate)
                 return invalid('employeeId', 'Choose an eligible active employee and a different active reviewer in an open period.');
-            if (!(await tx.assignments(employeeId, period.endDate)).some(a => a.is_primary && a.lead_employee_id === reviewerEmployeeId))
+            // `OH-BE-0304`: the reviewer must be the lead effective on the
+            // period end date — the department appointment where the placement
+            // has one. HR keeps its explicit override path, which is why this
+            // check sits on the default assignment route only.
+            if (!(await tx.assignments(employeeId, period.endDate)).some(a => a.is_primary && a.effective_lead_employee_id === reviewerEmployeeId))
                 return invalid('reviewerEmployeeId', 'Assign the employee’s effective primary Team Lead.');
             if ((await tx.evaluations()).some(e => e.periodId === periodId && e.employeeId === employeeId))
                 return conflict('This employee already has an evaluation in this period.');

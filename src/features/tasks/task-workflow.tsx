@@ -39,7 +39,7 @@ import { cn } from '@/lib/cn';
 import { DEMO_TODAY } from '@/lib/demo-context';
 import { formatTimestamp, NOT_RECORDED } from '@/lib/format';
 import { TASK_STATUS_LABEL } from '@/lib/status';
-import { mockTimesheetService } from '@/services/mock/timesheet';
+import { timesheetService as mockTimesheetService } from '@/services/runtime/timesheet';
 import { useAsync } from '@/lib/use-async';
 
 export type TaskBoardFilter =

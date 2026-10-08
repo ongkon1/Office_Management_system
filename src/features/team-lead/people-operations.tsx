@@ -1,11 +1,11 @@
-'use client';
+﻿'use client';
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { CalendarDays, CheckCircle2, Gauge, Send, Users } from 'lucide-react';
 import type { EvaluationAreaKey } from '@/contracts/domain';
 import type { TeamEvaluationView, TeamRequestView } from '@/contracts/team-lead';
-import { mockTeamLeadService } from '@/services/mock/team-lead';
+import { teamLeadService as mockTeamLeadService } from '@/services/runtime/team-lead';
 import { useAsync } from '@/lib/use-async';
 import { useSession } from '@/features/access/session-provider';
 import { useToast } from '@/components/feedback/toast';
