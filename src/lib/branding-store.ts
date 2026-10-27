@@ -1,31 +1,12 @@
-import type { BrandLogoAsset, OrganizationBrandingView } from '@/contracts/admin';
+import type { OrganizationBrandingView } from '@/contracts/admin';
+import { isBrandLogoAsset } from '@/lib/branding';
 
 const STORAGE_KEY = 'oms.organization-branding';
-const ALLOWED_TYPES = new Set<BrandLogoAsset['mediaType']>([
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-]);
 
 export const DEFAULT_BRANDING: OrganizationBrandingView = Object.freeze({
   productName: 'Timesheet',
   logo: null,
 });
-
-function isLogo(value: unknown): value is BrandLogoAsset {
-  if (!value || typeof value !== 'object') return false;
-  const candidate = value as Partial<BrandLogoAsset>;
-  return (
-    typeof candidate.dataUrl === 'string' &&
-    typeof candidate.fileName === 'string' &&
-    typeof candidate.mediaType === 'string' &&
-    ALLOWED_TYPES.has(candidate.mediaType as BrandLogoAsset['mediaType']) &&
-    candidate.dataUrl.startsWith(`data:${candidate.mediaType};base64,`) &&
-    Number.isSafeInteger(candidate.sizeBytes) &&
-    Number(candidate.sizeBytes) > 0 &&
-    Number(candidate.sizeBytes) <= 1_048_576
-  );
-}
 
 function read(): OrganizationBrandingView {
   if (typeof window === 'undefined') return DEFAULT_BRANDING;
@@ -35,7 +16,7 @@ function read(): OrganizationBrandingView {
     const parsed = JSON.parse(raw) as Partial<OrganizationBrandingView>;
     return Object.freeze({
       productName: 'Timesheet',
-      logo: parsed.logo === null || isLogo(parsed.logo) ? parsed.logo : null,
+      logo: parsed.logo === null || isBrandLogoAsset(parsed.logo) ? parsed.logo : null,
     });
   } catch {
     return DEFAULT_BRANDING;

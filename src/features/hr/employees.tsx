@@ -36,7 +36,6 @@ import {
 } from './placement-history';
 import {
   CompanyScope,
-  DIVISION_OPTIONS,
   EMPLOYMENT_TYPE_OPTIONS,
   HrLoading,
   HrResultFallback,
@@ -48,6 +47,19 @@ const STATUS_OPTIONS = [
   { value: 'active', label: 'Active' },
   { value: 'inactive', label: 'Inactive' },
 ];
+
+/**
+ * Divisions as the service knows them. A fixed option list names ids that
+ * exist only in the demo fixtures, so every placement made from it was
+ * refused by the database.
+ */
+function useDivisionOptions(userId: string) {
+  const { state } = useAsync(() => mockHrService.listDivisionOptions(userId), [userId]);
+  return {
+    loading: state.status === 'loading',
+    options: state.status === 'success' ? state.data : [],
+  };
+}
 
 /* -------------------------------------------------------------------------- */
 /* FE-0502 — directory                                                        */
@@ -63,6 +75,7 @@ export function EmployeeDirectory({ incompleteOnly = false }: { incompleteOnly?:
   const [employmentTypes, setEmploymentTypes] = React.useState<readonly string[]>([]);
   const [workModes, setWorkModes] = React.useState<readonly string[]>([]);
   const [incomplete, setIncomplete] = React.useState(incompleteOnly);
+  const divisionOptions = useDivisionOptions(user?.userId ?? '').options;
 
   const { state } = useAsync(
     () =>
@@ -88,7 +101,7 @@ export function EmployeeDirectory({ incompleteOnly = false }: { incompleteOnly?:
     ...divisionIds.map((value) => ({
       key: `division-${value}`,
       label: 'Division',
-      value: DIVISION_OPTIONS.find((option) => option.value === value)?.label ?? value,
+      value: divisionOptions.find((option) => option.value === value)?.label ?? value,
       onRemove: () => setDivisionIds(divisionIds.filter((item) => item !== value)),
     })),
     ...teamLeadIds.map((value) => ({
@@ -166,7 +179,7 @@ export function EmployeeDirectory({ incompleteOnly = false }: { incompleteOnly?:
         <MultiSelectFilter label="Status" options={STATUS_OPTIONS} selected={status} onChange={setStatus} />
         <MultiSelectFilter
           label="Division"
-          options={DIVISION_OPTIONS}
+          options={divisionOptions}
           selected={divisionIds}
           onChange={setDivisionIds}
         />
@@ -305,14 +318,14 @@ export function EmployeeDirectory({ incompleteOnly = false }: { incompleteOnly?:
 
 const EMPTY_FORM: EmployeeFormInput = {
   fullName: '',
-  employeeCode: '',
   designation: '',
   employmentType: 'full_time',
   joiningDate: '2026-09-01',
   email: '',
   phone: '',
   officeLocation: '',
-  primaryDivisionId: 'pia',
+  primaryDivisionId: '',
+  primaryDepartmentId: '',
   normalWorkMode: 'office',
   standardDailyActiveMinutes: 420,
   standardWeeklyActiveMinutes: 2100,
@@ -340,6 +353,17 @@ export function EmployeeForm({ employeeId }: { employeeId?: string }) {
         : Promise.resolve({ status: 'success' as const, data: null }),
     [user?.userId, employeeId],
   );
+  const divisions = useDivisionOptions(user?.userId ?? '');
+  // Departments are only chosen while creating; an existing employee's
+  // placements change on the Assignments tab.
+  const { state: departmentState } = useAsync(
+    () =>
+      !employeeId && form.primaryDivisionId
+        ? mockHrService.listDepartmentOptions(user?.userId ?? '', form.primaryDivisionId)
+        : Promise.resolve({ status: 'success' as const, data: [] }),
+    [user?.userId, employeeId, form.primaryDivisionId],
+  );
+  const departmentOptions = departmentState.status === 'success' ? departmentState.data : [];
 
   // Adjusting state during render rather than in an effect: the form is
   // seeded once per loaded employee, and an effect here would run after a
@@ -350,14 +374,13 @@ export function EmployeeForm({ employeeId }: { employeeId?: string }) {
     setSeededFor(detail.employee.id);
     setForm({
       fullName: detail.employee.fullName,
-      employeeCode: detail.employee.employeeCode,
       designation: detail.employee.designation ?? '',
       employmentType: detail.employmentType,
       joiningDate: '2026-01-01',
       email: detail.email,
       phone: detail.phone ?? '',
       officeLocation: detail.officeLocation ?? '',
-      primaryDivisionId: detail.assignments.find((item) => item.isPrimary)?.division.id ?? 'pia',
+      primaryDivisionId: detail.assignments.find((item) => item.isPrimary)?.division.id ?? '',
       normalWorkMode: detail.workMode,
       standardDailyActiveMinutes: detail.standardDaily.minutes,
       standardWeeklyActiveMinutes: detail.standardWeekly.minutes,
@@ -382,7 +405,7 @@ export function EmployeeForm({ employeeId }: { employeeId?: string }) {
   async function save() {
     setSaving(true);
     setConflict(null);
-    if (!employeeId && user?.primaryRole === 'super_admin' && form.initialPassword !== confirmPassword) {
+    if (!employeeId && form.initialPassword !== confirmPassword) {
       setSaving(false);
       setErrors([{ field: 'confirmPassword', message: 'The passwords do not match. Retype them so they are identical.' }]);
       return;
@@ -462,11 +485,11 @@ export function EmployeeForm({ employeeId }: { employeeId?: string }) {
                 onChange={(event) => update('fullName', event.target.value)}
               />
             </Field>
-            <Field label="Employee code" required error={fieldError('employeeCode')} helperText="Format EMP-0000.">
+            <Field label="Employee ID" helperText="Assigned automatically and never changes.">
               <Input
                 name="employeeCode"
-                value={form.employeeCode}
-                onChange={(event) => update('employeeCode', event.target.value)}
+                readOnly
+                value={state.data?.employee.employeeCode ?? 'Assigned when saved (EMP-0000)'}
               />
             </Field>
             <Field label="Designation">
@@ -497,18 +520,56 @@ export function EmployeeForm({ employeeId }: { employeeId?: string }) {
                 onChange={(event) => update('joiningDate', event.target.value)}
               />
             </Field>
-            <Field label="Primary division">
-              <Select
-                value={form.primaryDivisionId}
-                options={DIVISION_OPTIONS}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    primaryDivisionId: event.target.value,
-                  }))
-                }
-              />
-            </Field>
+            {employeeId ? (
+              <Field label="Primary division" helperText="Change divisions and departments on the Assignments tab.">
+                <Input
+                  readOnly
+                  value={
+                    (state.data?.assignments.find((item) => item.isPrimary)?.division.name)
+                    ?? 'No primary division'
+                  }
+                />
+              </Field>
+            ) : (
+              <>
+                <Field label="Primary division" required error={fieldError('primaryDivisionId')}>
+                  <Select
+                    name="primaryDivisionId"
+                    value={form.primaryDivisionId}
+                    options={divisions.options}
+                    placeholder={divisions.loading ? 'Loading divisions' : 'Select division'}
+                    onChange={(event) =>
+                      // A department belongs to one division, so a new
+                      // division always clears the old choice.
+                      setForm((current) => ({
+                        ...current,
+                        primaryDivisionId: event.target.value,
+                        primaryDepartmentId: '',
+                      }))
+                    }
+                  />
+                </Field>
+                <Field
+                  label="Primary department"
+                  required
+                  error={fieldError('primaryDepartmentId')}
+                  helperText={
+                    form.primaryDivisionId && departmentState.status === 'success' && departmentOptions.length === 0
+                      ? 'This division has no active department. A Super Administrator must create one first.'
+                      : 'The employee is placed here from the joining date.'
+                  }
+                >
+                  <Select
+                    name="primaryDepartmentId"
+                    value={form.primaryDepartmentId ?? ''}
+                    options={departmentOptions}
+                    disabled={!form.primaryDivisionId}
+                    placeholder={departmentState.status === 'loading' ? 'Loading departments' : 'Select department'}
+                    onChange={(event) => update('primaryDepartmentId', event.target.value)}
+                  />
+                </Field>
+              </>
+            )}
             <Field label="Record status" helperText="An inactive employee keeps their history but cannot sign in.">
               <Select
                 value={form.status}
@@ -534,7 +595,8 @@ export function EmployeeForm({ employeeId }: { employeeId?: string }) {
                 />
               </Field>
             )}
-            {user?.primaryRole === 'super_admin' && !employeeId && (
+            {/* Every new account needs a credential, whoever creates it. */}
+            {!employeeId && (
               <>
                 <Field
                   label="Initial password"
@@ -655,8 +717,8 @@ export function EmployeeForm({ employeeId }: { employeeId?: string }) {
 /* -------------------------------------------------------------------------- */
 
 const EMPTY_ASSIGNMENT = {
-  divisionId: 'pia',
-  departmentId: 'dept-pia-technical',
+  divisionId: '',
+  departmentId: '',
   isPrimary: false,
   allocationPercent: 20,
   expectedWeeklyMinutes: 420,
@@ -685,8 +747,12 @@ function AssignmentEditor({
   const [form, setForm] = React.useState(EMPTY_ASSIGNMENT);
   const [errors, setErrors] = React.useState<readonly { field: string; message: string }[]>([]);
   const [seededFor, setSeededFor] = React.useState<string | null>(null);
+  const divisions = useDivisionOptions(user?.userId ?? '');
   const { state: departmentState } = useAsync(
-    () => mockHrService.listDepartmentOptions(user?.userId ?? '', form.divisionId),
+    () =>
+      form.divisionId
+        ? mockHrService.listDepartmentOptions(user?.userId ?? '', form.divisionId)
+        : Promise.resolve({ status: 'success' as const, data: [] }),
     [user?.userId, form.divisionId],
   );
 
@@ -750,7 +816,14 @@ function AssignmentEditor({
           message: `${error.message} ${error.guidance}`,
         })),
       );
+      return;
     }
+    // A refusal that is not about one field still has to be seen; before,
+    // the dialog stayed open with nothing explaining why.
+    setErrors([{
+      field: 'divisionId',
+      message: 'guidance' in result && result.guidance ? `${result.message} ${result.guidance}` : result.message,
+    }]);
   }
 
   const fieldError = (field: string) => errors.find((error) => error.field === field)?.message;
@@ -776,10 +849,11 @@ function AssignmentEditor({
       <div className="space-y-4">
         <FormErrorSummary errors={errors} autoFocus={false} />
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Division" required>
+          <Field label="Division" required error={fieldError('divisionId')}>
             <Select
               value={form.divisionId}
-              options={DIVISION_OPTIONS}
+              options={divisions.options}
+              placeholder={divisions.loading ? 'Loading divisions' : 'Select division'}
               onChange={(event) => setForm({
                 ...form, divisionId: event.target.value, departmentId: '',
               })}

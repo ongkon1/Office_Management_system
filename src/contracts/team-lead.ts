@@ -61,6 +61,49 @@ export interface TeamProjectView {
   readonly budgetLabel: string | null;
   readonly budgetRestricted: boolean;
   readonly notes: string | null;
+  /** The stored dates behind the labels, so an edit starts from real values. */
+  readonly startDate: IsoDate | null;
+  readonly endDate: IsoDate | null;
+  /** Current members — the Team tab and the edit form read these. */
+  readonly members: readonly EmployeeRef[];
+  /** Whether this viewer may edit the project and add tasks to it. */
+  readonly canManage: boolean;
+  /** Whether the project is currently active and accepts newly assigned work. */
+  readonly canAddTasks: boolean;
+  /**
+   * The stored budget as a decimal string, present only for a viewer with
+   * `finance.cost.view`. Everyone else gets null and `budgetRestricted`.
+   */
+  readonly budgetAmount: string | null;
+  /** Recorded changes, newest first. Populated by `getProject` only. */
+  readonly activity: readonly ProjectActivityView[];
+}
+
+export interface ProjectActivityView {
+  readonly id: string;
+  readonly label: string;
+  readonly actorName: string;
+  readonly atLabel: string;
+}
+
+/**
+ * Everything the project and task forms offer, loaded from the service so no
+ * option names an id that exists in only one data source.
+ */
+export interface ProjectFormOptionsView {
+  /** Team Lead, HR Manager or Super Administrator — an appointment alone is not enough. */
+  readonly canCreate: boolean;
+  /** Divisions this viewer may create a project in. */
+  readonly divisions: readonly { readonly value: string; readonly label: string }[];
+  /** Active employees, with the divisions they are placed in today. */
+  readonly people: readonly {
+    readonly value: string;
+    readonly label: string;
+    readonly divisionIds: readonly string[];
+  }[];
+  /** Whether a budget may be entered; cost access is a per-user grant. */
+  readonly canEditBudget: boolean;
+  readonly currency: string;
 }
 
 export interface TeamTaskView {
@@ -75,6 +118,8 @@ export interface TeamTaskView {
   readonly status: TaskStatus;
   readonly priority: Priority;
   readonly startDateLabel: string | null;
+  /** The stored start date, so an edit keeps it rather than clearing it. */
+  readonly startDate: IsoDate | null;
   readonly dueDate: IsoDate | null;
   readonly dueDateLabel: string | null;
   readonly estimated: DurationView;
@@ -140,9 +185,9 @@ export interface TeamEvaluationView {
   readonly summary: string;
 }
 
+/** The project code is assigned by the service (`PRJ-0000`), never submitted. */
 export interface ProjectFormInput {
   readonly name: string;
-  readonly code: string;
   readonly divisionId: string;
   readonly managerEmployeeId: string;
   readonly memberIds: readonly string[];
@@ -151,9 +196,15 @@ export interface ProjectFormInput {
   readonly endDate: IsoDate | null;
   readonly priority: Priority;
   readonly estimatedMinutes: number;
+  /**
+   * Decimal string in the organisation currency. Saved only for a viewer with
+   * cost access; ignored (and left unchanged) for everyone else. Empty clears it.
+   */
   readonly budgetAmount: string;
   readonly completionPercent: number;
   readonly notes: string;
+  /** Edit only; a new project always starts Active. */
+  readonly status?: ProjectStatus;
 }
 
 export interface TaskFormInput {
@@ -185,6 +236,7 @@ export interface TeamLeadService {
   resolveRemark(input: { userId: string; remarkId: string }): Promise<Result<{ state: RemarkState }>>;
   listProjects(userId: string): Promise<Result<readonly TeamProjectView[]>>;
   getProject(userId: string, id: string): Promise<Result<TeamProjectView>>;
+  getProjectFormOptions(userId: string): Promise<Result<ProjectFormOptionsView>>;
   saveProject(userId: string, input: ProjectFormInput, id?: string): Promise<Result<TeamProjectView>>;
   listTasks(userId: string): Promise<Result<readonly TeamTaskView[]>>;
   getTask(userId: string, id: string): Promise<Result<TeamTaskView>>;

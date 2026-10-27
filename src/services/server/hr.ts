@@ -8,6 +8,7 @@ const call = <T>(method: string, args: readonly unknown[]) =>
 
 export const serverHrService: Supported = {
   getDashboard: serverOperationsHrService.getDashboard,
+  listDivisionOptions: serverOperationsHrService.listDivisionOptions,
   listDepartmentOptions: serverOperationsHrService.listDepartmentOptions,
   listEmployees: serverOperationsHrService.listEmployees,
   getEmployee: serverOperationsHrService.getEmployee,

@@ -7,6 +7,7 @@ import type {
 } from '@/contracts/domain';
 import { SENSITIVE_PERMISSIONS } from '@/contracts/domain';
 import type {
+  ProjectActivityView,
   TeamEvaluationView,
   TeamLeadService,
   TeamProjectView,
@@ -21,6 +22,7 @@ import {
   formatDateWithWeekday,
   formatDurationDelta,
   formatMoney,
+  formatTimestamp,
 } from '@/lib/format';
 import {
   ATTENDANCE_LABEL,
@@ -53,6 +55,7 @@ import {
   type DepartmentRecord,
 } from './department-store';
 import { notifyEmployee } from './notification-store';
+import { nextRecordCodeFrom } from '@/lib/record-codes';
 
 const WAIT_MS = 120;
 const delay = () => new Promise((resolve) => setTimeout(resolve, WAIT_MS));
@@ -307,8 +310,18 @@ function projectView(project: Project, userId: string): TeamProjectView {
         : null,
     budgetRestricted: Boolean(project.budget && !canSeeBudget),
     notes: project.notes,
+    startDate: project.startDate,
+    endDate: project.endDate,
+    members: memberIds.map(employeeRef),
+    canManage: canManageProject(userId, project.divisionId, project.id),
+    canAddTasks: project.isActive && project.status === 'active' && project.acceptsTimeEntries,
+    budgetAmount: canSeeBudget && project.budget?.visible && project.budget.value ? project.budget.value.amount : null,
+    activity: projectActivity.get(project.id) ?? [],
   };
 }
+
+/** Recorded project changes, newest first — the mock twin of the audit trail. */
+const projectActivity = new Map<string, readonly ProjectActivityView[]>();
 
 function taskView(task: Task): TeamTaskView {
   const project = projects.find((item) => item.id === task.projectId);
@@ -325,6 +338,7 @@ function taskView(task: Task): TeamTaskView {
     status: task.status,
     priority: task.priority,
     startDateLabel: task.startDate ? formatDate(task.startDate) : null,
+    startDate: task.startDate,
     dueDate: task.dueDate,
     dueDateLabel: task.dueDate ? formatDate(task.dueDate) : null,
     estimated: toDurationView(task.estimatedMinutes),
@@ -655,29 +669,62 @@ export const mockTeamLeadService: TeamLeadService = {
     return success(projectView(project, userId));
   },
 
+  async getProjectFormOptions(userId) {
+    await delay();
+    const viewer = account(userId);
+    if (!viewer) return denied();
+    const wide = viewer.primaryRole === 'hr_manager' || viewer.primaryRole === 'super_admin';
+    const canCreate = wide || viewer.primaryRole === 'team_lead';
+    const divisions = canCreate
+      ? Object.values(DIVISIONS)
+        .filter((division) => wide ? (division.id !== 'gov' || viewer.permissions.includes(SENSITIVE_PERMISSIONS.governmentProjects)) : inDivisionScope(userId, division.id))
+        .map((division) => ({ value: division.id, label: division.name }))
+      : [];
+    const reachable = new Set([
+      ...divisions.map((division) => division.value),
+      ...projects.filter((project) => canManageProject(userId, project.divisionId, project.id)).map((project) => project.divisionId),
+    ]);
+    return success({
+      canCreate: canCreate && divisions.length > 0,
+      divisions,
+      people: DEMO_ACCOUNTS
+        .filter((item) => item.status === 'active' && item.scopedDivisionIds.some((id) => reachable.has(id)))
+        .map((item) => ({ value: item.employeeId, label: `${item.fullName} · ${item.employeeCode}`, divisionIds: item.scopedDivisionIds })),
+      canEditBudget: viewer.permissions.includes(SENSITIVE_PERMISSIONS.financialDetail),
+      currency: 'BDT',
+    });
+  },
+
   async saveProject(userId, input, id) {
     await delay();
     if (!canManageProject(userId, input.divisionId, id)) return denied();
-    if (!input.name.trim() || !input.code.trim()) return {
-      status: 'validation_failure', code: 'VALIDATION_FAILED', message: 'Complete the required project fields.', focusField: !input.name.trim() ? 'name' : 'code',
-      fieldErrors: [{ field: !input.name.trim() ? 'name' : 'code', code: 'REQUIRED', message: 'This field is required.', guidance: 'Enter a value before saving.' }],
+    if (!input.name.trim()) return {
+      status: 'validation_failure', code: 'VALIDATION_FAILED', message: 'Complete the required project fields.', focusField: 'name',
+      fieldErrors: [{ field: 'name', code: 'REQUIRED', message: 'This field is required.', guidance: 'Enter a project name; the project code is assigned automatically.' }],
     };
     const existing = id ? projects.find((item) => item.id === id) : undefined;
     const now = new Date().toISOString();
     const project: Project = {
-      id: existing?.id ?? `prj-${Date.now()}`, name: input.name.trim(), code: input.code.trim().toUpperCase(),
+      // The code is assigned once and never edited — the same rule as the MySQL service.
+      id: existing?.id ?? `prj-${Date.now()}`, name: input.name.trim(),
+      code: existing?.code ?? nextRecordCodeFrom('project', projects.map((item) => item.code)),
       divisionId: input.divisionId, managerEmployeeId: input.managerEmployeeId,
       client: input.client || null, startDate: input.startDate, endDate: input.endDate,
       priority: input.priority, description: existing?.description ?? null, estimatedMinutes: input.estimatedMinutes,
-      budget: input.budgetAmount
-        ? { visible: true, value: { amount: input.budgetAmount, currency: 'BDT' } }
+      // A budget changes only for a viewer with cost access; everyone else leaves it as it was.
+      budget: account(userId)?.permissions.includes(SENSITIVE_PERMISSIONS.financialDetail)
+        ? (input.budgetAmount.trim() ? { visible: true, value: { amount: input.budgetAmount.trim(), currency: 'BDT' } } : null)
         : existing?.budget ?? null,
-      completionPercent: input.completionPercent, status: existing?.status ?? 'planned', isActive: existing?.isActive ?? true,
+      completionPercent: input.completionPercent, status: existing ? input.status ?? existing.status : 'active', isActive: existing?.isActive ?? true,
       acceptsTimeEntries: existing?.acceptsTimeEntries ?? true, notes: input.notes || null,
       createdAt: existing?.createdAt ?? now, createdBy: existing?.createdBy ?? actorFor(userId), updatedAt: now, updatedBy: actorFor(userId),
     };
     projects = existing ? projects.map((item) => item.id === id ? project : item) : [...projects, project];
     projectMembers.set(project.id, input.memberIds);
+    projectActivity.set(project.id, [
+      { id: `${project.id}-${Date.now()}`, label: existing ? 'Project details updated' : 'Project created', actorName: actorFor(userId).displayName, atLabel: formatTimestamp(now) },
+      ...(projectActivity.get(project.id) ?? []),
+    ]);
     return success(projectView(project, userId));
   },
 
@@ -697,6 +744,11 @@ export const mockTeamLeadService: TeamLeadService = {
     await delay();
     const project = projects.find((item) => item.id === input.projectId);
     if (!project || !inDivisionScope(userId, project.divisionId)) return denied();
+    const existing = id ? mockStore.findTask(id) : undefined;
+    if (!existing && (!project.isActive || project.status !== 'active' || !project.acceptsTimeEntries)) return {
+      status: 'validation_failure', code: 'VALIDATION_FAILED', message: 'New tasks require an active project that accepts work.', focusField: 'projectId',
+      fieldErrors: [{ field: 'projectId', code: 'PROJECT_NOT_AVAILABLE', message: 'This project cannot receive a new task.', guidance: 'Choose another project or ask an administrator to activate this one.' }],
+    };
     if (!input.title.trim()) return {
       status: 'validation_failure', code: 'VALIDATION_FAILED', message: 'Enter a task title.', focusField: 'title',
       fieldErrors: [{ field: 'title', code: 'REQUIRED', message: 'Task title is required.', guidance: 'Enter a short, specific title.' }],
@@ -708,7 +760,6 @@ export const mockTeamLeadService: TeamLeadService = {
       status: 'validation_failure', code: 'VALIDATION_FAILED', message: 'Choose who will do this task.', focusField: 'assigneeEmployeeId',
       fieldErrors: [{ field: 'assigneeEmployeeId', code: 'REQUIRED', message: 'This task has no assignee yet.', guidance: 'Choose an eligible team member to assign it to.' }],
     };
-    const existing = id ? mockStore.findTask(id) : undefined;
     const creatorEmployeeId = account(userId)?.employeeId ?? userId;
     const isSelfAssigned = input.assigneeEmployeeId === creatorEmployeeId;
     const now = new Date().toISOString();

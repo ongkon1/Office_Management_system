@@ -15,6 +15,8 @@ const repo = (): TaskReviewRepository => ({
 });
 
 const effects = () => ({ audit: vi.fn(), notify: vi.fn() });
+const service = (repository: TaskReviewRepository, sideEffects = effects()) =>
+  new TaskReviewApplicationService(repository, sideEffects, () => '2026-09-02');
 const input = {
   projectId: 'p1',
   title: 'Work',
@@ -28,7 +30,7 @@ describe('self-created task application boundary', () => {
   it('forces employee self-assignment and current-lead review', async () => {
     const repository = repo();
     const sideEffects = effects();
-    const result = await new TaskReviewApplicationService(repository, sideEffects).raise('u', input);
+    const result = await service(repository, sideEffects).raise('u', input);
     expect(result.status).toBe('success');
     expect(repository.insertSelfTask).toHaveBeenCalledWith(expect.objectContaining({
       employeeId: 'e1', requiresReview: true, estimatedMinutes: 90,
@@ -44,7 +46,7 @@ describe('self-created task application boundary', () => {
       id: 'lead', leadEmployeeId: null, divisionIds: ['d1'], isTeamLead: true,
     });
     const sideEffects = effects();
-    const result = await new TaskReviewApplicationService(repository, sideEffects).raise('u', input);
+    const result = await service(repository, sideEffects).raise('u', input);
     expect(result.status).toBe('success');
     expect(repository.insertSelfTask).toHaveBeenCalledWith(expect.objectContaining({
       employeeId: 'lead', requiresReview: false,
@@ -58,7 +60,7 @@ describe('self-created task application boundary', () => {
   it('rejects wrong and self reviewers without revealing the task', async () => {
     const repository = repo();
     vi.mocked(repository.currentLeadForEmployee).mockResolvedValue('someone-else');
-    expect((await new TaskReviewApplicationService(repository, effects()).decide(
+    expect((await service(repository).decide(
       'u', 't1', { decision: 'approved', note: '', idempotencyKey: 'k' },
     )).status).toBe('not_found');
   });
@@ -69,13 +71,25 @@ describe('self-created task application boundary', () => {
       id: 'new-lead', leadEmployeeId: null, divisionIds: ['d1'], isTeamLead: true,
     });
     vi.mocked(repository.currentLeadForEmployee).mockResolvedValue('new-lead');
-    const service = new TaskReviewApplicationService(repository, effects());
-    expect((await service.decide(
+    const application = service(repository);
+    expect((await application.decide(
       'u', 't1', { decision: 'rejected', note: '', idempotencyKey: 'k' },
     )).status).toBe('validation_failure');
     vi.mocked(repository.decideAtomic).mockResolvedValue('conflict');
-    expect((await service.decide(
+    expect((await application.decide(
       'u', 't1', { decision: 'approved', note: '', idempotencyKey: 'k' },
     )).status).toBe('conflict');
+  });
+
+  it.each([
+    [{ title: '   ' }, 'title'],
+    [{ priority: 'immediate' }, 'priority'],
+    [{ dueDate: '2026-09-01' }, 'dueDate'],
+    [{ dueDate: 'not-a-date' }, 'dueDate'],
+    [{ estimatedHours: '0' }, 'estimatedHours'],
+    [{ description: 'x'.repeat(5001) }, 'description'],
+  ])('rejects invalid create input %o', async (override, field) => {
+    const result = await service(repo()).raise('u', { ...input, ...override });
+    expect(result).toMatchObject({ status: 'validation_failure', focusField: field });
   });
 });

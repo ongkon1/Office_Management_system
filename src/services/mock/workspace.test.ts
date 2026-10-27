@@ -551,15 +551,29 @@ describe('division administration (FE-0730)', () => {
     if (result.status === 'conflict') expect(result.guidance).toContain('assignment');
   });
 
-  it('rejects a duplicate division code', async () => {
+  it('rejects a duplicate division name', async () => {
     const result = await mockAdminService.saveDivision(ADMIN, {
-      name: 'New Division',
-      code: 'pia',
+      name: 'PowerInAI',
       description: '',
       teamLeadEmployeeId: 'emp-2001',
       isRestricted: false,
     });
     expect(result.status).toBe('conflict');
+  });
+
+  it('assigns the division code itself, in sequence, and keeps it on edit', async () => {
+    const input = { description: '', teamLeadEmployeeId: '', isRestricted: false };
+    const first = await mockAdminService.saveDivision(ADMIN, { ...input, name: 'Research' });
+    const second = await mockAdminService.saveDivision(ADMIN, { ...input, name: 'Analytics' });
+    if (first.status !== 'success' || second.status !== 'success') throw new Error('save failed');
+    const research = second.data.find((division) => division.name === 'Research')!;
+    const analytics = second.data.find((division) => division.name === 'Analytics')!;
+    expect(research.code).toMatch(/^DIV-\d{4}$/);
+    expect(Number(analytics.code.slice(4))).toBe(Number(research.code.slice(4)) + 1);
+
+    const renamed = await mockAdminService.saveDivision(ADMIN, { ...input, name: 'Research Lab' }, research.id);
+    if (renamed.status !== 'success') throw new Error('edit failed');
+    expect(renamed.data.find((division) => division.id === research.id)?.code).toBe(research.code);
   });
 });
 

@@ -5,8 +5,8 @@ import type { SessionUser } from '@/contracts/domain';
 import type { LoginInput } from '@/contracts/services';
 import type { Result } from '@/contracts/results';
 import { serverAuthService } from '@/services/server/auth';
-import { serverAdminService } from '@/services/server/admin';
-import { commitBranding, resetBranding } from '@/lib/branding-store';
+import { serverBrandingService } from '@/services/server/branding';
+import { commitBranding } from '@/lib/branding-store';
 import { sessionStore } from './session-store';
 
 /**
@@ -79,12 +79,15 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     return ()=>{active=false;};
   }, []);
 
-  React.useEffect(()=>{
-    if(!user){resetBranding();return;}
-    let active=true;
-    void serverAdminService.getBranding(user.userId).then(result=>{if(active&&result.status==='success')commitBranding(result.data);});
-    return()=>{active=false;};
-  },[user?.userId]);
+  React.useEffect(() => {
+    let active = true;
+    void serverBrandingService.getBranding().then((result) => {
+      if (active && result.status === 'success') commitBranding(result.data);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // One tick drives the countdown and enforces expiry. Expiry is applied in
   // the timer callback rather than an effect, so a session cannot outlive its

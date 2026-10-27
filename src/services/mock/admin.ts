@@ -41,6 +41,7 @@ import type {
 } from '@/contracts/admin';
 import { success } from '@/contracts/results';
 import { formatDate, formatTimestamp } from '@/lib/format';
+import { nextRecordCodeFrom } from '@/lib/record-codes';
 import { PROJECTS, STANDARD_POLICY } from '@/fixtures';
 import { EMPLOYEES } from '@/fixtures/hr';
 import { AUDIT_EVENTS, type AuditEventFixture } from '@/fixtures/workspace';
@@ -721,19 +722,16 @@ export const mockAdminService: AdminService = {
     if (!input.name.trim()) {
       return invalid('name', 'Enter a division name.', 'Employees see this name throughout.');
     }
-    if (!input.code.trim()) {
-      return invalid('code', 'Enter a division code.', 'Use a short uppercase code, such as PIA.');
-    }
     const duplicate = divisions.find(
       (division) =>
-        division.id !== id && division.code.toLowerCase() === input.code.trim().toLowerCase(),
+        division.id !== id && division.name.toLowerCase() === input.name.trim().toLowerCase(),
     );
     if (duplicate) {
       return {
         status: 'conflict' as const,
         code: 'CONFLICT' as const,
-        message: `Code ${input.code.trim().toUpperCase()} is already used by ${duplicate.name}.`,
-        guidance: 'Choose a different code.',
+        message: `The name ${input.name.trim()} is already used by another division.`,
+        guidance: 'Choose a different name.',
       };
     }
 
@@ -741,7 +739,8 @@ export const mockAdminService: AdminService = {
     const record: DivisionRecord = {
       id: existing?.id ?? `div-${Date.now()}`,
       name: input.name.trim(),
-      code: input.code.trim().toUpperCase(),
+      // Assigned once, never edited — the same rule as the MySQL service.
+      code: existing?.code ?? nextRecordCodeFrom('division', divisions.map((division) => division.code)),
       description: input.description.trim() || null,
       teamLeadEmployeeId: input.teamLeadEmployeeId || null,
       isActive: existing?.isActive ?? true,

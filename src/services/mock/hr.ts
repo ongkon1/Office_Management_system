@@ -45,6 +45,7 @@ import type {
 } from '@/contracts/hr';
 import { success, type Result } from '@/contracts/results';
 import { aggregateSummaries } from '@/lib/calculation/engine';
+import { nextRecordCodeFrom } from '@/lib/record-codes';
 import {
   addDays,
   daysBetween,
@@ -801,6 +802,21 @@ function evaluationPeriodView(period: EvaluationPeriod): HrEvaluationPeriodView 
 /* -------------------------------------------------------------------------- */
 
 export const mockHrService: HrService = {
+  async listDivisionOptions(userId) {
+    await delay();
+    if (!canAdminister(userId)) {
+      return denied(
+        'Employee administration is limited to HR and Super Administrators.',
+        'Return to your dashboard.',
+      );
+    }
+    return success(
+      [...Object.values(DIVISIONS)]
+        .sort((left, right) => left.name.localeCompare(right.name))
+        .map((division) => ({ value: division.id, label: division.name, isRestricted: division.isRestricted })),
+    );
+  },
+
   async listDepartmentOptions(userId, divisionId) {
     await delay();
     if (!canAdminister(userId)) {
@@ -1183,9 +1199,6 @@ export const mockHrService: HrService = {
     if (!input.fullName.trim()) {
       return invalid('fullName', 'Enter the employee name.', 'Use the name as it appears on the employment record.');
     }
-    if (!input.employeeCode.trim()) {
-      return invalid('employeeCode', 'Enter an employee code.', 'Use the format EMP-0000.');
-    }
     if (!input.email.trim()) {
       return invalid('email', 'Enter a work email address.', 'The employee signs in with this address.');
     }
@@ -1216,25 +1229,14 @@ export const mockHrService: HrService = {
         'Give the password securely to the user and ask them to change it after signing in.',
       );
     }
-    const duplicate = employees.find(
-      (employee) =>
-        employee.id !== employeeId &&
-        employee.employeeCode.toLowerCase() === input.employeeCode.trim().toLowerCase(),
-    );
-    if (duplicate) {
-      return {
-        status: 'conflict' as const,
-        code: 'CONFLICT' as const,
-        message: `Employee code ${input.employeeCode} is already used by ${duplicate.fullName}.`,
-        guidance: 'Choose a different employee code.',
-      };
-    }
-
     const now = new Date().toISOString();
     const actor = { userId, displayName: actorName(userId) };
     const record: Employee = {
       id: existing?.id ?? `emp-${Date.now()}`,
-      employeeCode: input.employeeCode.trim().toUpperCase(),
+      // Assigned once, never edited — the same rule as the MySQL service.
+      employeeCode:
+        existing?.employeeCode ??
+        nextRecordCodeFrom('employee', employees.map((employee) => employee.employeeCode)),
       fullName: input.fullName.trim(),
       photoUrl: existing?.photoUrl ?? null,
       designation: input.designation.trim(),

@@ -12,6 +12,8 @@ import type {
   TeamLeadService,
   TeamMemberView,
   TeamProjectView,
+  ProjectActivityView,
+  ProjectFormOptionsView,
   TeamTaskView,
   TeamRequestView,
   WorkloadMemberView,
@@ -25,6 +27,8 @@ import type {
   Task,
   RoleKey,
   TaskStatus,
+  Priority,
+  ProjectStatus,
 } from "@/contracts/domain";
 import type { Result } from "@/contracts/results";
 import type {
@@ -35,13 +39,19 @@ import type {
 } from "@/contracts/view-models";
 import { success } from "@/contracts/results";
 import {
+  isDuplicateKeyError,
+  nextRecordCode,
+} from "@/server/organization/record-codes";
+import {
   formatDate,
   formatDateRange,
   formatDateWithWeekday,
   formatDurationDelta,
   formatMonth,
+  formatMoney,
   formatTimestamp,
 } from "@/lib/format";
+import { money, storedMoney } from "@/lib/money";
 import {
   ATTENDANCE_LABEL,
   REQUEST_STATE_LABEL,
@@ -51,14 +61,38 @@ import {
 import { AuthenticationService } from "@/server/authentication/service";
 import { MysqlAuthenticationStore } from "@/server/authentication/mysql-store";
 import { loadActorPolicyContext } from "@/server/authorization/mysql-context";
+import {
+  hasPermission,
+  type ActorPolicyContext,
+} from "@/server/authorization/policy";
 import { hashPassword } from "@/server/security/crypto";
 import type { createHrServices } from "@/server/hr/composition";
 import type { createTimeServices } from "@/server/time/composition";
+import { businessToday } from "@/lib/business-date";
+import { NotificationService } from "@/server/notifications/service";
 
 type Row = RowDataPacket & Record<string, unknown>;
 type HrServices = ReturnType<typeof createHrServices>;
 type TimeServices = ReturnType<typeof createTimeServices>;
-const today = () => new Date().toISOString().slice(0, 10);
+const today = businessToday;
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const PRIORITIES: readonly Priority[] = ["low", "medium", "high", "urgent"];
+const PROJECT_STATUSES: readonly ProjectStatus[] = ["planned", "active", "on_hold", "completed", "closed"];
+const PROJECT_FIELD_LABEL: Readonly<Record<string, string>> = {
+  name: "name", client: "client", startDate: "start date", endDate: "end date", priority: "priority",
+  estimate: "estimate", progress: "progress", notes: "notes", status: "status", manager: "manager",
+  budget: "budget", members: "members",
+};
+/** Organisation-wide authority over projects. */
+const isWideRole = (a: ActorPolicyContext) =>
+  a.roles.includes("super_admin") || a.roles.includes("hr_manager");
+/** Management/View-Only with no other role: may read, never change. */
+const isReadOnly = (a: ActorPolicyContext) =>
+  a.roles.includes("management") &&
+  !a.roles.some((role) => ["super_admin", "hr_manager", "team_lead"].includes(role));
+/** A role that carries project management — an appointment alone does not. */
+const canCreateProject = (a: ActorPolicyContext) =>
+  isWideRole(a) || a.roles.includes("team_lead");
 const date = (v: unknown) =>
   v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10);
 const absent = (resource = "record"): Result<never> => ({
@@ -221,18 +255,47 @@ export class OperationsService {
     };
   }
 
-  async listDepartmentOptions(userId: string, divisionId: string) {
+  async listDivisionOptions(userId: string) {
     if (!(await this.hrActor(userId))) return denied();
     const rows = await this.rows(
-      `SELECT id,name,code,is_active FROM departments WHERE division_id=? AND is_active=TRUE ORDER BY name`,
+      "SELECT id,name,is_government FROM divisions WHERE is_active=TRUE ORDER BY name",
+    );
+    return success(
+      rows.map((r) => ({
+        value: String(r.id),
+        label: String(r.name),
+        isRestricted: Boolean(r.is_government),
+      })),
+    );
+  }
+  async listDepartmentOptions(userId: string, divisionId: string) {
+    if (!(await this.hrActor(userId))) return denied();
+    // The contract's option shape (`value`/`label`/`currentLead`), which is
+    // what the placement controls read. The lead shown is the appointment
+    // effective today — context only; the form never submits it.
+    const rows = await this.rows(
+      `SELECT d.id,d.name,d.division_id,d.is_active,e.id lead_id,e.employee_code lead_code,e.display_name lead_name,e.job_title lead_title,u.image_url lead_image
+       FROM departments d
+       LEFT JOIN department_lead_assignments l ON l.department_id=d.id AND l.effective_from<=CURRENT_DATE AND (l.effective_to IS NULL OR l.effective_to>=CURRENT_DATE)
+       LEFT JOIN employees e ON e.id=l.lead_employee_id LEFT JOIN users u ON u.id=e.user_id
+       WHERE d.division_id=? AND d.is_active=TRUE ORDER BY d.name`,
       [divisionId],
     );
     return success(
       rows.map((r) => ({
-        id: String(r.id),
-        name: String(r.name),
-        code: String(r.code),
+        value: String(r.id),
+        label: String(r.name),
+        divisionId: String(r.division_id),
         isActive: Boolean(r.is_active),
+        currentLead: r.lead_id
+          ? {
+              id: String(r.lead_id),
+              employeeCode: String(r.lead_code),
+              fullName: String(r.lead_name),
+              designation: r.lead_title ? String(r.lead_title) : null,
+              avatarUrl: r.lead_image ? String(r.lead_image) : null,
+            }
+          : null,
       })),
     );
   }
@@ -398,23 +461,55 @@ export class OperationsService {
         "Use at least 12 characters.",
         "Create a secure initial password.",
       );
-    const duplicate = await this.rows(
-      "SELECT id FROM employees WHERE employee_code=? AND id<>COALESCE(?,'')",
-      [input.employeeCode.trim().toUpperCase(), employeeId ?? null],
+    const emailOwner = await this.rows(
+      "SELECT u.id FROM users u LEFT JOIN employees e ON e.user_id=u.id WHERE u.email_normalized=? AND (e.id IS NULL OR e.id<>COALESCE(?,''))",
+      [input.email.trim().toLowerCase(), employeeId ?? null],
     );
-    if (duplicate[0])
+    if (emailOwner[0])
       return conflict(
-        "That employee code is already in use.",
-        "Choose another employee code.",
+        "That work email is already in use.",
+        "Use the employee's own work email address.",
       );
+    // A new employee is placed in the same transaction that creates them.
+    // Without this the account existed with no division, so it could record
+    // no time and appeared in no division until HR added a placement by hand.
+    if (!employeeId) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(input.joiningDate ?? ""))
+        return invalid(
+          "joiningDate",
+          "Enter the joining date.",
+          "The primary division assignment starts on this date.",
+        );
+      const division = await this.rows(
+        "SELECT id FROM divisions WHERE id=? AND is_active=TRUE",
+        [input.primaryDivisionId ?? ""],
+      );
+      if (!division[0])
+        return invalid(
+          "primaryDivisionId",
+          "Choose an active primary division.",
+          "Select a division from the list.",
+        );
+      const department = await this.rows(
+        "SELECT id FROM departments WHERE id=? AND division_id=? AND is_active=TRUE",
+        [input.primaryDepartmentId ?? "", input.primaryDivisionId],
+      );
+      if (!department[0])
+        return invalid(
+          "primaryDepartmentId",
+          "Choose an active department in the primary division.",
+          "If the list is empty, a Super Administrator must create a department for this division first.",
+        );
+    }
     const id = employeeId ?? randomUUID();
+    try {
     await this.transaction(async (c) => {
       if (employeeId) {
         await c.execute(
-          `UPDATE employees e JOIN users u ON u.id=e.user_id SET e.display_name=?,e.employee_code=?,e.job_title=?,e.employment_type=?,e.hire_date=?,e.phone=?,e.office_location=?,e.normal_work_mode=?,e.standard_daily_active_minutes=?,e.standard_weekly_active_minutes=?,e.skills=?,e.status=?,u.name=?,u.email=?,u.email_normalized=?,u.status=?,e.version=e.version+1,u.version=u.version+1 WHERE e.id=?`,
+          // The employee code is not updated: it is assigned once on create.
+          `UPDATE employees e JOIN users u ON u.id=e.user_id SET e.display_name=?,e.job_title=?,e.employment_type=?,e.hire_date=?,e.phone=?,e.office_location=?,e.normal_work_mode=?,e.standard_daily_active_minutes=?,e.standard_weekly_active_minutes=?,e.skills=?,e.status=?,u.name=?,u.email=?,u.email_normalized=?,u.status=?,e.version=e.version+1,u.version=u.version+1 WHERE e.id=?`,
           [
             input.fullName.trim(),
-            input.employeeCode.trim().toUpperCase(),
             input.designation.trim(),
             input.employmentType,
             input.joiningDate,
@@ -434,6 +529,7 @@ export class OperationsService {
         );
       } else {
         const uid = randomUUID();
+        const employeeCode = await nextRecordCode(c, "employee");
         await c.execute(
           "INSERT INTO users(id,name,email,email_normalized,employee_identifier,status) VALUES(?,?,?,?,?,?)",
           [
@@ -441,7 +537,7 @@ export class OperationsService {
             input.fullName.trim(),
             input.email.trim(),
             input.email.trim().toLowerCase(),
-            input.employeeCode.trim().toUpperCase(),
+            employeeCode,
             input.status,
           ],
         );
@@ -450,7 +546,7 @@ export class OperationsService {
           [
             id,
             uid,
-            input.employeeCode.trim().toUpperCase(),
+            employeeCode,
             input.fullName.trim(),
             input.designation.trim(),
             input.joiningDate,
@@ -483,8 +579,27 @@ export class OperationsService {
             "INSERT INTO user_roles(id,user_id,role_id,effective_from) SELECT ?,?,id,CURRENT_DATE FROM roles WHERE role_key=? AND is_active=TRUE",
             [randomUUID(), uid, key],
           );
+        await c.execute(
+          "INSERT INTO employee_division_assignments(id,employee_id,division_id,department_id,effective_from,allocation_percent_basis_points,expected_weekly_minutes,is_primary,is_temporary,is_active) VALUES(?,?,?,?,?,10000,?,TRUE,FALSE,TRUE)",
+          [
+            randomUUID(),
+            id,
+            input.primaryDivisionId,
+            input.primaryDepartmentId!,
+            input.joiningDate,
+            input.standardWeeklyActiveMinutes,
+          ],
+        );
       }
     });
+    } catch (error) {
+      if (isDuplicateKeyError(error))
+        return conflict(
+          "Another record took that identifier or email at the same moment.",
+          "Save again; a new employee ID is assigned automatically.",
+        );
+      throw error;
+    }
     const r = await this.employeeRow(id);
     return r ? success(this.mapEmployeeRow(r)) : absent("Employee");
   }
@@ -1005,18 +1120,111 @@ export class OperationsService {
         r.status === "success" ? success({ state: r.data.state }) : r,
       );
   }
-  private async projectRows(
-    a: NonNullable<Awaited<ReturnType<OperationsService["lead"]>>>,
-    id?: string,
-  ) {
-    const ids = [...a.projectIds];
+  /**
+   * Project reach, decided per row from live data.
+   *
+   * This replaces a filter on `actor.projectIds`, which only `scoped_grants`
+   * fills and nothing writes — so every project list was empty, a project
+   * vanished the moment it was saved, and every task under it was hidden.
+   *
+   * View: Super Administrator and HR (all), Management (all, read only), a
+   * Team Lead over projects in the divisions they are placed in, the project's
+   * manager, its active members, and anyone with a task on it.
+   * Manage: Super Administrator, HR, a Team Lead in the project's division,
+   * and the project's manager. A department appointment alone grants neither —
+   * it is authority over people, never over a project.
+   * Government projects additionally need `organization.government.view`.
+   */
+  private async projectAccess(a: ActorPolicyContext) {
+    const me = a.employeeId ?? "";
+    const on = today();
+    const rows = await this.rows(
+      `SELECT p.id,p.division_id,p.manager_employee_id,d.is_government,
+        EXISTS(SELECT 1 FROM project_members pm WHERE pm.project_id=p.id AND pm.employee_id=? AND pm.is_active=TRUE
+          AND pm.effective_from<=? AND (pm.effective_to IS NULL OR pm.effective_to>=?)) is_member,
+        EXISTS(SELECT 1 FROM tasks t WHERE t.project_id=p.id AND t.is_active=TRUE
+          AND (t.assignee_employee_id=? OR EXISTS(SELECT 1 FROM task_members tm WHERE tm.task_id=t.id AND tm.employee_id=?))) has_task
+       FROM projects p JOIN divisions d ON d.id=p.division_id`,
+      [me, on, on, me, me],
+    );
+    const wide = isWideRole(a);
+    const government = hasPermission(a, "organization.government.view");
+    const access = new Map<string, { manage: boolean; divisionId: string }>();
+    for (const r of rows) {
+      if (r.is_government && !government) continue;
+      const divisionId = String(r.division_id);
+      const manage =
+        wide ||
+        (a.employeeId !== null && String(r.manager_employee_id) === a.employeeId) ||
+        (a.roles.includes("team_lead") && a.divisionIds.has(divisionId));
+      const view =
+        manage ||
+        a.roles.includes("management") ||
+        a.projectIds.has(String(r.id)) ||
+        Boolean(r.is_member) ||
+        Boolean(r.has_task);
+      if (view) access.set(String(r.id), { manage: manage && !isReadOnly(a), divisionId });
+    }
+    return access;
+  }
+  private async projectRows(ids: readonly string[]) {
     if (!ids.length) return [];
     return this.rows(
-      `SELECT p.*,d.name division_name,d.division_key division_code,d.is_government division_restricted,e.id manager_id,e.employee_code manager_employee_code,e.display_name manager_display_name,e.job_title manager_job_title,u.image_url manager_image_url,(SELECT COUNT(*) FROM project_members pm WHERE pm.project_id=p.id AND pm.effective_from<=CURRENT_DATE AND (pm.effective_to IS NULL OR pm.effective_to>=CURRENT_DATE)) member_count,(SELECT COALESCE(SUM(te.active_minutes),0) FROM time_entries te WHERE te.project_id=p.id AND te.is_active=TRUE AND te.status<>'draft') actual_minutes FROM projects p JOIN divisions d ON d.id=p.division_id JOIN employees e ON e.id=p.manager_employee_id JOIN users u ON u.id=e.user_id WHERE p.id IN (${ids.map(() => "?").join(",")}) ${id ? "AND p.id=?" : ""} ORDER BY p.name`,
-      id ? [...ids, id] : ids,
+      `SELECT p.*,d.name division_name,d.division_key division_code,d.is_government division_restricted,e.id manager_id,e.employee_code manager_employee_code,e.display_name manager_display_name,e.job_title manager_job_title,u.image_url manager_image_url,
+        (SELECT COUNT(*) FROM project_members pm WHERE pm.project_id=p.id AND pm.is_active=TRUE AND pm.effective_from<=CURRENT_DATE AND (pm.effective_to IS NULL OR pm.effective_to>=CURRENT_DATE)) member_count,
+        (SELECT COALESCE(SUM(te.active_minutes),0) FROM time_entries te WHERE te.project_id=p.id AND te.is_active=TRUE AND te.status<>'draft') actual_minutes
+       FROM projects p JOIN divisions d ON d.id=p.division_id JOIN employees e ON e.id=p.manager_employee_id JOIN users u ON u.id=e.user_id
+       WHERE p.id IN (${ids.map(() => "?").join(",")}) ORDER BY p.name`,
+      [...ids],
     );
   }
-  private mapProject(r: Row): TeamProjectView {
+  /** Current members of each project, in one query. */
+  private async projectMembers(ids: readonly string[]) {
+    const members = new Map<string, EmployeeRef[]>();
+    if (!ids.length) return members;
+    const rows = await this.rows(
+      `SELECT pm.project_id,e.id,e.employee_code,e.display_name,e.job_title,u.image_url
+       FROM project_members pm JOIN employees e ON e.id=pm.employee_id JOIN users u ON u.id=e.user_id
+       WHERE pm.project_id IN (${ids.map(() => "?").join(",")}) AND pm.is_active=TRUE
+         AND pm.effective_from<=? AND (pm.effective_to IS NULL OR pm.effective_to>=?)
+       ORDER BY e.display_name`,
+      [...ids, today(), today()],
+    );
+    for (const r of rows) {
+      const list = members.get(String(r.project_id)) ?? [];
+      list.push(employee(r));
+      members.set(String(r.project_id), list);
+    }
+    return members;
+  }
+  private async projectActivity(id: string): Promise<ProjectActivityView[]> {
+    const rows = await this.rows(
+      `SELECT a.event_id,a.action,a.after_protected,a.occurred_at,u.name actor_name FROM audit_events a
+       LEFT JOIN users u ON u.id=a.actor_user_id WHERE a.resource_type='project' AND a.resource_id=?
+       ORDER BY a.occurred_at DESC,a.sequence_id DESC LIMIT 50`,
+      [id],
+    );
+    return rows.map((r) => {
+      const after = (typeof r.after_protected === "string" ? JSON.parse(r.after_protected) : r.after_protected) as { changedFields?: string[] } | null;
+      const fields = (after?.changedFields ?? []).map((field) => PROJECT_FIELD_LABEL[field] ?? field);
+      return {
+        id: String(r.event_id),
+        label: r.action === "project.created"
+          ? "Project created"
+          : fields.length ? `Updated ${fields.join(", ")}` : "Project saved with no changes",
+        actorName: r.actor_name ? String(r.actor_name) : "System",
+        atLabel: formatTimestamp(r.occurred_at instanceof Date ? r.occurred_at.toISOString() : String(r.occurred_at)),
+      };
+    });
+  }
+  private mapProject(
+    r: Row,
+    manage: boolean,
+    canSeeCost: boolean,
+    members: readonly EmployeeRef[] = [],
+    activity: readonly ProjectActivityView[] = [],
+  ): TeamProjectView {
+    const budget = r.budget_amount != null && r.currency ? storedMoney(String(r.budget_amount), String(r.currency)) : null;
     return {
       id: String(r.id),
       name: String(r.name),
@@ -1025,133 +1233,268 @@ export class OperationsService {
       manager: employee(r, "manager_"),
       memberCount: Number(r.member_count),
       client: r.client_name ? String(r.client_name) : null,
-      startDateLabel: r.start_date
-        ? formatDate(date(r.start_date))
-        : "Not recorded",
+      startDateLabel: r.start_date ? formatDate(date(r.start_date)) : "Not recorded",
       endDateLabel: r.end_date ? formatDate(date(r.end_date)) : null,
       priority: String(r.priority ?? "medium") as TeamProjectView["priority"],
-      status: (String(r.status) === "closed"
-        ? "closed"
-        : String(r.status)) as TeamProjectView["status"],
+      status: String(r.status) as TeamProjectView["status"],
       completionPercent: Number(r.completion_percent ?? 0),
       estimated: toDurationView(Number(r.estimated_minutes ?? 0)),
       actual: toDurationView(Number(r.actual_minutes ?? 0)),
-      budgetLabel: null,
-      budgetRestricted: true,
+      // Cost is a per-user grant: without it there is no amount in the view at all.
+      budgetLabel: canSeeCost ? (budget ? formatMoney(budget) : null) : null,
+      budgetRestricted: !canSeeCost,
+      budgetAmount: canSeeCost && budget ? budget.amount : null,
       notes: r.notes ? String(r.notes) : null,
+      startDate: r.start_date ? date(r.start_date) : null,
+      endDate: r.end_date ? date(r.end_date) : null,
+      members,
+      canManage: manage,
+      canAddTasks: manage && Boolean(r.is_active) && String(r.status) === "active" && Boolean(r.accepts_time_entries),
+      activity,
     };
   }
   async listProjects(userId: string) {
-    const a = await this.lead(userId);
-    return a
-      ? success((await this.projectRows(a)).map((r) => this.mapProject(r)))
-      : denied();
+    const a = await this.identity(userId);
+    if (!a) return denied();
+    const access = await this.projectAccess(a);
+    const ids = [...access.keys()];
+    const [rows, members] = await Promise.all([this.projectRows(ids), this.projectMembers(ids)]);
+    const cost = hasPermission(a, "finance.cost.view");
+    return success(rows.map((r) => this.mapProject(r, access.get(String(r.id))!.manage, cost, members.get(String(r.id)) ?? [])));
   }
   async getProject(userId: string, id: string) {
-    const a = await this.lead(userId);
+    const a = await this.identity(userId);
     if (!a) return absent("Project");
-    const r = (await this.projectRows(a, id))[0];
-    return r ? success(this.mapProject(r)) : absent("Project");
+    const reach = (await this.projectAccess(a)).get(id);
+    if (!reach) return absent("Project");
+    const r = (await this.projectRows([id]))[0];
+    if (!r) return absent("Project");
+    const [members, activity] = await Promise.all([this.projectMembers([id]), this.projectActivity(id)]);
+    return success(this.mapProject(r, reach.manage, hasPermission(a, "finance.cost.view"), members.get(id) ?? [], activity));
+  }
+  /** Active employees placed (today) in each division, for manager and member choices. */
+  private async placedPeople() {
+    const rows = await this.rows(
+      `SELECT e.id,e.display_name,e.employee_code,GROUP_CONCAT(DISTINCT a.division_id) division_ids
+       FROM employees e JOIN users u ON u.id=e.user_id
+       JOIN employee_division_assignments a ON a.employee_id=e.id AND a.is_active=TRUE
+         AND a.effective_from<=? AND (a.effective_to IS NULL OR a.effective_to>=?)
+       WHERE e.status='active' AND u.status='active'
+       GROUP BY e.id,e.display_name,e.employee_code ORDER BY e.display_name`,
+      [today(), today()],
+    );
+    return rows.map((r) => ({
+      value: String(r.id),
+      label: `${String(r.display_name)} · ${String(r.employee_code)}`,
+      divisionIds: String(r.division_ids ?? "").split(",").filter(Boolean),
+    }));
+  }
+  private async creatableDivisions(a: ActorPolicyContext) {
+    if (!canCreateProject(a)) return [];
+    const government = hasPermission(a, "organization.government.view");
+    const rows = await this.rows("SELECT id,name,is_government FROM divisions WHERE is_active=TRUE ORDER BY name");
+    return rows
+      .filter((r) => !r.is_government || government)
+      .filter((r) => isWideRole(a) || a.divisionIds.has(String(r.id)))
+      .map((r) => ({ value: String(r.id), label: String(r.name) }));
+  }
+  async getProjectFormOptions(userId: string): Promise<Result<ProjectFormOptionsView>> {
+    const a = await this.identity(userId);
+    if (!a) return denied();
+    const [divisions, access, people] = await Promise.all([this.creatableDivisions(a), this.projectAccess(a), this.placedPeople()]);
+    // Only people in divisions the viewer can create or manage work in: the
+    // options are a working list, not a company directory.
+    const reachable = new Set([...divisions.map((d) => d.value), ...[...access.values()].filter((p) => p.manage).map((p) => p.divisionId)]);
+    return success({
+      canCreate: canCreateProject(a) && divisions.length > 0,
+      divisions,
+      people: people.filter((person) => person.divisionIds.some((id) => reachable.has(id))),
+      canEditBudget: hasPermission(a, "finance.cost.view") && !isReadOnly(a),
+      currency: "BDT",
+    });
   }
   async saveProject(
     userId: string,
     input: Parameters<TeamLeadService["saveProject"]>[1],
     id?: string,
   ) {
-    const actor = await this.lead(userId);
-    if (!actor?.employeeId) return denied();
-    const existing = id
-      ? (await this.rows("SELECT * FROM projects WHERE id=?", [id]))[0]
-      : null;
-    if (existing && String(existing.manager_employee_id) !== actor.employeeId)
-      return absent("Project");
-    if (!existing && !actor.divisionIds.has(input.divisionId))
-      return denied("Choose a division in your authorized scope.");
-    if (!input.name.trim() || !input.code.trim())
-      return invalid(
-        "name",
-        "Enter a project name and code.",
-        "Both values are required.",
-      );
+    const a = await this.identity(userId);
+    if (!a) return denied();
+    if (isReadOnly(a)) return denied("Management access is read-only.");
+    const access = await this.projectAccess(a);
+    let existing: Row | null = null;
+    if (id) {
+      const reach = access.get(id);
+      if (!reach) return absent("Project");
+      if (!reach.manage)
+        return denied("Only the project manager, a Team Lead in its division, HR or a Super Administrator can change this project.");
+      existing = (await this.rows("SELECT * FROM projects WHERE id=?", [id]))[0] ?? null;
+      if (!existing) return absent("Project");
+    } else if (!canCreateProject(a)) {
+      return denied("Only a Team Lead, HR Manager or Super Administrator can create a project.");
+    }
+
+    // ---- validation -------------------------------------------------------
+    const name = input.name.trim();
+    if (!name || name.length > 200)
+      return invalid("name", "Enter a project name of up to 200 characters.", "The project code is assigned automatically.");
+    const divisionId = existing ? String(existing.division_id) : input.divisionId;
+    if (existing && input.divisionId !== divisionId)
+      return conflict("A project cannot move to another division.", "Create a new project in the other division.");
+    if (!existing && !(await this.creatableDivisions(a)).some((d) => d.value === divisionId))
+      return invalid("divisionId", "Choose a division you can create projects in.", "Only divisions in your scope are listed.");
+    if (!ISO_DATE.test(input.startDate ?? ""))
+      return invalid("startDate", "Enter a start date.", "Use the date picker.");
+    if (input.endDate && (!ISO_DATE.test(input.endDate) || input.endDate < input.startDate))
+      return invalid("endDate", "The end date cannot be before the start date.", "Choose an end date on or after the start date.");
+    if (!PRIORITIES.includes(input.priority))
+      return invalid("priority", "Choose a priority.", "Pick one of the listed priorities.");
+    const status = existing ? (input.status ?? String(existing.status)) : "active";
+    if (!PROJECT_STATUSES.includes(status as ProjectStatus))
+      return invalid("status", "Choose a project status.", "Pick one of the listed statuses.");
+    if (!Number.isInteger(input.estimatedMinutes) || input.estimatedMinutes < 0 || input.estimatedMinutes > 10_000_000)
+      return invalid("estimatedMinutes", "Enter the estimate as whole minutes.", "Use 0 when there is no estimate yet.");
+    if (!Number.isInteger(input.completionPercent) || input.completionPercent < 0 || input.completionPercent > 100)
+      return invalid("completionPercent", "Progress must be a whole number from 0 to 100.", "Enter the percentage complete.");
+    if (input.client.length > 200) return invalid("client", "Keep the client name under 200 characters.", "Shorten the name.");
+    if (input.notes.length > 5000) return invalid("notes", "Keep notes under 5,000 characters.", "Move long material into a document.");
+    const placed = (await this.placedPeople()).filter((person) => person.divisionIds.includes(divisionId));
+    const placedIds = new Set(placed.map((person) => person.value));
+    const keepsManager = existing && String(existing.manager_employee_id) === input.managerEmployeeId;
+    if (!keepsManager && !placedIds.has(input.managerEmployeeId))
+      return invalid("managerEmployeeId", "Choose an active employee placed in this division as manager.", "The list shows everyone currently placed there.");
+    const memberIds = [...new Set(input.memberIds)];
+    if (memberIds.length > 500) return invalid("memberIds", "A project can have at most 500 members.", "Remove some members.");
+    // Existing members stay valid even if their placement has since ended.
+    const currentMembers = existing
+      ? (await this.rows(
+          "SELECT employee_id FROM project_members WHERE project_id=? AND is_active=TRUE AND (effective_to IS NULL OR effective_to>=?)",
+          [existing.id as string, today()],
+        )).map((r) => String(r.employee_id))
+      : [];
+    if (memberIds.some((member) => !placedIds.has(member) && !currentMembers.includes(member)))
+      return invalid("memberIds", "Every member must be an active employee placed in this division.", "Choose members from the list.");
+    const canSeeCost = hasPermission(a, "finance.cost.view");
+    let budget: string | null | undefined; // undefined = leave unchanged
+    if (canSeeCost) {
+      const raw = input.budgetAmount.trim().replaceAll(",", "");
+      if (!raw) budget = null;
+      else if (!/^\d{1,15}(\.\d{1,2})?$/.test(raw))
+        return invalid("budgetAmount", "Enter the budget as an amount with up to two decimal places.", "For example 450000 or 450000.50.");
+      else budget = money(raw, "BDT").amount;
+    }
+
+    // ---- write ------------------------------------------------------------
     const projectId = id ?? randomUUID();
-    await this.transaction(async (connection) => {
-      if (existing)
+    const on = today();
+    const memberFrom = input.startDate > on ? input.startDate : on;
+    const changedFields: string[] = [];
+    if (existing) {
+      const was = (key: string) => (existing![key] == null ? "" : existing![key] instanceof Date ? date(existing![key]) : String(existing![key]));
+      const compare: [string, string, string][] = [
+        ["name", was("name"), name], ["client", was("client_name"), input.client.trim()],
+        ["startDate", was("start_date"), input.startDate], ["endDate", was("end_date"), input.endDate ?? ""],
+        ["priority", was("priority"), input.priority], ["estimate", was("estimated_minutes"), String(input.estimatedMinutes)],
+        ["progress", was("completion_percent"), String(input.completionPercent)], ["notes", was("notes"), input.notes.trim()],
+        ["status", was("status"), status], ["manager", was("manager_employee_id"), input.managerEmployeeId],
+      ];
+      for (const [field, before, after] of compare) if (before !== after) changedFields.push(field);
+      if (budget !== undefined && (existing.budget_amount == null ? null : storedMoney(String(existing.budget_amount), "BDT").amount) !== budget)
+        changedFields.push("budget");
+      const added = memberIds.filter((m) => !currentMembers.includes(m));
+      const removed = currentMembers.filter((m) => !memberIds.includes(m));
+      if (added.length || removed.length) changedFields.push("members");
+    }
+    let code: string | null = null;
+    try {
+      await this.transaction(async (connection) => {
+        if (existing) {
+          await connection.execute(
+            `UPDATE projects SET name=?,manager_employee_id=?,client_name=?,start_date=?,end_date=?,priority=?,estimated_minutes=?,completion_percent=?,notes=?,status=?
+              ${budget !== undefined ? ",budget_amount=?,currency=?" : ""},version=version+1 WHERE id=?`,
+            [name, input.managerEmployeeId, input.client.trim() || null, input.startDate, input.endDate, input.priority,
+              input.estimatedMinutes, input.completionPercent, input.notes.trim() || null, status,
+              ...(budget !== undefined ? [budget, budget === null ? null : "BDT"] : []), projectId],
+          );
+        } else {
+          code = await nextRecordCode(connection, "project");
+          await connection.execute(
+            "INSERT INTO projects(id,name,project_code,division_id,manager_employee_id,client_name,start_date,end_date,priority,estimated_minutes,completion_percent,notes,budget_amount,currency,status,is_active,accepts_time_entries) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,'active',TRUE,TRUE)",
+            [projectId, name, code, divisionId, input.managerEmployeeId, input.client.trim() || null, input.startDate, input.endDate,
+              input.priority, input.estimatedMinutes, input.completionPercent, input.notes.trim() || null,
+              budget ?? null, budget ? "BDT" : null],
+          );
+        }
+        // Membership is effective-dated history, never rewritten: a removal
+        // ends the row, an addition starts one. Time already logged by a
+        // former member keeps its meaning.
+        for (const member of currentMembers.filter((m) => !memberIds.includes(m)))
+          await connection.execute(
+            "UPDATE project_members SET is_active=FALSE,effective_to=GREATEST(effective_from,?),version=version+1 WHERE project_id=? AND employee_id=? AND is_active=TRUE",
+            [on, projectId, member],
+          );
+        for (const member of memberIds.filter((m) => !currentMembers.includes(m)))
+          await connection.execute(
+            "INSERT INTO project_members(id,project_id,employee_id,effective_from) VALUES(?,?,?,?) ON DUPLICATE KEY UPDATE is_active=TRUE,effective_to=NULL,version=version+1",
+            [randomUUID(), projectId, member, existing ? memberFrom : input.startDate],
+          );
         await connection.execute(
-          "UPDATE projects SET name=?,project_code=?,division_id=?,manager_employee_id=?,client_name=?,start_date=?,end_date=?,priority=?,estimated_minutes=?,completion_percent=?,notes=?,version=version+1 WHERE id=?",
-          [
-            input.name.trim(),
-            input.code.trim().toUpperCase(),
-            input.divisionId,
-            input.managerEmployeeId,
-            input.client || null,
-            input.startDate,
-            input.endDate,
-            input.priority,
-            input.estimatedMinutes,
-            input.completionPercent,
-            input.notes || null,
-            projectId,
-          ],
+          "INSERT INTO audit_events(event_id,actor_user_id,action,resource_type,resource_id,scope_json,correlation_id,before_protected,after_protected) VALUES(?,?,?,?,?,?,?,?,?)",
+          [randomUUID(), a.userId, existing ? "project.updated" : "project.created", "project", projectId,
+            JSON.stringify({ divisionId }), randomUUID(), JSON.stringify(null),
+            JSON.stringify(existing ? { changedFields } : { name, code, memberCount: memberIds.length })],
         );
-      else
-        await connection.execute(
-          "INSERT INTO projects(id,name,project_code,division_id,manager_employee_id,client_name,start_date,end_date,priority,estimated_minutes,completion_percent,notes,status,is_active,accepts_time_entries) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,'active',TRUE,TRUE)",
-          [
-            projectId,
-            input.name.trim(),
-            input.code.trim().toUpperCase(),
-            input.divisionId,
-            input.managerEmployeeId,
-            input.client || null,
-            input.startDate,
-            input.endDate,
-            input.priority,
-            input.estimatedMinutes,
-            input.completionPercent,
-            input.notes || null,
-          ],
-        );
-      await connection.execute(
-        "DELETE FROM project_members WHERE project_id=?",
-        [projectId],
-      );
-      for (const member of input.memberIds)
-        await connection.execute(
-          "INSERT INTO project_members(id,project_id,employee_id,effective_from) VALUES(?,?,?,?)",
-          [randomUUID(), projectId, member, input.startDate],
-        );
-    });
-    const refreshedActor = {
-      ...actor,
-      projectIds: new Set([...actor.projectIds, projectId]),
-    };
-    const row = (await this.projectRows(refreshedActor, projectId))[0];
-    return row ? success(this.mapProject(row)) : absent("Project");
+      });
+    } catch (error) {
+      if (isDuplicateKeyError(error))
+        return conflict("Another project took that code at the same moment.", "Save again; a new project code is assigned automatically.");
+      throw error;
+    }
+    return this.getProject(userId, projectId);
   }
-  private async taskRows(
-    a: NonNullable<Awaited<ReturnType<OperationsService["lead"]>>>,
-    id?: string,
-  ) {
-    const ids = [...a.projectIds];
-    if (!ids.length) return [];
-    return this.rows(
-      `SELECT t.*,p.name project_name,p.project_code,p.division_id,d.name division_name,d.division_key division_code,d.is_government division_restricted,e.id assignee_id,e.employee_code assignee_employee_code,e.display_name assignee_display_name,e.job_title assignee_job_title,u.image_url assignee_image_url,(SELECT COALESCE(SUM(te.active_minutes),0) FROM time_entries te WHERE te.task_id=t.id AND te.is_active=TRUE AND te.status<>'draft') actual_minutes FROM tasks t JOIN projects p ON p.id=t.project_id JOIN divisions d ON d.id=p.division_id LEFT JOIN employees e ON e.id=t.assignee_employee_id LEFT JOIN users u ON u.id=e.user_id WHERE t.project_id IN (${ids.map(() => "?").join(",")}) ${id ? "AND t.id=?" : ""} ORDER BY t.due_date,t.title`,
-      id ? [...ids, id] : ids,
+  /**
+   * Tasks in projects the viewer can see, plus — for a lead — tasks assigned
+   * to the people they lead, so a Team Lead's board shows their team's work
+   * wherever it sits. Government work still needs its permission.
+   */
+  private async taskRows(a: ActorPolicyContext, id?: string) {
+    const projectIds = [...(await this.projectAccess(a)).keys()];
+    const team = hasPermission(a, "time.team.read")
+      ? [...a.employeeIds].filter((employeeId) => employeeId !== a.employeeId)
+      : [];
+    if (!projectIds.length && !team.length) return [];
+    const scope = [
+      projectIds.length ? `t.project_id IN (${projectIds.map(() => "?").join(",")})` : null,
+      team.length ? `t.assignee_employee_id IN (${team.map(() => "?").join(",")})` : null,
+    ].filter(Boolean).join(" OR ");
+    const rows = await this.rows(
+      `SELECT t.*,p.name project_name,p.project_code,p.division_id,d.name division_name,d.division_key division_code,d.is_government division_restricted,e.id assignee_id,e.employee_code assignee_employee_code,e.display_name assignee_display_name,e.job_title assignee_job_title,u.image_url assignee_image_url,(SELECT COALESCE(SUM(te.active_minutes),0) FROM time_entries te WHERE te.task_id=t.id AND te.is_active=TRUE AND te.status<>'draft') actual_minutes FROM tasks t JOIN projects p ON p.id=t.project_id JOIN divisions d ON d.id=p.division_id LEFT JOIN employees e ON e.id=t.assignee_employee_id LEFT JOIN users u ON u.id=e.user_id WHERE (${scope}) ${id ? "AND t.id=?" : ""} ORDER BY t.due_date,t.title`,
+      [...projectIds, ...team, ...(id ? [id] : [])],
     );
+    const government = hasPermission(a, "organization.government.view");
+    return rows.filter((r) => !r.division_restricted || government);
   }
   private async mapTask(r: Row): Promise<TeamTaskView> {
     const id = String(r.id),
       actual = Number(r.actual_minutes),
       estimate = Number(r.estimated_minutes ?? 0),
       due = r.due_date ? date(r.due_date) : null;
-    const checklist = await this.rows(
-      "SELECT id,label,is_done FROM task_checklist_items WHERE task_id=? ORDER BY position",
-      [id],
-    );
-    const history = await this.rows(
-      "SELECT id,work_date,active_minutes,completed_work FROM time_entries WHERE task_id=? AND is_active=TRUE AND status<>'draft' ORDER BY work_date DESC",
-      [id],
-    );
+    const [checklist, history, supporters] = await Promise.all([
+      this.rows(
+        "SELECT id,label,is_done FROM task_checklist_items WHERE task_id=? ORDER BY position",
+        [id],
+      ),
+      this.rows(
+        "SELECT id,work_date,active_minutes,completed_work FROM time_entries WHERE task_id=? AND is_active=TRUE AND status<>'draft' ORDER BY work_date DESC",
+        [id],
+      ),
+      this.rows(
+        `SELECT e.id,e.employee_code,e.display_name,e.job_title,u.image_url
+         FROM task_members tm JOIN employees e ON e.id=tm.employee_id JOIN users u ON u.id=e.user_id
+         WHERE tm.task_id=? ORDER BY e.display_name`,
+        [id],
+      ),
+    ]);
     return {
       id,
       title: String(r.title),
@@ -1159,10 +1502,11 @@ export class OperationsService {
       projectLabel: String(r.project_name),
       division: division(r),
       assignee: r.assignee_id ? employee(r, "assignee_") : null,
-      supportingMembers: [],
+      supportingMembers: supporters.map((supporter) => employee(supporter)),
       status: String(r.status) as TaskStatus,
       priority: String(r.priority ?? "medium") as TeamTaskView["priority"],
       startDateLabel: r.start_date ? formatDate(date(r.start_date)) : null,
+      startDate: r.start_date ? date(r.start_date) : null,
       dueDate: due,
       dueDateLabel: due ? formatDate(due) : null,
       estimated: toDurationView(estimate),
@@ -1200,14 +1544,14 @@ export class OperationsService {
     };
   }
   async listTasks(userId: string) {
-    const a = await this.lead(userId);
+    const a = await this.identity(userId);
     if (!a) return denied();
     return success(
       await Promise.all((await this.taskRows(a)).map((r) => this.mapTask(r))),
     );
   }
   async getTask(userId: string, id: string) {
-    const a = await this.lead(userId);
+    const a = await this.identity(userId);
     if (!a) return absent("Task");
     const r = (await this.taskRows(a, id))[0];
     return r ? success(await this.mapTask(r)) : absent("Task");
@@ -1217,27 +1561,70 @@ export class OperationsService {
     input: Parameters<TeamLeadService["saveTask"]>[1],
     id?: string,
   ) {
-    const actor = await this.lead(userId);
-    if (!actor?.employeeId || !actor.projectIds.has(input.projectId))
-      return absent("Project");
-    if (
-      !actor.employeeIds.has(input.assigneeEmployeeId) &&
-      input.assigneeEmployeeId !== actor.employeeId
-    )
+    const actor = await this.identity(userId);
+    if (!actor?.employeeId) return denied();
+    const reach = (await this.projectAccess(actor)).get(input.projectId);
+    if (!reach) return absent("Project");
+    if (!reach.manage)
+      return denied("Only the project manager, a Team Lead in its division, HR or a Super Administrator can add or change its tasks.");
+    const title = input.title.trim();
+    if (!title || title.length > 240)
+      return invalid("title", "Enter a task title of up to 240 characters.", "Name the outcome the task delivers.");
+    if (input.startDate && !ISO_DATE.test(input.startDate))
+      return invalid("startDate", "Enter a valid start date.", "Use the date picker or YYYY-MM-DD.");
+    if (input.dueDate && !ISO_DATE.test(input.dueDate))
+      return invalid("dueDate", "Enter a valid due date.", "Use the date picker or YYYY-MM-DD.");
+    if (input.startDate && input.dueDate && input.dueDate < input.startDate)
+      return invalid("dueDate", "The due date cannot be before the start date.", "Choose a due date on or after the start date.");
+    if (!PRIORITIES.includes(input.priority))
+      return invalid("priority", "Choose a valid priority.", "Pick one of the listed priorities.");
+    if (!Number.isInteger(input.estimatedMinutes) || input.estimatedMinutes < 0 || input.estimatedMinutes > 10_000_000)
+      return invalid("estimatedMinutes", "Enter the estimate as whole minutes.", "Use 0 when there is no estimate yet.");
+    const description = input.description.trim();
+    if (description.length > 5000)
+      return invalid("description", "Keep the description under 5,000 characters.", "Move long supporting material into a document.");
+    if (input.supportingMemberIds.length > 500)
+      return invalid("supportingMemberIds", "A task can have at most 500 supporting members.", "Remove some supporting members.");
+    if (input.checklist.length > 100)
+      return invalid("checklist", "A task can have at most 100 checklist items.", "Keep only the actions needed to finish this task.");
+    const checklist = input.checklist.map((label) => label.trim()).filter(Boolean);
+    if (checklist.some((label) => label.length > 240))
+      return invalid("checklist", "Keep each checklist item under 240 characters.", "Shorten the highlighted work steps.");
+    if (new Set(checklist.map((label) => label.toLocaleLowerCase())).size !== checklist.length)
+      return invalid("checklist", "Checklist items must be unique.", "Remove duplicate checklist items.");
+    // Assignee and supporters must be able to log work in this division.
+    const placed = new Set(
+      (await this.placedPeople())
+        .filter((person) => person.divisionIds.includes(reach.divisionId))
+        .map((person) => person.value),
+    );
+    if (!placed.has(input.assigneeEmployeeId))
       return invalid(
         "assigneeEmployeeId",
-        "Choose an employee in your team scope.",
-        "The assignee must be reachable by your current appointment.",
+        "Choose an active employee placed in this project's division.",
+        "Only people who can record time in the division are listed.",
+      );
+    const selfAssigned = input.assigneeEmployeeId === actor.employeeId;
+    const supportingMemberIds = selfAssigned ? [] : [...new Set(input.supportingMemberIds)];
+    if (supportingMemberIds.includes(input.assigneeEmployeeId))
+      return invalid("supportingMemberIds", "The assignee cannot also be a supporting member.", "Remove the assignee from supporting members.");
+    if (supportingMemberIds.some((member) => !placed.has(member)))
+      return invalid(
+        "supportingMemberIds",
+        "Every supporting member must be placed in this project's division.",
+        "Choose supporting members from the list.",
       );
     const project = (
-      await this.rows("SELECT division_id FROM projects WHERE id=?", [
+      await this.rows("SELECT division_id,is_active,status,accepts_time_entries FROM projects WHERE id=?", [
         input.projectId,
       ])
     )[0];
     if (!project) return absent("Project");
     const existing = id
-      ? (await this.rows("SELECT project_id FROM tasks WHERE id=?", [id]))[0]
+      ? (await this.rows("SELECT project_id,assignee_employee_id,title,start_date,due_date,priority,estimated_minutes,description FROM tasks WHERE id=?", [id]))[0]
       : null;
+    if (!existing && (!project.is_active || String(project.status) !== "active" || !project.accepts_time_entries))
+      return invalid("projectId", "New tasks require an active project that accepts work.", "Choose another project or ask an administrator to activate this one.");
     if (existing && String(existing.project_id) !== input.projectId)
       return conflict(
         "A task cannot be moved between projects.",
@@ -1249,13 +1636,13 @@ export class OperationsService {
         await connection.execute(
           "UPDATE tasks SET title=?,assignee_employee_id=?,start_date=?,due_date=?,priority=?,estimated_minutes=?,description=?,version=version+1 WHERE id=?",
           [
-            input.title.trim(),
+            title,
             input.assigneeEmployeeId,
             input.startDate,
             input.dueDate,
             input.priority,
             input.estimatedMinutes,
-            input.description || null,
+            description || null,
             taskId,
           ],
         );
@@ -1266,20 +1653,20 @@ export class OperationsService {
             taskId,
             input.projectId,
             String(project.division_id),
-            input.title.trim(),
+            title,
             input.assigneeEmployeeId,
             actor.employeeId,
             input.startDate,
             input.dueDate,
             input.priority,
             input.estimatedMinutes,
-            input.description || null,
+            description || null,
           ],
         );
       await connection.execute("DELETE FROM task_members WHERE task_id=?", [
         taskId,
       ]);
-      for (const member of input.supportingMemberIds)
+      for (const member of supportingMemberIds)
         await connection.execute(
           "INSERT INTO task_members(task_id,employee_id) VALUES(?,?)",
           [taskId, member],
@@ -1288,11 +1675,27 @@ export class OperationsService {
         "DELETE FROM task_checklist_items WHERE task_id=?",
         [taskId],
       );
-      for (const [position, label] of input.checklist.entries())
+      for (const [position, label] of checklist.entries())
         await connection.execute(
           "INSERT INTO task_checklist_items(id,task_id,label,position) VALUES(?,?,?,?)",
           [randomUUID(), taskId, label, position],
         );
+      await connection.execute(
+        "INSERT INTO audit_events(event_id,actor_user_id,action,resource_type,resource_id,scope_json,correlation_id,before_protected,after_protected) VALUES(?,?,?,?,?,?,?,?,?)",
+        [randomUUID(), actor.userId, existing ? "task.updated" : "task.created", "task", taskId,
+          JSON.stringify({ divisionId: String(project.division_id), projectId: input.projectId }), randomUUID(),
+          JSON.stringify(existing ?? null), JSON.stringify({ title, assigneeEmployeeId: input.assigneeEmployeeId, supportingMemberCount: supportingMemberIds.length })],
+      );
+      const previousAssignee = existing ? String(existing.assignee_employee_id) : null;
+      if (input.assigneeEmployeeId !== actor.employeeId && input.assigneeEmployeeId !== previousAssignee) {
+        await new NotificationService(connection).send({
+          employeeIds: [input.assigneeEmployeeId],
+          type: "task_assigned",
+          resourceType: "task",
+          resourceId: taskId,
+          eventKey: `${existing ? "updated" : "created"}:${taskId}:${input.assigneeEmployeeId}`,
+        });
+      }
     });
     return this.getTask(userId, taskId);
   }
@@ -1761,14 +2164,10 @@ export class OperationsService {
       "SELECT * FROM projects WHERE division_id=? AND is_active=TRUE AND status='active' ORDER BY name",
       [divisionId],
     );
+    const access = await this.projectAccess(a);
     return success(
       rows
-        .filter(
-          (r) =>
-            a.projectIds.has(String(r.id)) ||
-            a.roles.includes("hr_manager") ||
-            a.roles.includes("super_admin"),
-        )
+        .filter((r) => access.has(String(r.id)))
         .map((r) => ({
           id: String(r.id),
           divisionId: String(r.division_id),
@@ -1802,12 +2201,7 @@ export class OperationsService {
   ): Promise<Result<readonly Task[]>> {
     const a = await this.identity(userId);
     if (!a) return denied();
-    if (
-      !a.projectIds.has(projectId) &&
-      !a.roles.includes("hr_manager") &&
-      !a.roles.includes("super_admin")
-    )
-      return success([]);
+    if (!(await this.projectAccess(a)).has(projectId)) return success([]);
     const rows = await this.rows(
       "SELECT * FROM tasks WHERE project_id=? AND is_active=TRUE AND status='in_progress' AND review_state IN ('not_required','approved') ORDER BY title",
       [projectId],

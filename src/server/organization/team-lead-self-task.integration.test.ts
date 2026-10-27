@@ -23,6 +23,7 @@ describe('Team Lead self-created task persistence', () => {
     const service = new TaskReviewApplicationService(
       new MysqlTaskReviewRepository(database.connection as unknown as Pool, () => '2026-09-02'),
       effects,
+      () => '2026-09-02',
     );
 
     const result = await service.raise('30000000-0000-4000-8000-000000000002', {

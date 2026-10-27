@@ -1,5 +1,6 @@
 import type { TaskReviewState } from '@/contracts/domain';
 import type { Result } from '@/contracts/results';
+import { businessToday } from '@/lib/business-date';
 
 export interface RaisedTask {
   readonly id: string;
@@ -69,6 +70,7 @@ export class TaskReviewApplicationService {
   constructor(
     private repo: TaskReviewRepository,
     private effects: TaskReviewEffects,
+    private readonly currentDate = businessToday,
   ) {}
 
   async raise(
@@ -89,6 +91,21 @@ export class TaskReviewApplicationService {
         code: 'FORBIDDEN',
         message: 'Only an active employee or Team Lead can create a task for themselves.',
       };
+    }
+
+    const title = input.title.trim();
+    if (!title || title.length > 240) {
+      return validation('title', 'INVALID_TITLE', 'Enter a task title of up to 240 characters.', 'Name the outcome this task should deliver.');
+    }
+    if (!['low', 'medium', 'high', 'urgent'].includes(input.priority)) {
+      return validation('priority', 'INVALID_PRIORITY', 'Choose a valid priority.', 'Select Low, Medium, High, or Urgent.');
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(input.dueDate) || input.dueDate < this.currentDate()) {
+      return validation('dueDate', 'INVALID_DUE_DATE', 'Choose today or a later due date.', 'Use the date picker to choose a valid business date.');
+    }
+    const description = input.description.trim();
+    if (description.length > 5000) {
+      return validation('description', 'DESCRIPTION_TOO_LONG', 'Keep the description under 5,000 characters.', 'Move long supporting material into a document.');
     }
 
     const requiresReview = !employee.isTeamLead;
@@ -118,15 +135,18 @@ export class TaskReviewApplicationService {
         'Enter a positive value that resolves to whole minutes.',
       );
     }
+    if (hours * 60 > 10_000_000) {
+      return validation('estimatedHours', 'DURATION_TOO_LARGE', 'The estimate is too large.', 'Enter an estimate below 10,000,000 minutes.');
+    }
 
     const id = await this.repo.insertSelfTask({
       employeeId: employee.id,
       projectId: input.projectId,
-      title: input.title.trim(),
+      title,
       priority: input.priority,
       dueDate: input.dueDate,
       estimatedMinutes: hours * 60,
-      description: input.description.trim(),
+      description,
       requiresReview,
     });
     const reviewState = requiresReview ? 'pending_review' : 'not_required';

@@ -36,7 +36,7 @@ import { Button, LinkButton } from '@/components/ui/button';
 import { Duration } from '@/components/ui/misc';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/cn';
-import { DEMO_TODAY } from '@/lib/demo-context';
+import { businessToday } from '@/lib/business-date';
 import { formatTimestamp, NOT_RECORDED } from '@/lib/format';
 import { TASK_STATUS_LABEL } from '@/lib/status';
 import { timesheetService as mockTimesheetService } from '@/services/runtime/timesheet';
@@ -99,7 +99,7 @@ function matches(task: WorkflowBoardTask, filter: TaskBoardFilter): boolean {
   return (
     task.status !== 'completed' &&
     task.dueDate !== null &&
-    task.dueDate >= DEMO_TODAY
+    task.dueDate >= businessToday()
   );
 }
 
@@ -193,7 +193,7 @@ function TaskActionButtons({
         <LinkButton
           size="sm"
           variant="secondary"
-          href={`/timesheets/${DEMO_TODAY}?task=${task.id}`}
+          href={`/timesheets/${businessToday()}?task=${task.id}`}
           iconLeading={<Clock3 aria-hidden className="size-4" />}
         >
           Log work
@@ -343,9 +343,10 @@ function TransitionPanel({
   // The lock that matters is the assignee's. An unassigned task has none to
   // check, and its start is refused by the service anyway.
   const assigneeId = task.assignee?.id ?? '';
+  const currentDate = businessToday();
   const day = useAsync(
-    () => mockTimesheetService.getDay({ employeeId: assigneeId, date: DEMO_TODAY }),
-    [assigneeId, DEMO_TODAY],
+    () => mockTimesheetService.getDay({ employeeId: assigneeId, date: currentDate }),
+    [assigneeId, currentDate],
     { keepPrevious: true },
   ).state;
   const todayLocked = day.status === 'success' && day.data.summary.isLocked;
@@ -417,7 +418,7 @@ function TransitionPanel({
               </Alert>
             ) : (
               <LinkButton
-                href={`/timesheets/${DEMO_TODAY}?task=${task.id}`}
+                href={`/timesheets/${currentDate}?task=${task.id}`}
                 variant="primary"
                 iconTrailing={<ArrowRight aria-hidden className="size-4" />}
               >
@@ -504,7 +505,7 @@ function TransitionPanel({
             </Alert>
           ) : (
             <LinkButton
-              href={`/timesheets/${DEMO_TODAY}?task=${task.id}`}
+              href={`/timesheets/${currentDate}?task=${task.id}`}
               variant="secondary"
               size="sm"
               className="mt-3"

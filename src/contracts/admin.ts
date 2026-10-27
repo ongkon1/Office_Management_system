@@ -65,9 +65,9 @@ export interface DivisionAdminView {
   readonly deactivationBlockers: readonly string[];
 }
 
+/** The division code is assigned by the service (`DIV-0000`), never submitted. */
 export interface DivisionFormInput {
   readonly name: string;
-  readonly code: string;
   readonly description: string;
   readonly teamLeadEmployeeId: string;
   readonly isRestricted: boolean;

@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+
+vi.mock('@/lib/business-date', () => ({ businessToday: () => '2026-09-02' }));
+
 import { ToastProvider } from '@/components/feedback/toast';
 import { toDurationView } from '@/lib/status';
 import { mockStore } from '@/services/mock/store';

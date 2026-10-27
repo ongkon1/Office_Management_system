@@ -17,16 +17,13 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ReportsFallback, ReportsLoading } from '@/features/reports/report-catalogue';
 
-const TEAM_LEAD_OPTIONS = [
-  { value: 'emp-2001', label: 'Imran Hossain' },
-  { value: 'emp-2002', label: 'Farhana Islam' },
-];
+/** A division may exist before anyone leads it; this is the explicit choice. */
+const NO_TEAM_LEAD = { value: '', label: 'No Team Lead' };
 
 const EMPTY: DivisionFormInput = {
   name: '',
-  code: '',
   description: '',
-  teamLeadEmployeeId: 'emp-2001',
+  teamLeadEmployeeId: '',
   isRestricted: false,
 };
 
@@ -53,6 +50,12 @@ export function DivisionAdministration() {
     () => mockAdminService.listDivisions(user?.userId ?? ''),
     [user?.userId],
   );
+  // Team Lead candidates come from the same user records the service checks,
+  // never from a fixed list whose ids exist in only one data source.
+  const { state: usersState } = useAsync(
+    () => mockAdminService.listUsers(user?.userId ?? ''),
+    [user?.userId],
+  );
 
   const seedKey = open ? (editing?.id ?? 'new') : null;
   if (seedKey !== seededFor) {
@@ -63,9 +66,8 @@ export function DivisionAdministration() {
       editing
         ? {
             name: editing.name,
-            code: editing.code,
             description: editing.description ?? '',
-            teamLeadEmployeeId: editing.teamLead?.id ?? 'emp-2001',
+            teamLeadEmployeeId: editing.teamLead?.id ?? '',
             isRestricted: editing.isRestricted,
           }
         : EMPTY,
@@ -77,6 +79,21 @@ export function DivisionAdministration() {
     return <ReportsFallback result={state.failure} subject="Divisions" />;
   }
   const divisions = state.data;
+  const leadCandidates = usersState.status === 'success'
+    ? usersState.data
+      .filter((account) => account.status === 'active' && account.roles.includes('team_lead'))
+      .map((account) => ({ value: account.employee.id, label: account.employee.fullName }))
+    : [];
+  // Keep the current lead selectable even when they no longer hold the role,
+  // so opening the form never silently changes who leads the division.
+  const currentLead = editing?.teamLead;
+  const teamLeadOptions = [
+    NO_TEAM_LEAD,
+    ...(currentLead && !leadCandidates.some((option) => option.value === currentLead.id)
+      ? [{ value: currentLead.id, label: currentLead.fullName }]
+      : []),
+    ...leadCandidates,
+  ];
 
   async function save() {
     setErrors([]);
@@ -85,10 +102,14 @@ export function DivisionAdministration() {
     if (result.status === 'success') {
       setOpen(false);
       reload();
+      // The code is assigned by the service, so read it back from the result.
+      const saved = result.data.find((division) =>
+        editing ? division.id === editing.id : division.name === form.name.trim(),
+      );
       toast.show({
         tone: 'success',
         title: editing ? 'Division updated' : 'Division created',
-        description: `${form.name} · ${form.code.toUpperCase()}`,
+        description: saved ? `${saved.name} · ${saved.code}` : form.name.trim(),
       });
       return;
     }
@@ -270,18 +291,22 @@ export function DivisionAdministration() {
                 onChange={(event) => setForm({ ...form, name: event.target.value })}
               />
             </Field>
-            <Field label="Code" required error={fieldError('code')} helperText="Short uppercase code.">
+            <Field label="Code" helperText="Assigned automatically and never changes.">
               <Input
                 name="code"
-                value={form.code}
-                onChange={(event) => setForm({ ...form, code: event.target.value })}
+                readOnly
+                value={editing ? editing.code : 'Assigned when saved (DIV-0000)'}
               />
             </Field>
           </div>
-          <Field label="Team Lead">
+          <Field
+            label="Team Lead"
+            error={fieldError('teamLeadEmployeeId')}
+            helperText={usersState.status === 'loading' ? 'Loading Team Leads…' : 'Active users with the Team Lead role.'}
+          >
             <Select
               value={form.teamLeadEmployeeId}
-              options={TEAM_LEAD_OPTIONS}
+              options={teamLeadOptions}
               onChange={(event) => setForm({ ...form, teamLeadEmployeeId: event.target.value })}
             />
           </Field>

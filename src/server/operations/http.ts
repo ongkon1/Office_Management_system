@@ -5,6 +5,7 @@ import type { OperationsService } from "./service";
 const allowed = {
   hr: new Set([
     "getDashboard",
+    "listDivisionOptions",
     "listDepartmentOptions",
     "listEmployees",
     "getEmployee",
@@ -27,6 +28,7 @@ const allowed = {
     "listProjects",
     "getProject",
     "saveProject",
+    "getProjectFormOptions",
     "listTasks",
     "getTask",
     "saveTask",

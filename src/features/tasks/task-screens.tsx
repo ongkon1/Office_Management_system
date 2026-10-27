@@ -25,7 +25,7 @@ import { Card, CardHeader } from '@/components/feedback/card';
 import { Alert, EmptyState } from '@/components/feedback/alert';
 import { PageContainer, PageHeader } from '@/components/layout/page';
 import { employeeTaskService as mockTaskService } from '@/services/runtime/employee';
-import { DEMO_TODAY } from '@/lib/demo-context';
+import { businessToday } from '@/lib/business-date';
 
 function employeeBoardTask(task: TaskSummaryView): WorkflowBoardTask {
   return {
@@ -183,7 +183,7 @@ export function TaskDetail({ taskId }: { taskId: string }) {
               variant="primary"
               iconLeading={<Plus aria-hidden className="size-4" />}
               onClick={() => {
-                router.push(`/timesheets/${DEMO_TODAY}`);
+                router.push(`/timesheets/${businessToday()}?task=${summary.id}`);
               }}
             >
               Log work

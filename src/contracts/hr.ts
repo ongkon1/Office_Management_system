@@ -172,9 +172,12 @@ export interface HrAuditEntryView {
   readonly reason: string | null;
 }
 
+/**
+ * There is no employee code here: the service assigns the next `EMP-0000`
+ * number on create and never changes it, so no form can submit one.
+ */
 export interface EmployeeFormInput {
   readonly fullName: string;
-  readonly employeeCode: string;
   readonly designation: string;
   readonly employmentType: EmploymentType;
   readonly joiningDate: IsoDate;
@@ -182,6 +185,11 @@ export interface EmployeeFormInput {
   readonly phone: string;
   readonly officeLocation: string;
   readonly primaryDivisionId: string;
+  /**
+   * Required when creating: every placement names a department in its own
+   * division. Ignored on edit — placements change on the Assignments tab.
+   */
+  readonly primaryDepartmentId?: string;
   readonly normalWorkMode: WorkMode;
   readonly standardDailyActiveMinutes: number;
   readonly standardWeeklyActiveMinutes: number;
@@ -208,6 +216,17 @@ export interface AssignmentFormInput {
 }
 
 export type { DepartmentOptionView } from './organization-hierarchy';
+
+/**
+ * A division an employee may be placed in. Loaded from the service rather than
+ * a fixed list, because a hard-coded id only exists in one data source and a
+ * placement that names it is refused by every other.
+ */
+export interface DivisionOptionView {
+  readonly value: string;
+  readonly label: string;
+  readonly isRestricted: boolean;
+}
 
 /* ------------------------------------------------------------------------- */
 /* Attendance, WFH, leave, holidays                                          */
@@ -455,6 +474,9 @@ export interface HrEvaluationDetailView extends HrEvaluationRowView {
 
 export interface HrService {
   getDashboard(userId: string): Promise<Result<HrDashboard>>;
+
+  /** Active divisions, in name order, for placement and filter controls. */
+  listDivisionOptions(userId: string): Promise<Result<readonly DivisionOptionView[]>>;
 
   listDepartmentOptions(
     userId: string,

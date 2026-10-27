@@ -56,7 +56,11 @@ async function openAssignmentForm() {
   await openAssignmentsTab();
   const add = await screen.findByRole('button', { name: /assignment/i }, { timeout: 5000 });
   await userEvent.click(add);
-  return screen.findByRole('dialog');
+  const dialog = await screen.findByRole('dialog');
+  // Division options come from the service, not a fixed list, so they arrive
+  // after the dialog opens.
+  await within(dialog).findByRole('option', { name: 'Government Projects' }, { timeout: 5000 });
+  return dialog;
 }
 
 describe('the assignment form owns placement (OH-FE-0301, OH-FE-0302)', () => {

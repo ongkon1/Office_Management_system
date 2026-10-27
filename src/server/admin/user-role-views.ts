@@ -2,6 +2,7 @@ import 'server-only';
 
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolConnection, RowDataPacket } from 'mysql2/promise';
+import { isDuplicateKeyError, nextRecordCode } from '@/server/organization/record-codes';
 import type {
   AdminService,
   AuditFilters,
@@ -91,7 +92,30 @@ export class BackendUserRoleAdmin implements AdminService {
     e.id lead_id,e.employee_code lead_code,e.display_name lead_name,e.job_title lead_title,u.image_url lead_image
     FROM divisions d LEFT JOIN employees e ON e.id=d.team_lead_employee_id LEFT JOIN users u ON u.id=e.user_id ORDER BY d.name`);return rows.map(row=>{const assignments=Number(row.assignment_count),projects=Number(row.project_count),tasks=Number(row.task_count);const blockers=[...(assignments?[`${assignments} active employee assignment(s).`]:[]),...(projects?[`${projects} active project(s).`]:[]),...(tasks?[`${tasks} open task(s).`]:[])];return{id:String(row.id),name:String(row.name),code:String(row.division_key),description:row.description?String(row.description):null,teamLead:row.lead_id?{id:String(row.lead_id),employeeCode:String(row.lead_code),fullName:String(row.lead_name),designation:row.lead_title?String(row.lead_title):null,avatarUrl:row.lead_image?String(row.lead_image):null}:null,isActive:Boolean(row.is_active),isRestricted:Boolean(row.is_government),activeAssignmentCount:assignments,activeProjectCount:projects,openTaskCount:tasks,deactivationBlockers:blockers};});}
   async listDivisions(userId:string){if(!await this.administrator(userId))return denied();return success(await this.divisionViews());}
-  async saveDivision(userId:string,input:DivisionFormInput,id?:string){const actor=await this.administrator(userId);if(!actor)return denied();if(!input.name.trim())return invalid('name','Enter a division name.','Employees see this name throughout.');if(!input.code.trim())return invalid('code','Enter a division code.','Use a short unique code.');const [duplicates]=await this.pool.execute<RowDataPacket[]>('SELECT id FROM divisions WHERE (LOWER(name)=LOWER(?) OR LOWER(division_key)=LOWER(?)) AND id<>COALESCE(?,\'\') LIMIT 1',[input.name,input.code,id??null]);if(duplicates[0])return conflict('That division name or code is already in use.','Choose a unique name and code.');const resourceId=id??randomUUID();if(id){const [result]=await this.pool.execute<import('mysql2/promise').ResultSetHeader>('UPDATE divisions SET name=?,division_key=?,description=?,team_lead_employee_id=?,is_government=?,version=version+1 WHERE id=?',[input.name.trim(),input.code.trim().toUpperCase(),input.description.trim()||null,input.teamLeadEmployeeId||null,input.isRestricted,id]);if(!result.affectedRows)return absent();}else await this.pool.execute('INSERT INTO divisions(id,name,division_key,description,team_lead_employee_id,is_government) VALUES(?,?,?,?,?,?)',[resourceId,input.name.trim(),input.code.trim().toUpperCase(),input.description.trim()||null,input.teamLeadEmployeeId||null,input.isRestricted]);await this.audit.append({actorUserId:actor.userId,action:id?'division.updated':'division.created',resourceType:'division',resourceId,scope:{},correlationId:randomUUID(),before:null,after:{name:input.name,code:input.code}});return this.listDivisions(userId);}
+  async saveDivision(userId:string,input:DivisionFormInput,id?:string){
+    const actor=await this.administrator(userId);if(!actor)return denied();
+    if(!input.name.trim())return invalid('name','Enter a division name.','Employees see this name throughout.');
+    const [duplicates]=await this.pool.execute<RowDataPacket[]>('SELECT id FROM divisions WHERE LOWER(name)=LOWER(?) AND id<>COALESCE(?,\'\') LIMIT 1',[input.name.trim(),id??null]);
+    if(duplicates[0])return conflict('That division name is already in use.','Choose a unique name.');
+    if(input.teamLeadEmployeeId){const [leads]=await this.pool.execute<RowDataPacket[]>("SELECT e.id FROM employees e JOIN users u ON u.id=e.user_id WHERE e.id=? AND e.status='active' AND u.status='active'",[input.teamLeadEmployeeId]);if(!leads[0])return invalid('teamLeadEmployeeId','Choose an active employee as Team Lead, or leave it empty.','Reload the page to refresh the list of employees.');}
+    const resourceId=id??randomUUID();
+    let code:string|null=null;
+    try{
+      const saved=await this.transaction(async(connection)=>{
+        // The division code is assigned once on create and never edited.
+        if(id){const [result]=await connection.execute<import('mysql2/promise').ResultSetHeader>('UPDATE divisions SET name=?,description=?,team_lead_employee_id=?,is_government=?,version=version+1 WHERE id=?',[input.name.trim(),input.description.trim()||null,input.teamLeadEmployeeId||null,input.isRestricted,id]);return result.affectedRows>0;}
+        code=await nextRecordCode(connection,'division');
+        await connection.execute('INSERT INTO divisions(id,name,division_key,description,team_lead_employee_id,is_government) VALUES(?,?,?,?,?,?)',[resourceId,input.name.trim(),code,input.description.trim()||null,input.teamLeadEmployeeId||null,input.isRestricted]);
+        return true;
+      });
+      if(!saved)return absent();
+    }catch(error){
+      if(isDuplicateKeyError(error))return conflict('Another division took that name or code at the same moment.','Save again; a new division code is assigned automatically.');
+      throw error;
+    }
+    await this.audit.append({actorUserId:actor.userId,action:id?'division.updated':'division.created',resourceType:'division',resourceId,scope:{},correlationId:randomUUID(),before:null,after:{name:input.name,...(code?{code}:{})}});
+    return this.listDivisions(userId);
+  }
   async setDivisionActive(userId:string,id:string,isActive:boolean){const actor=await this.administrator(userId);if(!actor)return denied();const current=(await this.divisionViews()).find(item=>item.id===id);if(!current)return absent();if(!isActive&&current.deactivationBlockers.length)return conflict(`${current.name} still has active references.`,current.deactivationBlockers.join(' '));await this.pool.execute('UPDATE divisions SET is_active=?,version=version+1 WHERE id=?',[isActive,id]);await this.audit.append({actorUserId:actor.userId,action:isActive?'division.activated':'division.deactivated',resourceType:'division',resourceId:id,scope:{},correlationId:randomUUID(),before:{isActive:current.isActive},after:{isActive}});return this.listDivisions(userId);}
 
   async listUsers(userId: string): Promise<Result<readonly UserAdminView[]>> {
