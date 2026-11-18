@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import { Queue, Worker, type ConnectionOptions } from 'bullmq';
 import { success } from '@/contracts/results';
 import { addDays, daysBetween } from '@/lib/format';
@@ -7,6 +6,11 @@ import { hasPermission, indistinguishableNotFound } from '@/server/authorization
 import { invalid, dateSchema } from '@/server/time/validation';
 import { decode } from './repository';
 import { AttendanceApplication } from './attendance';
+import type { HrRepository } from './repository';
+import { NotificationService } from '@/server/notifications/service';
+import type { RelatedRecord } from '@/server/notifications/catalogue';
+import type { NotificationType } from '@/contracts/domain';
+import { leadsOfEmployee } from '@/server/organization/department-authority';
 export class HrJobs {
     constructor(readonly attendance: AttendanceApplication) {
     }
@@ -38,24 +42,7 @@ export class HrJobs {
                             continue;
                         }
                     }
-                    const recipientIds = new Set<string>();
-                    if (job.employee_id) {
-                        const employee = await tx.employee(String(job.employee_id));
-                        if (employee?.user_id)
-                            recipientIds.add(String(employee.user_id));
-                        if (String(job.kind).startsWith('request.') || job.kind === 'attendance.exception')
-                            for (const assignment of await tx.assignments(String(job.employee_id), app.today()))
-                                if (assignment.is_primary && assignment.effective_lead_employee_id) {
-                                    const lead = await tx.employee(String(assignment.effective_lead_employee_id));
-                                    if (lead?.user_id)
-                                        recipientIds.add(String(lead.user_id));
-                                }
-                    }
-                    if (job.kind === 'attendance.exception')
-                        for (const hr of await tx.rows("SELECT DISTINCT ur.user_id FROM user_roles ur JOIN roles r ON r.id=ur.role_id JOIN users u ON u.id=ur.user_id WHERE r.role_key='hr_manager' AND u.status='active' AND ur.effective_from<=? AND (ur.effective_to IS NULL OR ur.effective_to>=?)", [app.today(), app.today()]))
-                            recipientIds.add(String(hr.user_id));
-                    for (const recipient of recipientIds)
-                        await tx.execute('INSERT INTO notifications(id,recipient_user_id,notification_type,safe_payload,related_type,related_id,deduplication_key) VALUES(?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE deduplication_key=VALUES(deduplication_key)', [randomUUID(), recipient, String(job.kind), JSON.stringify({ title: 'A work-management record needs your attention.', href: job.kind === 'evaluation.published' ? '/evaluations' : '/notifications' }), 'hr', job.resource_id ? String(job.resource_id) : null, String(job.job_key)]);
+                    await notifyForJob(tx, job, app.today());
                 }
                 await tx.execute("UPDATE hr_jobs SET status='complete',completed_at=UTC_TIMESTAMP(6) WHERE id=?", [String(job.id)]);
             }
@@ -84,4 +71,49 @@ export function scheduledWindow(scheduledAt: string, monthly: boolean) {
     const scheduledDate = localParts(scheduledAt, 'Asia/Dhaka').date;
     const to = addDays(scheduledDate, -1);
     return { from: monthly ? `${to.slice(0, 7)}-01` : to, to };
+}
+
+const EXCEPTION_TYPE: Readonly<Record<string, NotificationType>> = {
+    missing: 'missing_time', under_time: 'under_time', overtime: 'overtime', critical: 'critical_time',
+};
+/**
+ * `BE-0702`. One HR job becomes notifications through the shared service, so
+ * every recipient is authorized individually, deduplicated by the job key and
+ * offered email only when they opted in. Leads come from the department-aware
+ * resolver, never the frozen legacy column.
+ */
+async function notifyForJob(tx: HrRepository, job: Record<string, unknown>, today: string) {
+    const db = tx.connection ?? tx.pool;
+    const notifications = new NotificationService(db);
+    const kind = String(job.kind);
+    const employeeId = job.employee_id ? String(job.employee_id) : null;
+    const resourceId = job.resource_id ? String(job.resource_id) : null;
+    const occurrenceKey = String(job.job_key);
+    const payload = decode<{ date?: string; status?: string; kind?: 'wfh' | 'leave'; state?: string }>(job.payload, {});
+    const leadsOf = async (id: string, on: string) => leadsOfEmployee(db, id, on);
+    const hrUsers = async () => (await tx.rows("SELECT DISTINCT ur.user_id FROM user_roles ur JOIN roles r ON r.id=ur.role_id JOIN users u ON u.id=ur.user_id WHERE r.role_key='hr_manager' AND u.status='active' AND ur.effective_from<=? AND (ur.effective_to IS NULL OR ur.effective_to>=?)", [today, today])).map(r => String(r.user_id));
+    if (kind === 'attendance.exception' && employeeId && payload.date && payload.status && EXCEPTION_TYPE[payload.status]) {
+        const related: RelatedRecord = { type: 'timesheet', employeeId, date: payload.date };
+        const type = EXCEPTION_TYPE[payload.status];
+        await notifications.notifyEmployees([employeeId, ...await leadsOf(employeeId, payload.date)], { type, related, occurrenceKey });
+        // HR follows missing records and overtime (`REQ-NOT-003`); under-time stays with the team.
+        if (type !== 'under_time') await notifications.notify({ recipientUserIds: await hrUsers(), type, related, occurrenceKey });
+        return;
+    }
+    if ((kind === 'evaluation.reminder' || kind === 'evaluation.published') && employeeId && resourceId) {
+        await notifications.notifyEmployees([employeeId], {
+            type: kind === 'evaluation.reminder' ? 'evaluation_due' : 'evaluation_published',
+            related: { type: 'evaluation', id: resourceId }, occurrenceKey,
+        });
+        return;
+    }
+    if (kind.startsWith('request.') && employeeId && resourceId && (payload.kind === 'wfh' || payload.kind === 'leave')) {
+        const related: RelatedRecord = { type: 'request', kind: payload.kind, id: resourceId };
+        const state = kind.slice('request.'.length);
+        if (state === 'submitted') {
+            await notifications.notifyEmployees(await leadsOf(employeeId, today), { type: 'request_submitted', related, occurrenceKey });
+        } else if (['approved', 'rejected', 'information_requested'].includes(state)) {
+            await notifications.notifyEmployees([employeeId], { type: payload.kind === 'wfh' ? 'wfh_decision' : 'leave_decision', related, occurrenceKey });
+        }
+    }
 }

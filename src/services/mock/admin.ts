@@ -29,6 +29,7 @@ import type {
   BrandLogoAsset,
   AuditLogView,
   DivisionAdminView,
+  DivisionDetailView,
   DivisionFormInput,
   EmployeeAccessRole,
   IntegrationPlaceholderView,
@@ -54,6 +55,7 @@ import {
 } from './accounts';
 import { mockStore } from './store';
 import {
+  departmentById,
   resetDepartmentState,
 } from './department-store';
 import {
@@ -557,7 +559,7 @@ const INTEGRATIONS: readonly IntegrationPlaceholderView[] = [
     deliveryPhaseLabel: 'Product Phase 3',
     state: 'not_configured',
     stateLabel: 'Not configured',
-    backendTaskIds: 'BE-0740',
+    backendTaskIds: 'BE-0732, BE-0733, BE-0734',
   },
   {
     key: 'email',
@@ -568,7 +570,7 @@ const INTEGRATIONS: readonly IntegrationPlaceholderView[] = [
     deliveryPhaseLabel: 'Backend Phase 4',
     state: 'not_configured',
     stateLabel: 'Not configured',
-    backendTaskIds: 'BE-0012, BE-0741',
+    backendTaskIds: 'BE-0012, BE-0704',
   },
   {
     key: 'storage',
@@ -579,7 +581,7 @@ const INTEGRATIONS: readonly IntegrationPlaceholderView[] = [
     deliveryPhaseLabel: 'Backend Phase 4',
     state: 'not_configured',
     stateLabel: 'Not configured',
-    backendTaskIds: 'BE-0011, BE-0742',
+    backendTaskIds: 'BE-0011, BE-0710, BE-0711',
   },
   {
     key: 'conferencing',
@@ -589,7 +591,7 @@ const INTEGRATIONS: readonly IntegrationPlaceholderView[] = [
     deliveryPhaseLabel: 'Product Phase 3',
     state: 'not_configured',
     stateLabel: 'Not configured',
-    backendTaskIds: 'BE-0743',
+    backendTaskIds: 'BE-0735',
   },
   {
     key: 'biometric',
@@ -600,7 +602,7 @@ const INTEGRATIONS: readonly IntegrationPlaceholderView[] = [
     deliveryPhaseLabel: 'Product Phase 3',
     state: 'not_configured',
     stateLabel: 'Not configured',
-    backendTaskIds: 'BE-0744',
+    backendTaskIds: 'BE-0735',
   },
   {
     key: 'payroll',
@@ -611,7 +613,7 @@ const INTEGRATIONS: readonly IntegrationPlaceholderView[] = [
     deliveryPhaseLabel: 'Product Phase 3',
     state: 'not_configured',
     stateLabel: 'Not configured',
-    backendTaskIds: 'BE-0745',
+    backendTaskIds: 'BE-0614, BE-0735',
   },
   {
     key: 'accounting',
@@ -621,7 +623,7 @@ const INTEGRATIONS: readonly IntegrationPlaceholderView[] = [
     deliveryPhaseLabel: 'Product Phase 3',
     state: 'not_configured',
     stateLabel: 'Not configured',
-    backendTaskIds: 'BE-0746',
+    backendTaskIds: 'BE-0735',
   },
   {
     key: 'sso',
@@ -632,7 +634,7 @@ const INTEGRATIONS: readonly IntegrationPlaceholderView[] = [
     deliveryPhaseLabel: 'Backend Phase 1',
     state: 'not_configured',
     stateLabel: 'Not configured',
-    backendTaskIds: 'BE-0008, BE-0747',
+    backendTaskIds: 'BE-0008, BE-0735',
   },
   {
     key: 'api',
@@ -643,7 +645,7 @@ const INTEGRATIONS: readonly IntegrationPlaceholderView[] = [
     deliveryPhaseLabel: 'Backend Phase 5',
     state: 'not_configured',
     stateLabel: 'Not configured',
-    backendTaskIds: 'BE-0748',
+    backendTaskIds: 'BE-0730',
   },
   {
     key: 'webhooks',
@@ -654,7 +656,7 @@ const INTEGRATIONS: readonly IntegrationPlaceholderView[] = [
     deliveryPhaseLabel: 'Backend Phase 5',
     state: 'not_configured',
     stateLabel: 'Not configured',
-    backendTaskIds: 'BE-0749',
+    backendTaskIds: 'BE-0731',
   },
 ];
 
@@ -714,6 +716,41 @@ export const mockAdminService: AdminService = {
     await delay();
     if (!isAdministrator(userId)) return denied(ADMIN_DENIAL.message, ADMIN_DENIAL.guidance);
     return success(divisions.map(divisionAdminView));
+  },
+
+  async getDivision(userId, id) {
+    await delay();
+    if (!isAdministrator(userId)) return denied(ADMIN_DENIAL.message, ADMIN_DENIAL.guidance);
+    const record = divisions.find((division) => division.id === id);
+    if (!record) return { status: 'not_found' as const, code: 'NOT_FOUND' as const, message: 'Division not found.', resource: 'division' };
+    const openTasks = mockStore.tasks().filter((task) => task.divisionId === id && task.status !== 'completed');
+    const projectCode = (projectId: string) => PROJECTS.find((project) => project.id === projectId)?.code ?? '—';
+    const detail: DivisionDetailView = {
+      division: divisionAdminView(record),
+      members: mockStore.assignments()
+        .filter((assignment) => assignment.divisionId === id && assignment.isActive)
+        .map((assignment) => ({
+          employee: employeeRef(assignment.employeeId),
+          departmentName: departmentById(assignment.departmentId)?.name ?? null,
+          roleInDivision: assignment.roleInDivision,
+          isPrimary: assignment.isPrimary,
+          allocationPercent: assignment.allocationPercent,
+          startDateLabel: formatDate(assignment.startDate),
+          endDateLabel: assignment.endDate ? formatDate(assignment.endDate) : null,
+        }))
+        .sort((left, right) => left.employee.fullName.localeCompare(right.employee.fullName)),
+      projects: PROJECTS.filter((project) => project.divisionId === id && project.isActive).map((project) => ({
+        id: project.id, code: project.code, name: project.name, status: project.status,
+        managerName: project.managerEmployeeId ? employeeRef(project.managerEmployeeId).fullName : null,
+        openTaskCount: openTasks.filter((task) => task.projectId === project.id).length,
+      })),
+      openTasks: openTasks.map((task) => ({
+        id: task.id, title: task.title, projectCode: projectCode(task.projectId), status: task.status,
+        assigneeName: task.assigneeEmployeeId ? employeeRef(task.assigneeEmployeeId).fullName : null,
+        dueDateLabel: task.dueDate ? formatDate(task.dueDate) : null,
+      })),
+    };
+    return success(detail);
   },
 
   async saveDivision(userId, input: DivisionFormInput, id) {

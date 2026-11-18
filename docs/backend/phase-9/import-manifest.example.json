@@ -1,0 +1,16 @@
+{
+  "releaseId": "production-cutover-2026-11",
+  "dataset": "divisions",
+  "mappingVersion": "be-0911-v1",
+  "sourceSystem": "approved-owner-register",
+  "sourceFileName": "divisions.csv",
+  "sourceCutoffDate": "2026-11-02",
+  "declaredRowCount": 5,
+  "sha256": "replace-with-64-lowercase-hex-characters-before-running",
+  "sensitivity": "internal",
+  "actorUserId": "replace-with-active-import-operator-user-id",
+  "owner": "Named accountable business owner",
+  "ownerUserId": "replace-with-active-owner-user-id",
+  "steward": "Named operational data steward",
+  "zeroRow": false
+}

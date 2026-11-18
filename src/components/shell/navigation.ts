@@ -237,6 +237,9 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
       items: [
         { key: 'dashboard', label: 'Dashboard', href: '/dashboard', iconKey: 'layout-dashboard', inMobileBottomNav: true },
         { key: 'employees', label: 'Employees', href: '/employees', iconKey: 'users', inMobileBottomNav: true },
+        // Organisation-wide oversight: every task and project, across all divisions.
+        { key: 'tasks', label: 'Tasks', href: '/tasks', iconKey: 'check-square' },
+        { key: 'projects', label: 'Projects', href: '/projects', iconKey: 'folder-kanban' },
         { key: 'reports', label: 'Reports', href: '/reports', iconKey: 'file-chart-column' },
         { key: 'requisitions', label: 'Requisition', href: '/requisitions', iconKey: 'package-open', flag: 'requisitions' },
         { key: 'conveyance', label: 'Conveyance', href: '/conveyance', iconKey: 'car-front', flag: 'conveyance' },

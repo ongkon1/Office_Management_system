@@ -2,7 +2,7 @@
 
 Durable context for anyone — human or AI — picking up this codebase. It records what the plan files don't: why things are the way they are, what's decided versus assumed, and the rules that are easy to break by accident.
 
-Last updated: **8 October 2026** (Backend `BE-0902` is complete: all in-scope production frontend contracts now use authenticated MySQL-backed service boundaries; later standalone modules remain in their own milestones).
+Last updated: **2 November 2026** (Backend `BE-0912` delivers guarded, audited production import commands for all nine dataset families; `BE-0910` remains in progress because 0/9 authoritative owner datasets have been supplied).
 
 ---
 
@@ -195,10 +195,11 @@ Environment: Windows + WAMP, PowerShell. **Not currently a git repository.**
 | Backend | 4 — Timesheet calculation and correction | Done (33/33) |
 | Backend | 5 — HR workflows | Done (26/26); browser cutover completed by `BE-0902` |
 | Backend | 6 — Reporting, Finance and exports | Done (19/19); browser cutover completed by `BE-0902` |
-| Backend | 7–8 | Pending |
-| Backend | 9 — Production readiness and frontend cutover | In progress (4/18; `BE-0901`–`BE-0904` done) |
-| Backend | 10 — Requisition | Pending (0/20) — new milestone |
-| Backend | 11 — Conveyance | Pending (0/22) — new milestone, depends on 10 |
+| Backend | 7 — Notifications, documents, search, and integrations | Done (23/23) |
+| Backend | 8 — Quality, performance, backup, and security hardening | In progress (12/23; code hardening complete, target monitoring/approvals/load/restore drills remain) |
+| Backend | 9 — Production readiness and frontend cutover | In progress (7/18; `BE-0901`–`BE-0905`, `BE-0911`, and `BE-0912` done; `BE-0910` owner data pending) |
+| Backend | 10 — Requisition | Done (20/20 · migration `0016`, authenticated runtime, shared approval engine and database integration tests) |
+| Backend | 11 — Conveyance | Done (22/22 · migration `0017`, shared approval engine, claim-bound Phase 7 receipts, evidence in `docs/backend/phase-11/verification.md`) |
 | Backend | 12 — Role consolidation: Finance into HR | Pending (0/11); `BE-1203` keeps cost access per-user, superseded by Phase 14 |
 | Backend | 13 — Meeting Minutes and AI task generation | Pending (0/34) |
 | Backend | 14 — Client Panel reporting | Pending (0/23) — new milestone; cuts over with Frontend Phase 12 |
@@ -302,6 +303,8 @@ Later phases harden screens and fixtures around these assumptions, so the cost o
 | Post-8 | A conveyance receipt is deny-by-default attachment data | `AGENTS.md` §2 lists attachments among the deny-by-default categories, so a receipt must be reachable by exactly the people who can see its claim — including against a direct file id, which is the access path a UI check never covers |
 | Post-8 | Requisition added to frontend Phase 7 and as backend Phase 10 | Requested by the user. Reopening a completed phase rather than inventing a Phase 10 frontend keeps the feature with the supporting modules it belongs to; the backend chain is self-contained enough to be its own milestone |
 | Post-8 | Requisition is allowed approval wording | A requisition is a real decision, like WFH and leave. The prohibition in §2 is specifically on daily time records, and this does not weaken it |
+| 16 Nov 2026 | Backend Requisition Phase 10 completed | Migration `0016` stores the two mutually exclusive form variants, exact BDT amounts and append-only reviews. `/api/requisitions` now uses the authenticated MySQL service. Employee requests route to the effective primary Team Lead; Team Lead requests skip that stage; current parallel reviewers are HR and Super Administrator. Lead changes reroute open work and no-lead cases escalate with audit evidence. Fixed safe notifications and deterministic seed scenarios use the existing Phase 7 infrastructure. Submitted amount is immutable; historical Finance review rows remain readable but receive no new work. |
+| 16 Nov 2026 | Backend Conveyance Phase 11 completed | Migration `0017` stores exact BDT claims, server submission time, visited instant, constrained mode, receipt linkage and append-only reviews. `/api/conveyance` uses the authenticated MySQL service and the same approval engine as requisition. Receipts use the Phase 7 file pipeline end to end: provisional employee ownership, integrity/type/size validation, scan state, transactional claim binding, live claim authorization, streamed/signed download and audit. Bound receipts are immutable. Employee claims route through the effective Team Lead; Team Lead claims skip to HR and Super Administrator; rerouting and no-lead escalation are audited. Evidence is in `docs/backend/phase-11/verification.md`. |
 | Post-8 | Re-skinned to the PowerInAI palette on a light canvas | Requested by the user. Values taken from powerinai.com's own stylesheet; because the site is dark-ground, each brand hue is split by job — full strength where 3:1 suffices, one step deeper where a label must be read |
 | Post-8 | Pink `#ff3c7e` excluded from controls and status | It reads as the Critical red beside a status badge, and Critical means an employee worked over twelve hours. It appears only on the mark, the sign-in panel and the chart palette |
 | Post-8 | The five day-status colours left untouched by the re-skin | They are semantic, not decorative, and Missing and Critical already sit within 0.1 of the 4.5:1 floor |
@@ -335,6 +338,19 @@ Finance defaults to verified data; open-period reads require `report.finance.unv
 Excel/CSV/PDF/print artifacts are generated by the persistent worker, stored privately in S3, and revalidated at download. Configure a Unicode PDF font, worker startup, private storage and lifecycle cleanup before production deployment. Queries are bounded to 367 dates, 20,000 employee-days and 32 MiB of retained source context; larger requests must be split. The production performance gate remains Phase 8.
 
 Verification: full backend regression 223/223 before the last two additional cases; final Phase 6 suite 30/30; frontend/shared 409/409; type generation, TypeScript, lint, contrast 48/48, migration validation 10/10, dependency high/critical gate and 60-page production build passed. The ExcelJS UUID advisory was fixed with a scoped compatible override; four pre-existing moderate Drizzle Kit development findings remain. Checks used the Windows Node 24 runtime and isolated WAMP test databases.
+
+## Backend Phase 9 import handoff — 2 November 2026
+
+`BE-0912` adds migration `0015` and `npm run db:import`. The command supports
+dry-run, permission-scoped approval, atomic commit, status, safe rejection
+export and fingerprint-guarded rollback for the nine `BE-0910` dataset
+families. Source identity is checksum + release + source system; stable source
+keys map through durable crosswalks, and every state change is audited. Runtime
+accounts cannot mutate `import_*`; operations use `DATABASE_MIGRATION_URL`.
+Real source files stay outside the repository. `BE-0910` remains `[~]` until
+owners provide or explicitly waive all nine extracts, and `BE-0913` remains the
+rehearsal/sign-off gate. Evidence and commands are in
+`docs/backend/phase-9/be-0912-verification.md`.
 
 ## Modify Phase B2 handoff — 21 September 2026
 

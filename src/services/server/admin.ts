@@ -6,6 +6,7 @@ export const serverAdminService:AdminService={
   getBranding:(...args)=>call('getBranding',args),
   updateBranding:(...args)=>call('updateBranding',args),
   listDivisions:(...args)=>call('listDivisions',args),
+  getDivision:(...args)=>call('getDivision',args),
   saveDivision:(...args)=>call('saveDivision',args),
   setDivisionActive:(...args)=>call('setDivisionActive',args),
   listUsers:(...args)=>call('listUsers',args),

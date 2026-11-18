@@ -65,7 +65,16 @@ import {
   hasPermission,
   type ActorPolicyContext,
 } from "@/server/authorization/policy";
+import {
+  PROJECT_FACT_COLUMNS,
+  canCreateProject,
+  decideProjectReach,
+  isReadOnly,
+  isWideRole,
+  projectFactsFrom,
+} from "@/server/authorization/record-access";
 import { hashPassword } from "@/server/security/crypto";
+import { publishWebhookEvent } from "@/server/integrations/webhooks";
 import type { createHrServices } from "@/server/hr/composition";
 import type { createTimeServices } from "@/server/time/composition";
 import { businessToday } from "@/lib/business-date";
@@ -83,16 +92,6 @@ const PROJECT_FIELD_LABEL: Readonly<Record<string, string>> = {
   estimate: "estimate", progress: "progress", notes: "notes", status: "status", manager: "manager",
   budget: "budget", members: "members",
 };
-/** Organisation-wide authority over projects. */
-const isWideRole = (a: ActorPolicyContext) =>
-  a.roles.includes("super_admin") || a.roles.includes("hr_manager");
-/** Management/View-Only with no other role: may read, never change. */
-const isReadOnly = (a: ActorPolicyContext) =>
-  a.roles.includes("management") &&
-  !a.roles.some((role) => ["super_admin", "hr_manager", "team_lead"].includes(role));
-/** A role that carries project management — an appointment alone does not. */
-const canCreateProject = (a: ActorPolicyContext) =>
-  isWideRole(a) || a.roles.includes("team_lead");
 const date = (v: unknown) =>
   v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10);
 const absent = (resource = "record"): Result<never> => ({
@@ -1139,31 +1138,15 @@ export class OperationsService {
     const me = a.employeeId ?? "";
     const on = today();
     const rows = await this.rows(
-      `SELECT p.id,p.division_id,p.manager_employee_id,d.is_government,
-        EXISTS(SELECT 1 FROM project_members pm WHERE pm.project_id=p.id AND pm.employee_id=? AND pm.is_active=TRUE
-          AND pm.effective_from<=? AND (pm.effective_to IS NULL OR pm.effective_to>=?)) is_member,
-        EXISTS(SELECT 1 FROM tasks t WHERE t.project_id=p.id AND t.is_active=TRUE
-          AND (t.assignee_employee_id=? OR EXISTS(SELECT 1 FROM task_members tm WHERE tm.task_id=t.id AND tm.employee_id=?))) has_task
-       FROM projects p JOIN divisions d ON d.id=p.division_id`,
+      `SELECT ${PROJECT_FACT_COLUMNS} FROM projects p JOIN divisions d ON d.id=p.division_id`,
       [me, on, on, me, me],
     );
-    const wide = isWideRole(a);
-    const government = hasPermission(a, "organization.government.view");
+    // One rule for every surface: `decideProjectReach` in record-access.
     const access = new Map<string, { manage: boolean; divisionId: string }>();
     for (const r of rows) {
-      if (r.is_government && !government) continue;
-      const divisionId = String(r.division_id);
-      const manage =
-        wide ||
-        (a.employeeId !== null && String(r.manager_employee_id) === a.employeeId) ||
-        (a.roles.includes("team_lead") && a.divisionIds.has(divisionId));
-      const view =
-        manage ||
-        a.roles.includes("management") ||
-        a.projectIds.has(String(r.id)) ||
-        Boolean(r.is_member) ||
-        Boolean(r.has_task);
-      if (view) access.set(String(r.id), { manage: manage && !isReadOnly(a), divisionId });
+      const facts = projectFactsFrom(r);
+      const decision = decideProjectReach(a, facts);
+      if (decision.view) access.set(facts.projectId, { manage: decision.manage, divisionId: facts.divisionId });
     }
     return access;
   }
@@ -1444,6 +1427,7 @@ export class OperationsService {
             JSON.stringify({ divisionId }), randomUUID(), JSON.stringify(null),
             JSON.stringify(existing ? { changedFields } : { name, code, memberCount: memberIds.length })],
         );
+        await publishWebhookEvent(connection, { type: "project.changed", resourceId: projectId, sourceKey: `project:${projectId}:${randomUUID()}` });
       });
     } catch (error) {
       if (isDuplicateKeyError(error))

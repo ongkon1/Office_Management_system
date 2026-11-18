@@ -83,5 +83,53 @@ if (!grantHardener.includes("table === 'task_status_transitions'") || !grantHard
 if (!grantHardener.includes("table.startsWith('department_migration_')")) {
   throw new Error('Runtime grant hardener must keep the department migration review tables read-only.');
 }
+if (!grantHardener.includes("table.startsWith('import_')")) {
+  throw new Error('Runtime grant hardener must keep production import evidence read-only.');
+}
+
+const importMigration = readFileSync(join(root, '0015_production_data_imports.sql'), 'utf8');
+for (const required of [
+  'import_batches',
+  'uq_import_source',
+  'import_rows',
+  'import_approvals',
+  'uq_import_active_approval',
+  'import_crosswalks',
+  'uq_import_crosswalk',
+  'import_mutations',
+  'committed_row_sha256',
+  'reconciliation_json',
+]) {
+  if (!importMigration.includes(required)) {
+    throw new Error(`Migration 0015 is missing required import invariant: ${required}`);
+  }
+}
+
+const requisitionMigration = readFileSync(join(root, '0016_requisitions.sql'), 'utf8');
+for (const required of [
+  'requisitions',
+  'requisition_in_house_details',
+  'requisition_new_details',
+  'requisition_reviews',
+  'uq_requisition_reviewer_role',
+  'chk_requisition_terminal',
+  'requisition_reviews_no_update',
+  'requisition_reviews_no_delete',
+]) {
+  if (!requisitionMigration.includes(required)) {
+    throw new Error(`Migration 0016 is missing required requisition invariant: ${required}`);
+  }
+}
+
+const conveyanceMigration = readFileSync(join(root, '0017_conveyance_claims.sql'), 'utf8');
+for (const required of [
+  'conveyance_claims', 'conveyance_reviews', 'receipt_attachment_id',
+  'uq_conveyance_reviewer_role', 'chk_conveyance_mode_description',
+  'chk_conveyance_terminal', 'conveyance_reviews_no_update', 'conveyance_reviews_no_delete',
+]) {
+  if (!conveyanceMigration.includes(required)) {
+    throw new Error(`Migration 0017 is missing required conveyance invariant: ${required}`);
+  }
+}
 
 console.log(`Migration validation passed: ${migrations.length} forward migration(s) and matching recovery scripts checked.`);

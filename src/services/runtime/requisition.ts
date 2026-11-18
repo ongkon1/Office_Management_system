@@ -1,4 +1,1 @@
-import type { RequisitionService } from '@/contracts/requisition';
-import { unavailableService } from './unavailable';
-
-export const requisitionService = unavailableService<RequisitionService>('Requisition operations');
+export { serverRequisitionService as requisitionService } from '@/services/server/requisition';

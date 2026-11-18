@@ -23,6 +23,7 @@ import type {
   Redactable,
   RoleKey,
   StoredRoleKey,
+  TaskStatus,
 } from './domain';
 import type { Result } from './results';
 import type { DivisionRef, EmployeeRef } from './view-models';
@@ -63,6 +64,40 @@ export interface DivisionAdminView {
    * Shown before the control is offered, never after it fails.
    */
   readonly deactivationBlockers: readonly string[];
+}
+
+/**
+ * Everything one division holds, for a Super Administrator's oversight: who is
+ * placed in it, which projects it runs, and its open work. Counts in
+ * `division` agree with these lists because both come from the same service.
+ */
+export interface DivisionDetailView {
+  readonly division: DivisionAdminView;
+  readonly members: readonly {
+    readonly employee: EmployeeRef;
+    readonly departmentName: string | null;
+    readonly roleInDivision: string | null;
+    readonly isPrimary: boolean;
+    readonly allocationPercent: number;
+    readonly startDateLabel: string;
+    readonly endDateLabel: string | null;
+  }[];
+  readonly projects: readonly {
+    readonly id: string;
+    readonly code: string;
+    readonly name: string;
+    readonly status: string;
+    readonly managerName: string | null;
+    readonly openTaskCount: number;
+  }[];
+  readonly openTasks: readonly {
+    readonly id: string;
+    readonly title: string;
+    readonly projectCode: string;
+    readonly status: TaskStatus;
+    readonly assigneeName: string | null;
+    readonly dueDateLabel: string | null;
+  }[];
 }
 
 /** The division code is assigned by the service (`DIV-0000`), never submitted. */
@@ -254,6 +289,7 @@ export interface AdminService {
   ): Promise<Result<OrganizationBrandingView>>;
 
   listDivisions(userId: string): Promise<Result<readonly DivisionAdminView[]>>;
+  getDivision(userId: string, id: string): Promise<Result<DivisionDetailView>>;
   saveDivision(
     userId: string,
     input: DivisionFormInput,

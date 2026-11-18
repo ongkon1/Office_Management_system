@@ -94,8 +94,35 @@ export interface SearchResultView {
   readonly isRestricted: boolean;
 }
 
+/** `REQ-SRCH-002`. Every filter is optional; each narrows the authorized results. */
+export interface SearchFilters {
+  readonly from?: IsoDate;
+  readonly to?: IsoDate;
+  readonly divisionIds?: readonly string[];
+  readonly employeeIds?: readonly string[];
+  readonly projectIds?: readonly string[];
+  readonly statuses?: readonly string[];
+  readonly workLocations?: readonly string[];
+  /** File extensions, or `link` for link-only documents. */
+  readonly fileTypes?: readonly string[];
+}
+
+export interface SearchOptions {
+  readonly filters?: SearchFilters;
+  readonly page?: number;
+  readonly pageSize?: number;
+}
+
 export interface SearchResultsView {
   readonly term: string;
+  /** Present when the service paginates; absent from the prototype adapter. */
+  readonly page?: {
+    readonly page: number;
+    readonly pageSize: number;
+    readonly hasMore: boolean;
+    /** The candidate scan reached its bound; refining the term may find more. */
+    readonly truncated: boolean;
+  };
   /** Count of results this viewer may see, never the unfiltered total. */
   readonly totalCount: number;
   readonly groups: readonly {
@@ -160,7 +187,13 @@ export interface MessageThreadView {
     readonly body: string;
     readonly atLabel: string;
     readonly isOwn: boolean;
+    /** `REQ-COM-002`. Optional: the prototype adapter does not set them. */
+    readonly isPinned?: boolean;
+    readonly isAnnouncement?: boolean;
+    readonly attachments?: readonly { readonly id: string; readonly fileName: string; readonly sizeLabel: string }[];
   }[];
+  /** Whether the viewer may announce and pin here. */
+  readonly canModerate?: boolean;
 }
 
 export interface MessagePrototypeView {
@@ -302,13 +335,15 @@ export interface WorkspaceService {
     userId: string,
     term: string,
     kinds?: readonly SearchEntityKind[],
+    options?: SearchOptions,
   ): Promise<Result<SearchResultsView>>;
 
   getDocuments(
     userId: string,
     filters?: { readonly term?: string; readonly scopes?: readonly string[] },
   ): Promise<Result<DocumentLibraryView>>;
-  downloadDocument(userId: string, id: string): Promise<Result<{ readonly note: string }>>;
+  /** `href`, when present, is the authenticated route that streams or redirects to the file. */
+  downloadDocument(userId: string, id: string): Promise<Result<{ readonly note: string; readonly href?: string }>>;
 
   getMessages(userId: string): Promise<Result<MessagePrototypeView>>;
 

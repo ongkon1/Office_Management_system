@@ -24,6 +24,7 @@ import { Field, FormErrorSummary } from '@/components/forms/field';
 import { FileUpload, Input, RadioGroup } from '@/components/forms/inputs';
 import { Button, LinkButton } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { discardConveyanceReceipt, uploadConveyanceReceipt } from '@/services/server/conveyance-receipt';
 
 const EMPTY: ConveyanceFormInput = {
   businessName: '',
@@ -66,6 +67,7 @@ export function ConveyanceForm() {
   const [blocked, setBlocked] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
   const [receiptNote, setReceiptNote] = React.useState<string | null>(null);
+  const [receiptFile, setReceiptFile] = React.useState<File | null>(null);
 
   const { state } = useAsync(
     () => mockConveyanceService.formContext(user?.userId ?? ''),
@@ -96,11 +98,13 @@ export function ConveyanceForm() {
     }
 
     const receipt: ReceiptUploadInput = {
+      attachmentId: null,
       fileName: file.name,
       sizeBytes: file.size,
       mimeType: file.type,
     };
     set('receipt', receipt);
+    setReceiptFile(file);
   }
 
   if (state.status === 'loading') {
@@ -154,7 +158,19 @@ export function ConveyanceForm() {
     setBlocked(null);
     setSubmitting(true);
 
-    const result = await mockConveyanceService.submit(user?.userId ?? '', form);
+    let submission = form;
+    let uploadedId: string | null = null;
+    if (receiptFile) {
+      const upload = await uploadConveyanceReceipt(user?.employeeId ?? '', receiptFile);
+      if (upload.status !== 'success') {
+        setSubmitting(false);
+        setErrors([{ field: 'receipt', message: upload.message }]);
+        return;
+      }
+      uploadedId = upload.data.attachmentId ?? null;
+      submission = { ...form, receipt: upload.data };
+    }
+    const result = await mockConveyanceService.submit(user?.userId ?? '', submission);
     setSubmitting(false);
 
     if (result.status === 'success') {
@@ -168,6 +184,7 @@ export function ConveyanceForm() {
     }
 
     if (result.status === 'validation_failure') {
+      if (uploadedId) await discardConveyanceReceipt(uploadedId);
       setErrors(
         result.fieldErrors.map((error) => ({
           field: error.field,
@@ -180,6 +197,7 @@ export function ConveyanceForm() {
     setBlocked(
       'guidance' in result ? `${result.message} ${result.guidance ?? ''}`.trim() : result.message,
     );
+    if (uploadedId) await discardConveyanceReceipt(uploadedId);
   }
 
   const errorFor = (field: string) => errors.find((error) => error.field === field)?.message;
@@ -348,6 +366,7 @@ export function ConveyanceForm() {
             onFilesSelected={chooseFile}
             onRemove={() => {
               set('receipt', null);
+              setReceiptFile(null);
               setReceiptNote(null);
             }}
           />

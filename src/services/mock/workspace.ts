@@ -158,7 +158,12 @@ function groupOf(type: NotificationFixture['type']): NotificationGroupKey {
     // would file it under "Needs your attention" — which a success is not.
     case 'meeting_minute_processed':
     case 'meeting_minute_failed':
+    case 'message_mention':
+    case 'announcement_posted':
+    case 'task_review_decided':
       return 'work';
+    case 'task_review_requested':
+      return 'action_required';
     case 'remark_added':
     case 'correction_requested':
       return 'action_required';

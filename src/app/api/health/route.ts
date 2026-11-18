@@ -1,5 +1,8 @@
 import { createDatabaseClient } from '@/server/database/client';
 import { checkDatabaseReadiness } from '@/server/database/health';
+import { checkJobReadiness } from '@/server/database/dependencies';
+import { incrementMetric, observeDuration } from '@/server/observability/metrics';
+import { operationalLog } from '@/server/observability/logger';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -18,13 +21,27 @@ async function healthResponse(includeBody: boolean): Promise<Response> {
 
   try {
     database ??= createDatabaseClient();
-    const readiness = await checkDatabaseReadiness(database.pool);
-    const healthy = readiness.status === 'healthy';
+    const [readiness, jobs] = await Promise.all([
+      checkDatabaseReadiness(database.pool),
+      checkJobReadiness(),
+    ]);
+    const healthy = readiness.status === 'healthy' && jobs.status !== 'unhealthy';
+    const degraded = healthy && jobs.status === 'degraded';
+    const durationMs = Math.ceil(performance.now() - startedAt);
+    incrementMetric(healthy ? 'health.success' : 'health.failure');
+    observeDuration('health.duration', durationMs);
+    operationalLog({
+      event: 'health.checked',
+      severity: healthy ? (degraded ? 'warn' : 'info') : 'error',
+      outcome: healthy ? (degraded ? 'degraded' : 'success') : 'failure',
+      durationMs,
+      details: { database: readiness.status, jobs: jobs.status },
+    });
     const payload = {
-      status: healthy ? 'healthy' : 'unhealthy',
+      status: healthy ? (degraded ? 'degraded' : 'healthy') : 'unhealthy',
       service: 'office-management-system',
       checkedAt,
-      responseTimeMs: Math.ceil(performance.now() - startedAt),
+      responseTimeMs: durationMs,
       uptimeSeconds: Math.floor(process.uptime()),
       deploymentVersion: process.env.DEPLOYMENT_VERSION ?? 'unknown',
       source: 'server',
@@ -39,6 +56,14 @@ async function healthResponse(includeBody: boolean): Promise<Response> {
           expectedMigration: readiness.expectedMigration,
           appliedMigration: readiness.appliedMigration,
         },
+        redis: { status: jobs.redis, latencyMs: jobs.latencyMs },
+        jobQueue: {
+          status: jobs.status,
+          waiting: jobs.waitingJobs,
+          delayed: jobs.delayedJobs,
+          failed: jobs.failedJobs,
+        },
+        workers: { status: jobs.workers, active: jobs.activeWorkers },
       },
     };
     return new Response(includeBody ? JSON.stringify(payload) : null, {

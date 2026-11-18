@@ -1,0 +1,5 @@
+[
+  { "name": "health-read", "method": "GET", "path": "/api/health", "p95Ms": 2000, "expectedStatuses": [200] },
+  { "name": "employee-dashboard", "method": "GET", "path": "/dashboard", "accept": "text/html", "p95Ms": 5000, "expectedStatuses": [200] },
+  { "name": "report-catalogue", "method": "GET", "path": "/reports", "accept": "text/html", "p95Ms": 5000, "expectedStatuses": [200] }
+]

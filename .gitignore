@@ -23,6 +23,8 @@
 /build
 
 # misc
+# Development-only local object store for attachments (BE-0011); never committed.
+/.data/
 .DS_Store
 *.pem
 

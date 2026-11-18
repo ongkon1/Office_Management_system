@@ -1,4 +1,5 @@
 import { NotificationService } from '@/server/notifications/service';
+import { publishWebhookEvent } from '@/server/integrations/webhooks';
 import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolConnection, RowDataPacket, ResultSetHeader } from 'mysql2/promise';
 import type { DailySummary, GeneralRemark, WorkPolicy, Project, Task, Division } from '@/contracts/domain';
@@ -92,7 +93,13 @@ export class MysqlTimeRepository implements TimeRepository {
     async saveBreak(employeeId: string, date: string, minutes: number, reason: string, policyId: string) { await this.db.execute("INSERT INTO daily_breaks(id,employee_id,work_date,minutes,source,reason,policy_version_id) VALUES(?,?,?,?,'override',?,?) ON DUPLICATE KEY UPDATE minutes=VALUES(minutes),source='override',reason=VALUES(reason),policy_version_id=VALUES(policy_version_id),version=version+1", [randomUUID(), employeeId, date, minutes, reason, policyId]); }
     async replay(actor: string, operation: string, key: string) { const r = (await this.rows('SELECT request_hash,response_body FROM idempotency_records WHERE actor_user_id=? AND operation_key=? AND idempotency_key=?', [actor, operation, key]))[0]; return r ? { hash: String(r.request_hash), result: json<Result<unknown>>(r.response_body, { status: 'success', data: null }) } : null; }
     async remember(actor: string, operation: string, key: string, hash: string, result: Result<unknown>) { await this.db.execute("INSERT INTO idempotency_records(id,actor_user_id,operation_key,idempotency_key,request_hash,response_status,response_body,expires_at) VALUES(?,?,?,?,?,?,?,DATE_ADD(UTC_TIMESTAMP(6),INTERVAL 365 DAY))", [randomUUID(), actor, operation, key, hash, result.status, JSON.stringify(result)]); }
-    async audit(e: TimeAudit) { await this.db.execute('INSERT INTO audit_events(event_id,actor_user_id,action,resource_type,resource_id,scope_json,reason,correlation_id,before_protected,after_protected) VALUES(?,?,?,?,?,?,?,?,?,?)', [randomUUID(), e.actorUserId, e.action, e.resourceType ?? 'time', e.resourceId, JSON.stringify({ employeeId: e.employeeId }), e.reason ?? null, e.correlationId, JSON.stringify(redactProtected(e.before)), JSON.stringify(redactProtected(e.after))]); }
+    async audit(e: TimeAudit) { await this.db.execute('INSERT INTO audit_events(event_id,actor_user_id,action,resource_type,resource_id,scope_json,reason,correlation_id,before_protected,after_protected) VALUES(?,?,?,?,?,?,?,?,?,?)', [randomUUID(), e.actorUserId, e.action, e.resourceType ?? 'time', e.resourceId, JSON.stringify({ employeeId: e.employeeId }), e.reason ?? null, e.correlationId, JSON.stringify(redactProtected(e.before)), JSON.stringify(redactProtected(e.after))]); 
+        // `BE-0731`: outbound events ride the same transaction as the audit evidence.
+        const after = e.after as { version?: number; taskId?: string } | null | undefined;
+        if (e.action === 'time.create' || e.action === 'time.correct') await publishWebhookEvent(this.db, { type: 'work_log.recorded', resourceId: e.resourceId, sourceKey: `work_log:${e.resourceId}:${after?.version ?? e.correlationId}` });
+        else if (e.action === 'task.transition' && after?.taskId) await publishWebhookEvent(this.db, { type: 'task.status_changed', resourceId: after.taskId, sourceKey: `task_transition:${e.resourceId}` });
+        else if (e.action === 'period.verify' || e.action === 'period.amend') await publishWebhookEvent(this.db, { type: 'period.verified', resourceId: e.resourceId, sourceKey: `${e.action}:${e.resourceId}:${after?.version ?? e.correlationId}` });
+    }
     async enqueue(key: string, type: string, employeeId: string, date: string) {
         await this.db.execute('INSERT INTO time_outbox(id,event_key,event_type,employee_id,work_date) VALUES(?,?,?,?,?) ON DUPLICATE KEY UPDATE event_key=event_key', [randomUUID(), key, type, employeeId, date]);
         if (['time.critical', 'time.overtime', 'time.correction.requested', 'time.period.amended'].includes(type) || type.startsWith('time.remark.')) {
@@ -104,8 +111,21 @@ export class MysqlTimeRepository implements TimeRepository {
         const rows = await this.rows('SELECT t.id,p.is_active,d.is_government FROM tasks t JOIN projects p ON p.id=t.project_id JOIN divisions d ON d.id=p.division_id WHERE t.id=? AND (t.assignee_employee_id=? OR EXISTS(SELECT 1 FROM task_members m WHERE m.task_id=t.id AND m.employee_id=?))', [taskId, employeeId, employeeId]);
         return rows.length === 1 && (!rows[0].is_government || hasPermission(actor, 'organization.government.view'));
     }
-    async attachmentAllowed(id: string, employeeId: string, actor: ActorPolicyContext) { if (!hasPermission(actor, 'file.protected.view'))
-        return false; return (await this.rows("SELECT a.id FROM attachments a JOIN employees e ON e.user_id=a.uploaded_by_user_id WHERE a.id=? AND e.id=? AND a.scan_status='clean' AND a.deactivated_at IS NULL", [id, employeeId])).length === 1; }
+    /**
+     * `BE-0712`. A work log or request may link a clean, completed, active
+     * upload that is the employee's own evidence (owner type `time_entry`,
+     * `wfh_request` or `leave_request`, owned by that employee and uploaded
+     * from their account). `file.protected.view` additionally allows any clean
+     * upload by that employee, which is the pre-Phase 7 rule kept for records
+     * attached before ownership existed.
+     */
+    async attachmentAllowed(id: string, employeeId: string, actor: ActorPolicyContext) {
+        const rows = await this.rows(`SELECT a.owner_type,a.owner_id FROM attachments a JOIN employees e ON e.user_id=a.uploaded_by_user_id
+          WHERE a.id=? AND e.id=? AND a.scan_status='clean' AND a.upload_state='completed' AND a.deactivated_at IS NULL`, [id, employeeId]);
+        if (rows.length !== 1) return false;
+        if (['time_entry', 'wfh_request', 'leave_request'].includes(String(rows[0].owner_type)) && rows[0].owner_id === employeeId) return true;
+        return hasPermission(actor, 'file.protected.view');
+    }
     async employeeRef(id: string) { const r = (await this.rows('SELECT id,display_name,employee_code,job_title FROM employees WHERE id=?', [id]))[0]; return r ? { id: String(r.id), fullName: String(r.display_name), employeeCode: String(r.employee_code), designation: r.job_title ? String(r.job_title) : null, avatarUrl: null } : null; }
     async employeeIds() { return (await this.rows("SELECT id FROM employees WHERE status='active' ORDER BY id")).map((r) => String(r.id)); }
     async periods() { return (await this.rows('SELECT t.*,p.version_number FROM timesheet_periods t JOIN policy_versions p ON p.id=t.policy_version_id ORDER BY t.start_date,t.id')).map((r) => ({ ...provenance(r), id: String(r.id), label: String(r.label), startDate: date(r.start_date), endDate: date(r.end_date), status: r.status as StoredPeriod['status'], verifiedAt: r.verified_at ? iso(r.verified_at) : null, verifiedBy: r.verified_by_user_id ? { userId: String(r.verified_by_user_id), displayName: 'HR' } : null, policyVersion: Number(r.version_number), policyId: String(r.policy_version_id), version: Number(r.version), includedEmployeeCount: 0, openExceptionCount: 0 })); }

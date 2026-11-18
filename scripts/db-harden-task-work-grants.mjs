@@ -68,6 +68,10 @@ try {
         // Migration 0013's review and reconciliation record is migration
         // output: the application reads it in a report and must never write it.
         !table.startsWith('department_migration_') &&
+        // Production import evidence is owned by the dedicated migration/import
+        // identity. Runtime services may inspect status, but cannot alter the
+        // batch ledger, approvals, crosswalks or rollback fingerprints.
+        !table.startsWith('import_') &&
         table !== 'time_capture_cutovers' &&
         table !== 'schema_migrations'
       ) {
@@ -77,7 +81,7 @@ try {
   }
 
   console.log(
-    `Hardened ${accounts.length} runtime account(s): task transitions are insert-only and timer sessions are read-only.`,
+    `Hardened ${accounts.length} runtime account(s): task transitions are insert-only; timer sessions and import evidence are read-only.`,
   );
 } finally {
   await connection.end();

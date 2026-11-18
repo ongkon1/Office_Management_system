@@ -964,7 +964,17 @@ export type NotificationType =
   | 'evaluation_due'
   | 'evaluation_published'
   | 'period_verified'
-  | 'export_ready';
+  | 'export_ready'
+  /** `REQ-COM-002`: someone named the recipient in a conversation they can read. */
+  | 'message_mention'
+  | 'announcement_posted'
+  /** An employee-raised task is waiting for, or has received, its Team Lead's review. */
+  | 'task_review_requested'
+  | 'task_review_decided'
+  | 'requisition_review_requested'
+  | 'requisition_decided'
+  | 'conveyance_review_requested'
+  | 'conveyance_decided';
 
 export interface Notification {
   readonly id: string;

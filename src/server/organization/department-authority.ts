@@ -70,9 +70,13 @@ const AUTHORITY_SELECT = `SELECT a.id AS assignment_id,a.employee_id,a.division_
 
 /** The precedence rule, isolated so it is testable without a database. */
 export function resolveAuthority(row: {
+  readonly departmentId?: string | null;
   readonly departmentLeadEmployeeId: string | null;
   readonly legacyLeadEmployeeId: string | null;
 }): { readonly leadEmployeeId: string | null; readonly fromDepartment: boolean } {
+  if (row.departmentId) {
+    return { leadEmployeeId: row.departmentLeadEmployeeId, fromDepartment: row.departmentLeadEmployeeId !== null };
+  }
   return row.departmentLeadEmployeeId !== null
     ? { leadEmployeeId: row.departmentLeadEmployeeId, fromDepartment: true }
     : { leadEmployeeId: row.legacyLeadEmployeeId, fromDepartment: false };
@@ -80,6 +84,7 @@ export function resolveAuthority(row: {
 
 function mapRow(row: AuthorityRow): EffectiveAuthorityRow {
   const resolved = resolveAuthority({
+    departmentId: row.department_id,
     departmentLeadEmployeeId: row.department_lead_employee_id,
     legacyLeadEmployeeId: row.legacy_lead_employee_id,
   });

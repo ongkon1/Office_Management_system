@@ -13,7 +13,7 @@ import { Alert, Callout } from '@/components/feedback/alert';
 import { Dialog } from '@/components/feedback/overlay';
 import { Field, FormErrorSummary } from '@/components/forms/field';
 import { Checkbox, Input, Select, Switch, Textarea } from '@/components/forms/inputs';
-import { Button } from '@/components/ui/button';
+import { Button, LinkButton } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ReportsFallback, ReportsLoading } from '@/features/reports/report-catalogue';
 
@@ -198,17 +198,22 @@ export function DivisionAdministration() {
                   <p className="mt-1 text-caption text-ink-subtle">{division.description}</p>
                 )}
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                iconLeading={<Pencil aria-hidden className="size-4" />}
-                onClick={() => {
-                  setEditing(division);
-                  setOpen(true);
-                }}
-              >
-                Edit
-              </Button>
+              <div className="flex min-w-0 flex-wrap gap-2">
+                <LinkButton variant="ghost" size="sm" href={`/admin/divisions/${division.id}`}>
+                  View details
+                </LinkButton>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  iconLeading={<Pencil aria-hidden className="size-4" />}
+                  onClick={() => {
+                    setEditing(division);
+                    setOpen(true);
+                  }}
+                >
+                  Edit
+                </Button>
+              </div>
             </div>
 
             <dl className="mt-4 grid grid-cols-3 gap-3">

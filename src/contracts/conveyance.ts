@@ -102,11 +102,13 @@ export interface ConveyanceFormInput {
 /**
  * A file chosen in the browser.
  *
- * The frontend milestone has no storage provider (`BE-0007`-`BE-0014` are
- * open), so this carries metadata only and is presented as a prototype — never
- * as a stored file.
+ * The browser receives this metadata only after the shared Phase 7 upload
+ * service has accepted the bytes. The claim service then validates and binds
+ * the attachment id transactionally.
  */
 export interface ReceiptUploadInput {
+  /** Set only after the Phase 7 upload path has accepted the bytes. */
+  readonly attachmentId: string | null;
   readonly fileName: string;
   readonly sizeBytes: number;
   readonly mimeType: string;
@@ -139,6 +141,8 @@ export type ReceiptView =
       readonly typeLabel: string;
       readonly href: string;
     }
+  | { readonly state: 'processing'; readonly fileName: string }
+  | { readonly state: 'rejected'; readonly fileName: string }
   | { readonly state: 'restricted' };
 
 export interface ConveyanceRowView {

@@ -28,8 +28,16 @@
     "db:seed": "node --env-file-if-exists=.env.local scripts/db-seed.mjs",
     "db:department-report": "node --env-file-if-exists=.env.local scripts/db-department-migration-report.mjs",
     "db:harden-task-work": "node --env-file-if-exists=.env.local scripts/db-harden-task-work-grants.mjs",
+    "db:import": "node --env-file-if-exists=.env.local scripts/db-import.mjs",
     "db:validate": "node scripts/validate-migrations.mjs",
+    "db:backup": "node --env-file-if-exists=.env.local scripts/db-backup.mjs",
+    "db:restore-drill": "node --env-file-if-exists=.env.local scripts/db-restore-drill.mjs",
+    "objects:backup": "node --env-file-if-exists=.env.local scripts/object-backup.mjs",
+    "objects:restore-drill": "node --env-file-if-exists=.env.local scripts/object-restore-drill.mjs",
     "audit:security": "npm audit --audit-level=high",
+    "audit:phase8:security": "node scripts/phase8-security.mjs && npm audit --audit-level=high",
+    "audit:phase8:cache": "node scripts/phase8-cache-audit.mjs",
+    "audit:phase8:load": "node --env-file-if-exists=.env.local scripts/phase8-load.mjs",
     "audit:data-boundaries": "node scripts/audit-production-data-boundaries.mjs",
     "audit:contrast": "node scripts/contrast-audit.mjs",
     "audit:responsive": "node scripts/responsive-audit.mjs",
@@ -49,12 +57,12 @@
     "audit:task-work": "node scripts/task-work-audit.mjs",
     "audit:role-merge": "node scripts/role-merge-flows.mjs",
     "verify": "npm run typecheck && npm run lint && npm run audit:data-boundaries && npm run audit:contrast && npm run test && npm run build",
-    "verify:backend": "npm run typecheck && npm run lint && npm run audit:data-boundaries && npm run db:validate && npm run test:backend && npm run audit:security && npm run build"
+    "verify:backend": "npm run typecheck && npm run lint && npm run audit:data-boundaries && npm run db:validate && npm run test:backend && npm run audit:phase8:cache && npm run audit:phase8:security && npm run build"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1125.0",
     "@aws-sdk/s3-request-presigner": "^3.1125.0",
-    "better-auth": "^1.7.2",
+    "better-auth": "1.7.25",
     "bullmq": "^6.3.4",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.2",
@@ -62,13 +70,13 @@
     "ioredis": "^6.0.0",
     "lucide-react": "^1.39.0",
     "mysql2": "^3.24.3",
-    "next": "16.3.4",
+    "next": "16.4.6",
     "pdfkit": "^0.20.2",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "resend": "^6.25.0",
     "tailwind-merge": "^3.6.0",
-    "zod": "^4.5.4"
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
@@ -77,19 +85,19 @@
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.7",
     "@types/node": "^20",
+    "@types/pdfkit": "^0.17.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^6.1.1",
-    "@vitest/coverage-v8": "^4.1.11",
+    "@vitest/coverage-v8": "4.1.12",
     "drizzle-kit": "^0.31.10",
     "eslint": "^9",
-    "eslint-config-next": "16.3.4",
+    "eslint-config-next": "16.4.6",
     "jsdom": "^30.0.1",
     "playwright": "^1.62.1",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "vitest": "^4.1.11",
-    "@types/pdfkit": "^0.17.6"
+    "vitest": "4.1.12"
   },
   "overrides": {
     "exceljs": {

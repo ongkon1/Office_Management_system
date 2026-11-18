@@ -3,12 +3,12 @@ import type { Pool, RowDataPacket } from 'mysql2/promise';
 /**
  * Must move with every reviewed production migration.
  *
- * It was left at `0011` while `0012` and `0013` shipped, which made readiness
- * report unhealthy on a correctly migrated database — the opposite of what the
- * probe is for. `0013` is the department hierarchy (organization hierarchy
- * Phase B1).
+ * It was left at `0011` while later reviewed migrations shipped, which made
+ * readiness report unhealthy on a correctly migrated database — the opposite
+ * of what the probe is for. `0017` is the current conveyance foundation
+ * migration.
  */
-export const EXPECTED_DATABASE_MIGRATION = '0013';
+export const EXPECTED_DATABASE_MIGRATION = '0017';
 
 export interface DatabaseHealth {
   readonly status: 'healthy' | 'unhealthy';

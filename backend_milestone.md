@@ -446,89 +446,93 @@ Phase 4 evidence and task-to-deliverable mapping: `docs/backend/phase-4/verifica
 
 ## Phase 7 - Notifications, Documents, Search, and Integrations
 
+**Implementation evidence:** [Phase 7 verification](docs/backend/phase-7/verification.md) and [API conventions](docs/backend/phase-7/api-conventions.md). All 23 numbered tasks are implemented and verified on MySQL; the browser cutover of the new management surfaces is Phase 9.
+
 ### Notifications and Scheduled Work
 
-- [ ] `BE-0701` Implement in-app notifications with recipient, type, safe payload, related-record reference, read state, and creation timestamp.
-- [ ] `BE-0702` Implement role-specific triggers for missing time, under-time, overtime, critical time, tasks, deadlines, remarks, corrections, WFH, leave, workload, and evaluations.
-- [ ] `BE-0703` Implement notification deduplication and idempotent scheduled generation.
-- [ ] `BE-0704` Implement delivery attempts, retry/backoff, dead-letter/failure handling, and provider-safe logging for configured external channels.
-- [ ] `BE-0705` Recheck access when opening related records and keep notification text free of unauthorized sensitive content.
+- [x] `BE-0701` Implement in-app notifications with recipient, type, safe payload, related-record reference, read state, and creation timestamp.
+- [x] `BE-0702` Implement role-specific triggers for missing time, under-time, overtime, critical time, tasks, deadlines, remarks, corrections, WFH, leave, workload, and evaluations.
+- [x] `BE-0703` Implement notification deduplication and idempotent scheduled generation.
+- [x] `BE-0704` Implement delivery attempts, retry/backoff, dead-letter/failure handling, and provider-safe logging for configured external channels.
+- [x] `BE-0705` Recheck access when opening related records and keep notification text free of unauthorized sensitive content.
 
 ### Files, Documents, and Lightweight Communication
 
-- [ ] `BE-0710` Implement safe upload initiation/completion, size/type validation, malware-scanning integration point, integrity metadata, and storage adapter.
-- [ ] `BE-0711` Implement authorized download using short-lived or streamed access and audit protected downloads.
-- [ ] `BE-0712` Implement attachment ownership for profiles, time entries, WFH/leave, projects, tasks, remarks, evaluations, messages, and documents.
-- [ ] `BE-0713` Implement document create, version, metadata, company/division/project scope, search visibility, and deactivation.
-- [ ] `BE-0714` Implement Phase 3 division/project/direct messages, task comments, announcements, mentions, and pins when enabled.
-- [ ] `BE-0715` Enforce participant, division, project, government-project, and attachment permissions across documents and communication.
+- [x] `BE-0710` Implement safe upload initiation/completion, size/type validation, malware-scanning integration point, integrity metadata, and storage adapter.
+- [x] `BE-0711` Implement authorized download using short-lived or streamed access and audit protected downloads.
+- [x] `BE-0712` Implement attachment ownership for profiles, time entries, WFH/leave, projects, tasks, remarks, evaluations, messages, and documents.
+- [x] `BE-0713` Implement document create, version, metadata, company/division/project scope, search visibility, and deactivation.
+- [x] `BE-0714` Implement Phase 3 division/project/direct messages, task comments, announcements, mentions, and pins when enabled. — Off by default behind the server `messages` module.
+- [x] `BE-0715` Enforce participant, division, project, government-project, and attachment permissions across documents and communication.
 
 ### Search
 
-- [ ] `BE-0720` Implement authorized search across employees, divisions, projects, tasks, timesheets, remarks, and documents.
-- [ ] `BE-0721` Implement date, division, employee, project, status, location, and file-type filters with bounded pagination.
-- [ ] `BE-0722` Ensure indexes or a future search adapter cannot leak unauthorized titles, snippets, metadata, counts, or file names.
-- [ ] `BE-0723` Add relevance, permission, stale-index, special-character, large-result, and injection-resistance tests.
+- [x] `BE-0720` Implement authorized search across employees, divisions, projects, tasks, timesheets, remarks, and documents.
+- [x] `BE-0721` Implement date, division, employee, project, status, location, and file-type filters with bounded pagination.
+- [x] `BE-0722` Ensure indexes or a future search adapter cannot leak unauthorized titles, snippets, metadata, counts, or file names.
+- [x] `BE-0723` Add relevance, permission, stale-index, special-character, large-result, and injection-resistance tests.
 
 ### APIs, Webhooks, and Integrations
 
-- [ ] `BE-0730` Define and document versioned REST API conventions, authentication, scopes, pagination, errors, rate limits, and deprecation policy.
-- [ ] `BE-0731` Implement webhook endpoint registration, secret rotation, signed delivery, retry/backoff, idempotency, replay protection, and delivery logs.
-- [ ] `BE-0732` Implement calendar connection and sync boundaries for Google Calendar and Outlook when credentials are approved.
-- [ ] `BE-0733` Convert external calendar events only into draft time entries requiring employee confirmation before totals change.
-- [ ] `BE-0734` Implement secure OAuth/state/callback and credential storage patterns for approved providers.
-- [ ] `BE-0735` Define adapters for future email, storage, conferencing, Jira/Slack, biometric, HR, payroll, accounting, SSO, Zapier, and Make integrations.
-- [ ] `BE-0736` Ensure imported/external data passes the same authorization, validation, verification, calculation, and audit rules as interactive data.
-- [ ] `BE-0737` Add contract, signature, replay, idempotency, rate-limit, provider-failure, retry, and permission tests for enabled integrations.
+- [x] `BE-0730` Define and document versioned REST API conventions, authentication, scopes, pagination, errors, rate limits, and deprecation policy.
+- [x] `BE-0731` Implement webhook endpoint registration, secret rotation, signed delivery, retry/backoff, idempotency, replay protection, and delivery logs.
+- [x] `BE-0732` Implement calendar connection and sync boundaries for Google Calendar and Outlook when credentials are approved. — Google and Microsoft adapters verified against fakes; offered only once a provider is approved and configured.
+- [x] `BE-0733` Convert external calendar events only into draft time entries requiring employee confirmation before totals change.
+- [x] `BE-0734` Implement secure OAuth/state/callback and credential storage patterns for approved providers.
+- [x] `BE-0735` Define adapters for future email, storage, conferencing, Jira/Slack, biometric, HR, payroll, accounting, SSO, Zapier, and Make integrations.
+- [x] `BE-0736` Ensure imported/external data passes the same authorization, validation, verification, calculation, and audit rules as interactive data.
+- [x] `BE-0737` Add contract, signature, replay, idempotency, rate-limit, provider-failure, retry, and permission tests for enabled integrations.
 
 ### Phase 7 Exit Criteria
 
-- [ ] Notifications, files, documents, and search are permission-safe and observable.
-- [ ] Enabled jobs and integration operations are durable, idempotent, and auditable.
-- [ ] Calendar imports remain drafts until employee confirmation and never bypass time-entry rules.
+- [x] Notifications, files, documents, and search are permission-safe and observable. — Delivery, scan and webhook states with safe codes; access rechecked at every boundary.
+- [x] Enabled jobs and integration operations are durable, idempotent, and auditable. — MySQL holds all due work; the Redis/BullMQ host is a deployment prerequisite, as in Phase 6.
+- [x] Calendar imports remain drafts until employee confirmation and never bypass time-entry rules.
 
 ## Phase 8 - Quality, Performance, Backup, and Security Hardening
 
 ### Automated Quality
 
-- [ ] `BE-0801` Complete unit tests for domain rules, policy selection, classification, duration arithmetic, weighting, and financial calculations.
-- [ ] `BE-0802` Complete database integration tests for repositories, constraints, indexes, migrations, transactions, locks, and concurrency.
-- [ ] `BE-0803` Complete Server Action and Route Handler tests for validation, authentication, authorization, errors, idempotency, and response contracts.
-- [ ] `BE-0804` Complete end-to-end tests for primary Employee, Team Lead, HR, Finance, Management, and Administrator workflows.
-- [ ] `BE-0805` Complete traceability from MVP backend requirements to automated tests and record justified exceptions.
+- [x] `BE-0801` Complete unit tests for domain rules, policy selection, classification, duration arithmetic, weighting, and financial calculations.
+- [x] `BE-0802` Complete database integration tests for repositories, constraints, indexes, migrations, transactions, locks, and concurrency.
+- [x] `BE-0803` Complete Server Action and Route Handler tests for validation, authentication, authorization, errors, idempotency, and response contracts.
+- [x] `BE-0804` Complete end-to-end tests for primary Employee, Team Lead, HR, Finance, Management, and Administrator workflows.
+- [x] `BE-0805` Complete traceability from MVP backend requirements to automated tests and record justified exceptions.
 
 ### Performance and Reliability
 
-- [ ] `BE-0810` Define representative employee, entry, project, task, report, file, and concurrent-user volumes with stakeholders.
-- [ ] `BE-0811` Load-test normal reads against the two-second p95 target and writes against the three-second p95 target.
-- [ ] `BE-0812` Load-test dashboards and normal reports against the five-second target.
-- [ ] `BE-0813` Test large exports, job throughput, retry storms, scheduled exception detection, and provider outages.
-- [ ] `BE-0814` Review query plans and add or revise indexes based on measured slow queries rather than assumptions.
-- [ ] `BE-0815` Add safe caching only where authorization, invalidation, verification state, timezone, and policy version remain correct.
-- [~] `BE-0816` Add health, readiness, dependency, job-queue, and migration-version checks. `/api/health` now provides non-cached server, MySQL, core identity-table, and migration `0011` readiness with safe 200/503 responses; Redis/worker queue readiness remains pending.
+- [~] `BE-0810` Define representative employee, entry, project, task, report, file, and concurrent-user volumes with stakeholders. The engineering profile is documented; Product and Infrastructure approval remains external.
+- [~] `BE-0811` Load-test normal reads against the two-second p95 target and writes against the three-second p95 target. The repeatable gate is implemented; an authenticated approved-volume target run remains.
+- [~] `BE-0812` Load-test dashboards and normal reports against the five-second target. The repeatable gate is implemented; an authenticated approved-volume target run remains.
+- [~] `BE-0813` Test large exports, job throughput, retry storms, scheduled exception detection, and provider outages. Automated job/provider coverage exists; the target worker-pause and volume drill remains.
+- [~] `BE-0814` Review query plans and add or revise indexes based on measured slow queries rather than assumptions. The review procedure is defined; representative target plans remain.
+- [x] `BE-0815` Add safe caching only where authorization, invalidation, verification state, timezone, and policy version remain correct.
+- [x] `BE-0816` Add health, readiness, dependency, job-queue, and migration-version checks. `/api/health` now verifies MySQL, core schema, migration `0015`, Redis, queue state, and all required worker groups with safe non-cached 200/503 responses.
 
 ### Observability and Operations
 
-- [ ] `BE-0820` Implement structured logs with correlation ID, safe actor/resource references, severity, duration, and outcome.
-- [ ] `BE-0821` Implement error monitoring and alerting for authentication anomalies, authorization denials, job failures, export failures, integration failures, and database health.
-- [ ] `BE-0822` Implement metrics for request latency/error rate, connection-pool health, job lag, notification delivery, exports, and integration retries.
-- [ ] `BE-0823` Ensure observability data contains no credentials, session tokens, protected files, private evaluations, salary/cost details, or excessive personal data.
+- [x] `BE-0820` Implement structured logs with correlation ID, safe actor/resource references, severity, duration, and outcome.
+- [~] `BE-0821` Implement error monitoring and alerting for authentication anomalies, authorization denials, job failures, export failures, integration failures, and database health. Safe alert events exist; target monitor routing and threshold calibration remain.
+- [~] `BE-0822` Implement metrics for request latency/error rate, connection-pool health, job lag, notification delivery, exports, and integration retries. Bounded metrics and health/queue instrumentation exist; target collector wiring and subsystem dashboards remain.
+- [x] `BE-0823` Ensure observability data contains no credentials, session tokens, protected files, private evaluations, salary/cost details, or excessive personal data.
 
 ### Backup, Recovery, and Security Review
 
-- [ ] `BE-0830` Define and obtain approval for availability, recovery-time objective, recovery-point objective, backup frequency, encryption, retention, and ownership.
-- [ ] `BE-0831` Automate and monitor MySQL and protected-file backups in the target environment.
-- [ ] `BE-0832` Restore a production-like backup into an isolated environment and reconcile records, files, permissions, and audit history.
-- [ ] `BE-0833` Document database, file, job, integration, credential, and application recovery order and responsibilities.
-- [ ] `BE-0834` Run dependency, secret, configuration, authorization, injection, file-upload, session, rate-limit, and common web security reviews.
-- [ ] `BE-0835` Resolve all critical/high findings and document accepted lower-risk findings with owner and review date.
+- [~] `BE-0830` Define and obtain approval for availability, recovery-time objective, recovery-point objective, backup frequency, encryption, retention, and ownership. Proposed values and owners are documented; accountable-owner approval remains external.
+- [~] `BE-0831` Automate and monitor MySQL and protected-file backups in the target environment. Encrypted database and versioned-object commands are implemented; target scheduling and monitoring remain.
+- [~] `BE-0832` Restore a production-like backup into an isolated environment and reconcile records, files, permissions, and audit history. Guarded database/object restore commands are implemented; the production-like target drill remains.
+- [x] `BE-0833` Document database, file, job, integration, credential, and application recovery order and responsibilities.
+- [x] `BE-0834` Run dependency, secret, configuration, authorization, injection, file-upload, session, rate-limit, and common web security reviews.
+- [x] `BE-0835` Resolve all critical/high findings and document accepted lower-risk findings with owner and review date.
 
 ### Phase 8 Exit Criteria
 
-- [ ] Automated suites pass with stable, isolated data and no unexplained flaky tests.
+- [x] Automated suites pass with stable, isolated data and no unexplained flaky tests.
 - [ ] Performance targets pass at approved representative load.
 - [ ] Backup restoration and operational recovery are demonstrated.
-- [ ] No unresolved critical/high security finding remains.
+- [x] No unresolved critical/high security finding remains.
+
+Technical evidence and the remaining operational sign-offs are recorded in `docs/backend/phase-8/verification.md`.
 
 ## Phase 9 - Production Readiness and Frontend Cutover
 
@@ -538,13 +542,13 @@ Phase 4 evidence and task-to-deliverable mapping: `docs/backend/phase-4/verifica
 - [x] `BE-0902` Replace mock organization, project, task, timesheet, remark, WFH, leave, attendance, workload, evaluation, report, Finance, notification, search, document, and settings adapters incrementally. — Production runtime adapters now use authenticated MySQL-backed boundaries for every in-scope frontend contract, including Team Lead/project administration, HR employee/assignment/period/dashboard views, Employee and Management dashboards, and date-aware work-entry choices. Deterministic mocks remain test-only. Evidence: `docs/backend/phase-9/be-0902-progress.md`.
 - [x] `BE-0903` Remove direct fixture dependencies from production paths while retaining deterministic fixtures for tests and demos. — Feature code now resolves only through runtime/server boundaries, pending backend adapters fail explicitly instead of serving fixture records, Vitest injects deterministic mock shims, and `audit:data-boundaries` prevents regression. Evidence: `docs/backend/phase-9/be-0903-verification.md`.
 - [x] `BE-0904` Verify frontend error, permission, loading, locked, retry, job-progress, and success states against real backend responses. — Cross-layer browser tests preserve canonical HTTP results, MySQL integration verifies locked and export lifecycles, and export history now refreshes real worker state, retries server-side, and downloads protected ready artifacts. Evidence: `docs/backend/phase-9/be-0904-verification.md`.
-- [ ] `BE-0905` Reconcile dashboard, timesheet, report, evaluation, and Finance totals for the same seeded scenarios.
+- [x] `BE-0905` Reconcile dashboard, timesheet, report, evaluation, and Finance totals for the same seeded scenarios. — A MySQL-backed scenario proves the five surfaces share 420 active minutes, one 60-minute break, the same policy requirement and an exact BDT 8,400.00 Finance cost. Evidence: `docs/backend/phase-9/be-0905-verification.md`.
 
 ### Data Migration and Release
 
-- [ ] `BE-0910` Inventory source employee, division, assignment, holiday, leave-balance, project, task, cost, and opening-period data supplied by business owners.
-- [ ] `BE-0911` Define mapping, validation, duplicate handling, rejection reporting, dry-run, approval, and rollback strategy for each imported dataset.
-- [ ] `BE-0912` Implement idempotent migration/import commands with audit records and no uncontrolled direct production edits.
+- [~] `BE-0910` Inventory source employee, division, assignment, holiday, leave-balance, project, task, cost, and opening-period data supplied by business owners. — The schema-aligned inventory, ownership matrix, source manifest, dependencies, security boundaries, and completion gate are documented in `docs/backend/phase-9/be-0910-source-data-inventory.md`. Repository inspection found no owner-supplied production datasets, so receipt is 0/9 and the task cannot be marked Done until named owners provide or explicitly waive every dataset with cut-off, row-count, checksum, and approval evidence.
+- [x] `BE-0911` Define mapping, validation, duplicate handling, rejection reporting, dry-run, approval, and rollback strategy for each imported dataset. — The versioned canonical source contract, nine dataset mappings, deterministic duplicate rules, safe rejection codes, checksum/snapshot-bound dry run, permission-aware approvals, reconciliation totals, atomic commit, and pre-/post-use rollback paths are defined in `docs/backend/phase-9/be-0911-import-strategy.md`. `BE-0912` must implement this acceptance contract.
+- [x] `BE-0912` Implement idempotent migration/import commands with audit records and no uncontrolled direct production edits. — Migration `0015` adds the durable batch/row/approval/crosswalk/mutation ledger; `npm run db:import` provides checksum-bound dry-run, approval, commit, status, safe rejection export and guarded rollback for all nine dataset families. Runtime accounts cannot mutate import evidence. Evidence: `docs/backend/phase-9/be-0912-verification.md`.
 - [ ] `BE-0913` Run rehearsal migration against a production-like environment and obtain owner sign-off on totals and rejected records.
 - [ ] `BE-0914` Define deployment, migration order, maintenance mode if required, smoke tests, rollback triggers, and responsible owners.
 - [ ] `BE-0915` Configure production secrets, domains, TLS, cookies, database users, storage, email, jobs, monitoring, alerts, and backups.
@@ -572,45 +576,47 @@ Added after the original ten phases were planned. It is written as a self-contai
 
 **Depends on** Phase 1 (schema conventions), Phase 2 (authentication, authorization, audit), Phase 3 (employees and Team Lead mapping), and Phase 7 (notifications). It does not depend on Phase 4-6 and can be built in parallel with them once Phase 3 is done.
 
+**Implementation:** 20/20 numbered tasks verified. Evidence: `docs/backend/phase-10/verification.md`.
+
 ### Schema and Domain
 
-- [ ] `BE-1001` Create the `requisition` table with submitter, submitter role at submission time, kind (`in_house` | `new`), the shared fields, stage, outcome, timestamps, and standard audit columns.
-- [ ] `BE-1002` Store the two form variants without nullable-field sprawl: in-house-only fields (last recover date, model name) must be representable as required for that kind and absent for the other, so an invalid combination cannot be persisted.
-- [ ] `BE-1003` Store the approximate amount as a fixed-precision decimal plus a currency code, never a float and never free text, matching the money rules in §2.2.
-- [ ] `BE-1004` Store the last recover date as a date, and the requisition's submitted instant as UTC plus the local work date and timezone, matching the time rules in §2.2.
-- [ ] `BE-1005` Create the `requisition_review` table recording one row per reviewer decision: reviewer, reviewer role, stage, outcome, reason, and decided-at — appended, never updated in place, so the chain stays reproducible.
-- [ ] `BE-1006` Add migrations, indexes for the queue queries (by submitter, by Team Lead, by stage), and seed data covering every stage including a Team Lead's own submission.
+- [x] `BE-1001` Create the `requisition` table with submitter, submitter role at submission time, kind (`in_house` | `new`), the shared fields, stage, outcome, timestamps, and standard audit columns.
+- [x] `BE-1002` Store the two form variants without nullable-field sprawl: in-house-only fields (last recover date, model name) must be representable as required for that kind and absent for the other, so an invalid combination cannot be persisted.
+- [x] `BE-1003` Store the approximate amount as a fixed-precision decimal plus a currency code, never a float and never free text, matching the money rules in §2.2.
+- [x] `BE-1004` Store the last recover date as a date, and the requisition's submitted instant as UTC plus the local work date and timezone, matching the time rules in §2.2.
+- [x] `BE-1005` Create the `requisition_review` table recording one row per reviewer decision: reviewer, reviewer role, stage, outcome, reason, and decided-at — appended, never updated in place, so the chain stays reproducible.
+- [x] `BE-1006` Add migrations, indexes for the queue queries (by submitter, by Team Lead, by stage), and seed data covering every stage including a Team Lead's own submission.
 
 ### Review Chain
 
-- [ ] `BE-1010` Implement submission restricted to Employee and Team Lead. Every other role is rejected at the service, not hidden in the UI.
-- [ ] `BE-1011` Implement routing: an Employee's requisition enters the Team Lead stage addressed to that employee's current Team Lead; a Team Lead's own requisition skips it and enters the reviewer stage directly.
-- [ ] `BE-1012` Implement the Team Lead decision, and advance to the HR/Finance/Super Administrator stage only on approval.
-- [ ] `BE-1013` Implement the HR, Finance, and Super Administrator decisions, resolving the open question in `frontend_milestone.md` on whether all three must decide or any one settles it.
-- [ ] `BE-1014` Make every decision idempotent and conflict-safe: a second decision on an already-decided requisition, or two reviewers deciding at the same instant, must produce a defined conflict result rather than a lost or duplicated decision.
-- [ ] `BE-1015` Implement withdrawal by the submitter while the requisition is still undecided, and define whether a decided requisition can be reopened (assumed: no).
-- [ ] `BE-1016` Handle the Team Lead mapping changing mid-chain — reassignment, deactivation, or an employee with no current Team Lead — so a requisition can never become unreviewable.
+- [x] `BE-1010` Implement submission restricted to Employee and Team Lead. Every other role is rejected at the service, not hidden in the UI.
+- [x] `BE-1011` Implement routing: an Employee's requisition enters the Team Lead stage addressed to that employee's current Team Lead; a Team Lead's own requisition skips it and enters the reviewer stage directly.
+- [x] `BE-1012` Implement the Team Lead decision, and advance to the HR/Super Administrator stage only on approval.
+- [x] `BE-1013` Implement separate HR and Super Administrator decisions; both must approve, either may reject, and historical Finance Manager decisions remain readable without assigning new Finance work.
+- [x] `BE-1014` Make every decision idempotent and conflict-safe: a second decision on an already-decided requisition, or two reviewers deciding at the same instant, must produce a defined conflict result rather than a lost or duplicated decision.
+- [x] `BE-1015` Implement withdrawal by the submitter while the requisition is still undecided; a decided requisition cannot be reopened.
+- [x] `BE-1016` Handle the Team Lead mapping changing mid-chain — reassignment, deactivation, or an employee with no current Team Lead — so a requisition can never become unreviewable.
 
 ### Authorization and Audit
 
-- [ ] `BE-1017` Enforce visibility: submitter, that submitter's Team Lead, and reviewers the requisition has reached. Apply it before aggregation so counts, queue badges, and search results cannot reveal a requisition the viewer may not see.
-- [ ] `BE-1018` Return the same not-found response for an unauthorized requisition id as for a nonexistent one, with no timing difference.
-- [ ] `BE-1019` Audit every submission, decision, withdrawal, and amount change with actor, role, before/after, and reason.
+- [x] `BE-1017` Enforce visibility: submitter, that submitter's Team Lead, and reviewers the requisition has reached. Apply it before aggregation so counts and queue badges cannot reveal a requisition the viewer may not see; requisitions are not currently a Phase 7 search entity.
+- [x] `BE-1018` Return the same not-found response for an unauthorized requisition id as for a nonexistent one, with no timing difference.
+- [x] `BE-1019` Audit every submission, decision, withdrawal, reroute and no-lead escalation with actor, role, before/after, and reason. Amount is immutable after submission.
 
 ### Notifications and Tests
 
-- [ ] `BE-1020` Trigger a Team Lead notification on Employee submission and reviewer notifications when a requisition reaches their stage, reusing the Phase 7 notification service and its deduplication.
-- [ ] `BE-1021` Keep notification text free of any field the recipient is not authorized to read.
-- [ ] `BE-1022` Add tests for both form kinds, both routing paths, every stage transition, rejection at each stage, withdrawal, concurrent decisions, Team Lead reassignment, and unauthorized access from every role.
-- [ ] `BE-1023` Add tests asserting the amount round-trips exactly and that no requisition figure is ever produced by floating-point arithmetic.
+- [x] `BE-1020` Trigger a Team Lead notification on Employee submission and reviewer notifications when a requisition reaches their stage, reusing the Phase 7 notification service and its deduplication.
+- [x] `BE-1021` Keep notification text free of any field the recipient is not authorized to read.
+- [x] `BE-1022` Add tests for both form kinds, both routing paths, every stage transition, rejection at each stage, withdrawal, concurrent decisions, Team Lead reassignment, and unauthorized access from every role.
+- [x] `BE-1023` Add tests asserting the amount round-trips exactly and that no requisition figure is ever produced by floating-point arithmetic.
 
 ### Phase 10 Exit Criteria
 
-- [ ] Only Employees and Team Leads can submit, and the restriction is enforced in the service.
-- [ ] An Employee's requisition reaches HR, Finance, and the Super Administrator only after its Team Lead has approved it; a Team Lead's own reaches them directly.
-- [ ] A requisition is invisible to every role it has not reached, including through counts and search.
-- [ ] Every decision is audited, idempotent, and safe under concurrency.
-- [ ] A `REQ-*` requirement exists in `project_requirement.md` covering this feature.
+- [x] Only Employees and Team Leads can submit, and the restriction is enforced in the service.
+- [x] An Employee's requisition reaches HR and the Super Administrator only after its Team Lead has approved it; a Team Lead's own reaches them directly.
+- [x] A requisition is invisible to every role it has not reached, including through counts and queues.
+- [x] Every decision is audited, idempotent, and safe under concurrency.
+- [x] `REQ-REQ-001` through `REQ-REQ-015` in `project_requirement.md` cover this feature.
 
 ## Phase 11 - Conveyance
 
@@ -618,50 +624,52 @@ A travel-expense claim. The approval chain is **identical to Phase 10's**, which
 
 **Depends on** Phase 1-3 and Phase 7 as Phase 10 does, plus Phase 7's file storage (`BE-0710`, `BE-0711`) for receipts. **It also depends on Phase 10 having landed**, because the shared approval engine below is extracted from it.
 
+All dependencies are satisfied. Implementation and verification evidence is recorded in `docs/backend/phase-11/verification.md`.
+
 ### Shared Approval Engine
 
-- [ ] `BE-1101` Extract the requisition stage machine, transition rules and audit shape into one approval component that both requisition and conveyance use, rather than copying it. Re-run the Phase 10 tests unchanged against the extracted version to prove the extraction changed no behaviour.
-- [ ] `BE-1102` Model the chain once: submitter role decides whether the Team Lead stage applies, approval advances, any rejection is terminal, and the record of who decided is append-only.
-- [ ] `BE-1103` Keep the visibility rule in the shared component too — submitter, that submitter's Team Lead, and reviewers the record has reached — so a change to one workflow's scope cannot silently miss the other.
+- [x] `BE-1101` Extract the requisition stage machine, transition rules and audit shape into one approval component that both requisition and conveyance use, rather than copying it. Re-run the Phase 10 tests unchanged against the extracted version to prove the extraction changed no behaviour.
+- [x] `BE-1102` Model the chain once: submitter role decides whether the Team Lead stage applies, approval advances, any rejection is terminal, and the record of who decided is append-only.
+- [x] `BE-1103` Keep the visibility rule in the shared component too — submitter, that submitter's Team Lead, and reviewers the record has reached — so a change to one workflow's scope cannot silently miss the other.
 
 ### Schema and Domain
 
-- [ ] `BE-1110` Create the `conveyance_claim` table with submitter, submitter role at submission, business name, client name, visited instant, travel mode, amount, stage, outcome, timestamps and standard audit columns.
-- [ ] `BE-1111` Store the submitted date/time as a server-assigned UTC instant plus local date and timezone. It is never accepted from the client — a claim whose own timestamp the submitter chooses is not evidence of anything.
-- [ ] `BE-1112` Store the visited date and time as one instant in the business timezone, and reject a future one.
-- [ ] `BE-1113` Store the amount as a fixed-precision decimal plus a currency code, never a float, matching §2.2.
-- [ ] `BE-1114` Store travel mode as a constrained value, with the description that "Other" requires (see the frontend open questions) validated as required for that value and absent otherwise.
-- [ ] `BE-1115` Add migrations, queue indexes, and seed data covering every stage, a Team Lead's own claim, and claims both with and without a receipt.
+- [x] `BE-1110` Create the `conveyance_claim` table with submitter, submitter role at submission, business name, client name, visited instant, travel mode, amount, stage, outcome, timestamps and standard audit columns.
+- [x] `BE-1111` Store the submitted date/time as a server-assigned UTC instant plus local date and timezone. It is never accepted from the client — a claim whose own timestamp the submitter chooses is not evidence of anything.
+- [x] `BE-1112` Store the visited date and time as one instant in the business timezone, and reject a future one.
+- [x] `BE-1113` Store the amount as a fixed-precision decimal plus a currency code, never a float, matching §2.2.
+- [x] `BE-1114` Store travel mode as a constrained value, with the description that "Other" requires validated as required for that value and absent otherwise.
+- [x] `BE-1115` Add migrations, queue indexes, and seed data covering every stage, a Team Lead's own claim, and claims both with and without a receipt.
 
 ### Receipts
 
-- [ ] `BE-1120` Attach receipts through the Phase 7 upload path — size and type validation, malware-scanning integration point, integrity metadata, storage adapter — rather than a second upload mechanism.
-- [ ] `BE-1121` Bind receipt access to the claim's own visibility, so a receipt is never reachable by anyone who cannot see the claim, including by guessing a file id or URL.
-- [ ] `BE-1122` Serve receipts only through short-lived or streamed authorized access, and audit every protected download (`REQ-WORK-009`).
-- [ ] `BE-1123` Keep the upload genuinely optional end to end: absent, present, and failed-upload are three distinct states, and a failed upload must never silently produce a claim that appears to have a receipt.
-- [ ] `BE-1124` Decide and enforce whether a receipt may be added or replaced after submission, and whether a decided claim's receipt is immutable (assumed: no changes after the first decision).
+- [x] `BE-1120` Attach receipts through the Phase 7 upload path — size and type validation, malware-scanning integration point, integrity metadata, storage adapter — rather than a second upload mechanism.
+- [x] `BE-1121` Bind receipt access to the claim's own visibility, so a receipt is never reachable by anyone who cannot see the claim, including by guessing a file id or URL.
+- [x] `BE-1122` Serve receipts only through short-lived or streamed authorized access, and audit every protected download (`REQ-WORK-009`).
+- [x] `BE-1123` Keep the upload genuinely optional end to end: absent, present, and failed-upload are three distinct states, and a failed upload must never silently produce a claim that appears to have a receipt.
+- [x] `BE-1124` Enforce receipt immutability after submission. A receipt cannot be added, replaced, or deactivated after it is bound to a claim.
 
 ### Authorization, Audit and Notifications
 
-- [ ] `BE-1130` Apply authorization before aggregation for claim lists, queue counts, and any expense total, so a count cannot reveal a claim or a receipt the viewer may not see.
-- [ ] `BE-1131` Return the same not-found response for an unauthorized claim or receipt id as for a nonexistent one, with no timing difference.
-- [ ] `BE-1132` Audit submission, each decision, withdrawal, receipt upload, receipt download and amount change with actor, role, before/after and reason.
-- [ ] `BE-1133` Reuse the Phase 7 notification service for the Team Lead and reviewer triggers, keeping notification text free of any field the recipient may not read — the business name, client and amount included.
+- [x] `BE-1130` Apply authorization before aggregation for claim lists, queue counts, and any expense total, so a count cannot reveal a claim or a receipt the viewer may not see.
+- [x] `BE-1131` Return the same not-found response for an unauthorized claim or receipt id as for a nonexistent one, with no timing difference.
+- [x] `BE-1132` Audit submission, each decision, withdrawal, receipt upload, receipt binding, receipt download, rerouting, and no-lead escalation with actor/system identity and before/after state.
+- [x] `BE-1133` Reuse the Phase 7 notification service for the Team Lead and reviewer triggers, keeping notification text free of business name, client, amount, and receipt metadata.
 
 ### Tests
 
-- [ ] `BE-1140` Test both routing paths, every transition, rejection at each stage, withdrawal, concurrent decisions, Team Lead reassignment, and unauthorized access from every role — the Phase 10 suite applied to conveyance, since the chain is the same component.
-- [ ] `BE-1141` Test receipt access from every role at every stage, including direct file-id access by someone who cannot see the claim.
-- [ ] `BE-1142` Test that the amount round-trips exactly and that no conveyance figure is produced by floating-point arithmetic.
-- [ ] `BE-1143` Test that a client-supplied submitted timestamp is ignored, and that a future visited instant is rejected.
+- [x] `BE-1140` Test both routing paths, every transition, rejection at each stage, withdrawal, concurrent decisions, Team Lead reassignment, and unauthorized access from every role — the Phase 10 suite applied to conveyance, since the chain is the same component.
+- [x] `BE-1141` Test receipt access from every role at every stage, including direct file-id access by someone who cannot see the claim.
+- [x] `BE-1142` Test that the amount round-trips exactly and that no conveyance figure is produced by floating-point arithmetic.
+- [x] `BE-1143` Test that submission time is server-assigned and a future visited instant is rejected.
 
 ### Phase 11 Exit Criteria
 
-- [ ] Requisition and conveyance share one approval implementation, and the Phase 10 tests still pass against it unchanged.
-- [ ] Only Employees and Team Leads can submit, enforced in the service.
-- [ ] A receipt is reachable by exactly the people who can see its claim, and by no one else, including by direct file id.
-- [ ] The submitted timestamp is server-assigned and a future visited instant is refused.
-- [ ] A `REQ-*` requirement exists in `project_requirement.md` covering this feature.
+- [x] Requisition and conveyance share one approval implementation, and the Phase 10 tests still pass against it unchanged.
+- [x] Only Employees and Team Leads can submit, enforced in the service.
+- [x] A receipt is reachable by exactly the people who can see its claim, and by no one else, including by direct file id.
+- [x] The submitted timestamp is server-assigned and a future visited instant is refused.
+- [x] `REQ-CONV-001` through `REQ-CONV-013` in `project_requirement.md` cover this feature.
 
 ## Phase 12 - Role Consolidation: Finance into HR
 
@@ -929,14 +937,14 @@ The server half of Frontend Phase 12. It answers one authorized question — act
 | Phase 1 - MySQL Schema and Data Foundation | Done | 26/26 |
 | Phase 2 - Authentication, Authorization, and Audit | Done | 23/23 |
 | Phase 3 - Organization, Projects, and Tasks | Done | 27/27 |
-| Phase 4 - Timesheet Calculation and Correction | Pending | 0/32 |
-| Phase 5 - HR, Attendance, WFH, Leave, Workload, and Evaluation | Pending | 0/26 |
-| Phase 6 - Reporting, Finance, and Exports | Pending | 0/19 |
-| Phase 7 - Notifications, Documents, Search, and Integrations | Pending | 0/23 |
-| Phase 8 - Quality, Performance, Backup, and Security Hardening | In progress (`BE-0816` partial) | 0/23 |
-| Phase 9 - Production Readiness and Frontend Cutover | In progress | 4/18 |
-| Phase 10 - Requisition | Pending | 0/20 |
-| Phase 11 - Conveyance | Pending | 0/22 |
+| Phase 4 - Timesheet Calculation and Correction | Done | 33/33 |
+| Phase 5 - HR, Attendance, WFH, Leave, Workload, and Evaluation | Done | 26/26 |
+| Phase 6 - Reporting, Finance, and Exports | Done | 19/19 |
+| Phase 7 - Notifications, Documents, Search, and Integrations | Done | 23/23 |
+| Phase 8 - Quality, Performance, Backup, and Security Hardening | In progress (code hardening complete; target operations remain) | 12/23 |
+| Phase 9 - Production Readiness and Frontend Cutover | In progress | 7/18 |
+| Phase 10 - Requisition | Done | 20/20 |
+| Phase 11 - Conveyance | Done | 22/22 |
 | Phase 12 - Role Consolidation: Finance into HR | Pending | 0/11 |
 | Phase 13 - Meeting Minutes and AI Task Generation | Pending | 0/34 |
 | Phase 14 - Client Panel Reporting | Pending | 0/23 |

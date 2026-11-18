@@ -16,7 +16,7 @@ import type { BackendUserRoleAdmin } from './user-role-views';
  * model would be a second place for authorization to be forgotten.
  */
 
-const adminMethod = z.enum(['getBranding','updateBranding','listDivisions','saveDivision','setDivisionActive','listUsers','updateEmployeeAccessRole','deactivateUser','listRoles','setRolePermission','getWorkPolicySettings','listNotificationSettings','setNotificationSetting','getAuditLog','listIntegrations']);
+const adminMethod = z.enum(['getBranding','updateBranding','listDivisions','getDivision','saveDivision','setDivisionActive','listUsers','updateEmployeeAccessRole','deactivateUser','listRoles','setRolePermission','getWorkPolicySettings','listNotificationSettings','setNotificationSetting','getAuditLog','listIntegrations']);
 
 /** Namespaced because `get`, `create` and `update` are not names an envelope shared by several services can carry unqualified. */
 const departmentMethod = z.enum(['department.catalogue','department.get','department.create','department.update','department.setStatus','department.remove','department.listEligibleLeads','department.appointLead']);

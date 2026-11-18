@@ -41,8 +41,11 @@ function Loading({ label }: { label: string }) {
   return <PageContainer><div role="status" aria-busy><span className="sr-only">Loading {label}</span><Skeleton height="2rem" width="18rem" /><Skeleton height="18rem" rounded="md" className="mt-5" /></div></PageContainer>;
 }
 
+/** Whose work this screen covers — the service decides the contents; this only names it. */
 function Scope() {
-  return <Badge tone="accent" icon={<Users aria-hidden className="size-3.5" />}>Assigned divisions and projects</Badge>;
+  const { user } = useSession();
+  const wide = user?.primaryRole === 'super_admin';
+  return <Badge tone="accent" icon={<Users aria-hidden className="size-3.5" />}>{wide ? 'All divisions and projects' : 'Assigned divisions and projects'}</Badge>;
 }
 
 /** One line a person can act on, for a refusal that is not about one field. */
@@ -540,6 +543,7 @@ export function TeamTaskBoard() {
   const { user } = useSession();
   const toast = useToast();
   const [formOpen, setFormOpen] = React.useState(false);
+  const [employeeId, setEmployeeId] = React.useState('all');
   const [version, setVersion] = React.useState(0);
   const { state, reload } = useAsync(
     () => mockTeamLeadService.listTasks(user?.userId ?? ''),
@@ -552,12 +556,26 @@ export function TeamTaskBoard() {
     return <PageContainer><EmptyState variant="error" title="Tasks unavailable" /></PageContainer>;
   }
 
-  const boardTasks = state.data.map((task) => teamBoardTask(task, user?.employeeId ?? ''));
+  const isAdministrator = user?.primaryRole === 'super_admin';
+  const employeeOptions = [...new Map(
+    state.data
+      .filter((task) => task.assignee)
+      .map((task) => [task.assignee!.id, task.assignee!.fullName]),
+  ).entries()]
+    .sort((left, right) => left[1].localeCompare(right[1]))
+    .map(([value, label]) => ({ value, label }));
+  const selectedEmployee = employeeOptions.find((option) => option.value === employeeId);
+  const filteredTasks = isAdministrator && employeeId !== 'all'
+    ? state.data.filter((task) => task.assignee?.id === employeeId)
+    : state.data;
+  const boardTasks = filteredTasks.map((task) => teamBoardTask(task, user?.employeeId ?? ''));
   return (
     <PageContainer>
       <PageHeader
         title="Tasks"
-        description="Manage team work and create your own tasks through Pending, In Progress, and Completed."
+        description={user?.primaryRole === 'super_admin'
+          ? 'Every task across all divisions and projects, with its assignee and status.'
+          : 'Manage team work and create your own tasks through Pending, In Progress, and Completed.'}
         meta={<Scope />}
         actions={
           <div className="flex flex-wrap gap-2">
@@ -572,6 +590,30 @@ export function TeamTaskBoard() {
         }
       />
       <TaskReviewQueue onDecided={() => setVersion((value) => value + 1)} />
+      {isAdministrator && (
+        <FilterBar
+          className="mt-5"
+          applied={selectedEmployee ? [{
+            key: 'employee',
+            label: 'Employee',
+            value: selectedEmployee.label,
+            onRemove: () => setEmployeeId('all'),
+          }] : []}
+          onClearAll={() => setEmployeeId('all')}
+          resultSummary={`${filteredTasks.length} ${filteredTasks.length === 1 ? 'task' : 'tasks'}`}
+        >
+          <Select
+            aria-label="Filter tasks by employee name"
+            value={employeeId}
+            onChange={(event) => setEmployeeId(event.target.value)}
+            options={[
+              { value: 'all', label: 'All employees' },
+              ...employeeOptions,
+            ]}
+            className="min-w-52"
+          />
+        </FilterBar>
+      )}
       <TaskWorkflowBoard
         tasks={boardTasks}
         actorRole="team_lead"

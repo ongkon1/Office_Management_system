@@ -163,10 +163,11 @@ describe('B3 authenticated boundary and related effects', () => {
         expect(remark.status, JSON.stringify(remark)).toBe('success');
         const id = await task('in_progress'); const self = new TimeApplication(new MysqlTimeRepository(pool), async () => actor(), now);
         const critical = await self.save({ ...log(id, 661), workDate: '2026-10-05' }); expect(critical.status).toBe('success');
-        const events = await rows("SELECT notification_type,safe_payload FROM notifications WHERE notification_type IN('time.overtime','time.critical','time.correction.requested')");
-        expect(new Set(events.map(e => e.notification_type))).toEqual(new Set(['time.overtime', 'time.critical', 'time.correction.requested']));
+        // Stored under the catalogue's names since Backend Phase 7 (`BE-0701`); older rows keep theirs.
+        const events = await rows("SELECT notification_type,safe_payload FROM notifications WHERE notification_type IN('overtime','critical_time','correction_requested')");
+        expect(new Set(events.map(e => e.notification_type))).toEqual(new Set(['overtime', 'critical_time', 'correction_requested']));
         expect(JSON.stringify(events)).not.toContain('Private');
-        const recipients = await rows("SELECT recipient_user_id FROM notifications WHERE notification_type='time.critical'");
+        const recipients = await rows("SELECT recipient_user_id FROM notifications WHERE notification_type='critical_time'");
         expect(recipients.map(r => r.recipient_user_id)).toEqual(expect.arrayContaining([uid(2), uid(4)]));
     });
     it('never grants company-wide Team Lead rights from a forged role or unrelated lead scope', async () => {

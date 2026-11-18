@@ -110,7 +110,7 @@ export class TimeApplication {
         }
         return success(items);
     }
-    private async prepare(tx: TimeRepository, actor: ActorPolicyContext, raw: WorkLogInput, id?: string, amendment = false): Promise<Result<{
+    private async prepare(tx: TimeRepository, actor: ActorPolicyContext, raw: WorkLogInput, id?: string, amendment = false, origin: 'manual' | 'imported' = 'manual'): Promise<Result<{
         entry: StoredEntry;
         context: DayContext;
         before: StoredEntry | null;
@@ -151,12 +151,21 @@ export class TimeApplication {
             if (!(await tx.attachmentAllowed(attachment, input.employeeId, actor)))
                 return invalid('attachmentIds', 'Choose an authorized, clean attachment owned by this employee.');
         const now = this.now();
-        const entry: StoredEntry = { ...input, idempotencyKey: before?.idempotencyKey ?? input.idempotencyKey, entryMethod: 'manual_duration', id: id ?? randomUUID(), startTime: null, endTime: null, activeMinutes: input.durationMinutes,
+        const entry: StoredEntry = { ...input, source: origin, idempotencyKey: before?.idempotencyKey ?? input.idempotencyKey, entryMethod: 'manual_duration', id: id ?? randomUUID(), startTime: null, endTime: null, activeMinutes: input.durationMinutes,
             state: amendment ? 'locked' : 'saved', crossMidnightGroupId: null, policyVersion: context.policy.version, policyId: context.policyId, timezone: context.policy.businessTimezone,
             version: (before?.version ?? 0) + 1, isActive: true, createdAt: before?.createdAt ?? now, updatedAt: now, createdBy: before?.createdBy ?? { userId: actor.userId, displayName: 'Employee' }, updatedBy: { userId: actor.userId, displayName: 'Employee' } };
         return success({ entry, context, before });
     }
-    async save(input: WorkLogInput, id?: string, expectedVersion?: number, changeReason?: string, legacyDraft?: { id: string; version: number }): Promise<Result<StoredEntry>> {
+    /**
+     * `BE-0736`, `REQ-INT-008`: a work log from a trusted server-side adapter
+     * (the REST API, a confirmed calendar draft). Validated, authorized and
+     * audited exactly like interactive entry; only the recorded source differs.
+     * Browser input can never reach this — its schema accepts `manual` only.
+     */
+    saveImported(input: WorkLogInput): Promise<Result<StoredEntry>> {
+        return this.save({ ...input, source: 'manual' }, undefined, undefined, undefined, undefined, 'imported');
+    }
+    async save(input: WorkLogInput, id?: string, expectedVersion?: number, changeReason?: string, legacyDraft?: { id: string; version: number }, origin: 'manual' | 'imported' = 'manual'): Promise<Result<StoredEntry>> {
         return this.run(async () => {
             const parsed = entryInputSchema.safeParse(input);
             if (!parsed.success) { const issue = parsed.error.issues[0]; return invalid(issue.path.join('.'), issue.message); }
@@ -177,7 +186,7 @@ export class TimeApplication {
                     if (legacyDraft && (!draft || draft.employeeId !== input.employeeId || draft.workDate !== input.workDate)) return notFound();
                     if (legacyDraft && (!draft?.isActive || draft.state !== 'draft' || draft.version !== legacyDraft.version)) return conflict('This draft has already changed or been converted.');
                     const targetId = id;
-                    const result = await this.prepare(tx, actor, input, targetId);
+                    const result = await this.prepare(tx, actor, input, targetId, false, origin);
                     if (result.status !== 'success')
                         return result;
                     const { entry, before } = result.data;

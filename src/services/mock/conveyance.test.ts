@@ -35,6 +35,7 @@ const CLAIM: ConveyanceFormInput = {
 };
 
 const RECEIPT = {
+  attachmentId: null,
   fileName: 'trip.pdf',
   sizeBytes: 120_000,
   mimeType: 'application/pdf',

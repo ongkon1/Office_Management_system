@@ -9,6 +9,7 @@ import type {
   AuditLogView,
   BrandLogoAsset,
   DivisionAdminView,
+  DivisionDetailView,
   DivisionFormInput,
   EmployeeAccessRole,
   IntegrationPlaceholderView,
@@ -92,6 +93,42 @@ export class BackendUserRoleAdmin implements AdminService {
     e.id lead_id,e.employee_code lead_code,e.display_name lead_name,e.job_title lead_title,u.image_url lead_image
     FROM divisions d LEFT JOIN employees e ON e.id=d.team_lead_employee_id LEFT JOIN users u ON u.id=e.user_id ORDER BY d.name`);return rows.map(row=>{const assignments=Number(row.assignment_count),projects=Number(row.project_count),tasks=Number(row.task_count);const blockers=[...(assignments?[`${assignments} active employee assignment(s).`]:[]),...(projects?[`${projects} active project(s).`]:[]),...(tasks?[`${tasks} open task(s).`]:[])];return{id:String(row.id),name:String(row.name),code:String(row.division_key),description:row.description?String(row.description):null,teamLead:row.lead_id?{id:String(row.lead_id),employeeCode:String(row.lead_code),fullName:String(row.lead_name),designation:row.lead_title?String(row.lead_title):null,avatarUrl:row.lead_image?String(row.lead_image):null}:null,isActive:Boolean(row.is_active),isRestricted:Boolean(row.is_government),activeAssignmentCount:assignments,activeProjectCount:projects,openTaskCount:tasks,deactivationBlockers:blockers};});}
   async listDivisions(userId:string){if(!await this.administrator(userId))return denied();return success(await this.divisionViews());}
+  /**
+   * One division in full, for a Super Administrator: current placements with
+   * their department, the division's projects with open-task counts, and its
+   * open tasks. Super Administrators hold every permission, government
+   * divisions included; nobody else reaches this.
+   */
+  async getDivision(userId:string,id:string):Promise<Result<DivisionDetailView>>{
+    if(!await this.administrator(userId))return denied();
+    const division=(await this.divisionViews()).find(item=>item.id===id);
+    if(!division)return absent();
+    type Row=RowDataPacket&Record<string,unknown>;
+    const day=(value:unknown)=>value instanceof Date?value.toISOString().slice(0,10):String(value).slice(0,10);
+    const [members]=await this.pool.execute<Row[]>(`SELECT e.id,e.employee_code,e.display_name,e.job_title,u.image_url,dep.name department_name,
+        a.role_in_division,a.is_primary,a.allocation_percent_basis_points,a.effective_from,a.effective_to
+      FROM employee_division_assignments a JOIN employees e ON e.id=a.employee_id JOIN users u ON u.id=e.user_id
+      LEFT JOIN departments dep ON dep.id=a.department_id
+      WHERE a.division_id=? AND a.is_active=TRUE AND a.effective_from<=CURRENT_DATE AND (a.effective_to IS NULL OR a.effective_to>=CURRENT_DATE)
+      ORDER BY e.display_name`,[id]);
+    const [projects]=await this.pool.execute<Row[]>(`SELECT p.id,p.project_code,p.name,p.status,m.display_name manager_name,
+        (SELECT COUNT(*) FROM tasks t WHERE t.project_id=p.id AND t.is_active=TRUE AND t.status<>'completed') open_tasks
+      FROM projects p LEFT JOIN employees m ON m.id=p.manager_employee_id WHERE p.division_id=? AND p.is_active=TRUE ORDER BY p.name`,[id]);
+    const [tasks]=await this.pool.execute<Row[]>(`SELECT t.id,t.title,t.status,t.due_date,p.project_code,a.display_name assignee_name
+      FROM tasks t JOIN projects p ON p.id=t.project_id LEFT JOIN employees a ON a.id=t.assignee_employee_id
+      WHERE p.division_id=? AND t.is_active=TRUE AND t.status<>'completed' ORDER BY t.due_date IS NULL,t.due_date,t.title LIMIT 200`,[id]);
+    return success({
+      division,
+      members:members.map(row=>({
+        employee:{id:String(row.id),employeeCode:String(row.employee_code),fullName:String(row.display_name),designation:row.job_title?String(row.job_title):null,avatarUrl:row.image_url?String(row.image_url):null},
+        departmentName:row.department_name?String(row.department_name):null,roleInDivision:row.role_in_division?String(row.role_in_division):null,
+        isPrimary:Boolean(row.is_primary),allocationPercent:Math.round(Number(row.allocation_percent_basis_points)/100),
+        startDateLabel:formatDate(day(row.effective_from)),endDateLabel:row.effective_to?formatDate(day(row.effective_to)):null,
+      })),
+      projects:projects.map(row=>({id:String(row.id),code:String(row.project_code),name:String(row.name),status:String(row.status),managerName:row.manager_name?String(row.manager_name):null,openTaskCount:Number(row.open_tasks)})),
+      openTasks:tasks.map(row=>({id:String(row.id),title:String(row.title),projectCode:String(row.project_code),status:String(row.status) as DivisionDetailView['openTasks'][number]['status'],assigneeName:row.assignee_name?String(row.assignee_name):null,dueDateLabel:row.due_date?formatDate(day(row.due_date)):null})),
+    });
+  }
   async saveDivision(userId:string,input:DivisionFormInput,id?:string){
     const actor=await this.administrator(userId);if(!actor)return denied();
     if(!input.name.trim())return invalid('name','Enter a division name.','Employees see this name throughout.');
@@ -218,7 +255,7 @@ export class BackendUserRoleAdmin implements AdminService {
   async listNotificationSettings(userId:string):Promise<Result<readonly NotificationSettingView[]>>{if(!await this.administrator(userId))return denied();const [rows]=await this.pool.execute<(RowDataPacket&{setting_key:string;in_app_enabled:number;email_enabled:number})[]>('SELECT setting_key,in_app_enabled,email_enabled FROM notification_preferences WHERE user_id=?',[userId]);return success(this.notificationDefinitions().map(definition=>{const row=rows.find(item=>item.setting_key===definition.key);return{...definition,inApp:row?Boolean(row.in_app_enabled):true,email:row?Boolean(row.email_enabled):false};}));}
   async setNotificationSetting(userId:string,key:string,channel:'inApp'|'email',enabled:boolean){if(!await this.administrator(userId))return denied();const definition=this.notificationDefinitions().find(item=>item.key===key);if(!definition)return absent();if(definition.isMandatory&&!enabled)return conflict(`${definition.label} cannot be switched off.`,'This notification is required by the work policy.');const column=channel==='inApp'?'in_app_enabled':'email_enabled';await this.pool.execute(`INSERT INTO notification_preferences(user_id,setting_key,${column}) VALUES(?,?,?) ON DUPLICATE KEY UPDATE ${column}=VALUES(${column}),version=version+1`,[userId,key,enabled]);return this.listNotificationSettings(userId);}
   async getAuditLog(userId:string,filters?:Partial<AuditFilters>):Promise<Result<AuditLogView>>{const actor=await this.administrator(userId);if(!actor||!actor.permissions.has('audit.view'))return denied();const values:(string|Date)[]=[];let where='1=1';if(filters?.actors?.length){where+=` AND a.actor_user_id IN (${filters.actors.map(()=>'?').join(',')})`;values.push(...filters.actors);}if(filters?.actions?.length){where+=` AND a.action IN (${filters.actions.map(()=>'?').join(',')})`;values.push(...filters.actions);}if(filters?.resourceTypes?.length){where+=` AND a.resource_type IN (${filters.resourceTypes.map(()=>'?').join(',')})`;values.push(...filters.resourceTypes);}if(filters?.from){where+=' AND a.occurred_at>=?';values.push(new Date(`${filters.from}T00:00:00Z`));}if(filters?.to){where+=' AND a.occurred_at<?';values.push(new Date(`${filters.to}T23:59:59.999Z`));}const [rows]=await this.pool.execute<(RowDataPacket&Record<string,unknown>)[]>(`SELECT a.*,u.name actor_name FROM audit_events a LEFT JOIN users u ON u.id=a.actor_user_id WHERE ${where} ORDER BY a.occurred_at DESC LIMIT 500`,values);const events=rows.map(row=>{const instant=row.occurred_at instanceof Date?row.occurred_at.toISOString():String(row.occurred_at);const map=(value:unknown)=>{if(value==null)return null;const data=(typeof value==='string'?JSON.parse(value):value) as Record<string,unknown>;return{visible:true as const,value:Object.fromEntries(Object.entries(data).map(([key,item])=>[key,typeof item==='string'?item:JSON.stringify(item)]))};};return{id:String(row.event_id),occurredAt:instant,occurredAtLabel:formatTimestamp(instant),actorLabel:String(row.actor_name??'System'),action:String(row.action),actionLabel:String(row.action).replaceAll('.',' '),resourceType:String(row.resource_type),resourceLabel:`${String(row.resource_type)} ${String(row.resource_id??'')}`.trim(),scopeLabel:null,reason:row.reason?String(row.reason):null,correlationId:String(row.correlation_id),before:map(row.before_protected),after:map(row.after_protected)};});const actors=[...new Map(rows.map(row=>[String(row.actor_user_id??''),String(row.actor_name??'System')])).entries()].map(([value,label])=>({value,label}));const actions=[...new Set(rows.map(row=>String(row.action)))].map(value=>({value,label:value.replaceAll('.',' ')}));const resources=[...new Set(rows.map(row=>String(row.resource_type)))].map(value=>({value,label:value.replaceAll('_',' ')}));return success({events,totalCount:events.length,actorOptions:actors,actionOptions:actions,resourceOptions:resources,restrictedCount:0});}
-  async listIntegrations(userId:string):Promise<Result<readonly IntegrationPlaceholderView[]>>{if(!await this.administrator(userId))return denied();const items:readonly IntegrationPlaceholderView[]=[{key:'calendar',label:'Calendar',description:'Calendar synchronization.',plannedBehaviour:'Would import approved calendar events as reviewable drafts.',deliveryPhaseLabel:'Backend Phase 7',state:'not_configured',stateLabel:'Not configured',backendTaskIds:'BE-0740'},{key:'email',label:'Email',description:'Transactional email delivery.',plannedBehaviour:'Would deliver safe notification content by email.',deliveryPhaseLabel:'Backend Phase 7',state:'not_configured',stateLabel:'Not configured',backendTaskIds:'BE-0741'},{key:'storage',label:'Private storage',description:'Protected document and export storage.',plannedBehaviour:'Would issue short-lived authorized downloads.',deliveryPhaseLabel:'Backend Phase 7',state:'not_configured',stateLabel:'Not configured',backendTaskIds:'BE-0742'},{key:'webhooks',label:'Webhooks',description:'Signed outbound events.',plannedBehaviour:'Would send signed events for configured workflows.',deliveryPhaseLabel:'Backend Phase 7',state:'not_configured',stateLabel:'Not configured',backendTaskIds:'BE-0749'}];return success(items);}
+  async listIntegrations(userId:string):Promise<Result<readonly IntegrationPlaceholderView[]>>{if(!await this.administrator(userId))return denied();const items:readonly IntegrationPlaceholderView[]=[{key:'calendar',label:'Calendar',description:'Calendar synchronization.',plannedBehaviour:'Would import approved calendar events as reviewable drafts.',deliveryPhaseLabel:'Backend Phase 7',state:'not_configured',stateLabel:'Not configured',backendTaskIds:'BE-0732, BE-0733, BE-0734'},{key:'email',label:'Email',description:'Transactional email delivery.',plannedBehaviour:'Would deliver safe notification content by email.',deliveryPhaseLabel:'Backend Phase 7',state:'not_configured',stateLabel:'Not configured',backendTaskIds:'BE-0704'},{key:'storage',label:'Private storage',description:'Protected document and export storage.',plannedBehaviour:'Would issue short-lived authorized downloads.',deliveryPhaseLabel:'Backend Phase 7',state:'not_configured',stateLabel:'Not configured',backendTaskIds:'BE-0710, BE-0711'},{key:'webhooks',label:'Webhooks',description:'Signed outbound events.',plannedBehaviour:'Would send signed events for configured workflows.',deliveryPhaseLabel:'Backend Phase 7',state:'not_configured',stateLabel:'Not configured',backendTaskIds:'BE-0731'}];return success(items);}
 
   private async transaction<T>(work:(connection:PoolConnection)=>Promise<T>):Promise<T>{
     const connection=await this.pool.getConnection();

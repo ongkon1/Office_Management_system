@@ -24,6 +24,11 @@ import {
   REVIEWER_ROLE_LABEL,
 } from '@/contracts/approval';
 import { formatTimestamp } from '@/lib/format';
+import {
+  initialApprovalStage,
+  pendingApprovalRoles,
+  transitionApproval,
+} from '@/lib/approval-chain';
 import { EMPLOYEES } from '@/fixtures/hr';
 import { DEMO_DATE, findAccountByUserId } from './accounts';
 import { mockStore } from './store';
@@ -79,13 +84,7 @@ export function reviewerRoleOf(userId: string): ReviewerRole | null {
 
 /** Parallel reviewer roles that have not yet decided. */
 export function pendingReviewerRoles(record: Approvable): readonly ReviewerRole[] {
-  if (record.stage !== 'reviewer_review') return [];
-  const decided = new Set(
-    record.reviews
-      .filter((review) => review.reviewerRole !== 'team_lead')
-      .map((review) => review.reviewerRole),
-  );
-  return PARALLEL_REVIEWER_ROLES.filter((role) => !decided.has(role));
+  return pendingApprovalRoles(record);
 }
 
 /**
@@ -157,27 +156,14 @@ export interface ChainTransition {
  * when *every* reviewer has approved.
  */
 export function applyDecision(record: Approvable, review: ApprovalReview): ChainTransition {
-  const reviews = [...record.reviews, review];
-
-  if (review.decision === 'rejected') {
-    return { reviews, stage: 'decided', outcome: 'rejected', decidedAt: review.decidedAt };
-  }
-
-  if (review.reviewerRole === 'team_lead') {
-    return { reviews, stage: 'reviewer_review', outcome: null, decidedAt: null };
-  }
-
-  const advanced: Approvable = { ...record, reviews, stage: 'reviewer_review' };
-  return pendingReviewerRoles(advanced).length === 0
-    ? { reviews, stage: 'decided', outcome: 'approved', decidedAt: review.decidedAt }
-    : { reviews, stage: 'reviewer_review', outcome: null, decidedAt: null };
+  return transitionApproval(record, review);
 }
 
 /** The stage a record enters on submission. */
 export function initialStage(submitterRole: 'employee' | 'team_lead'): Approvable['stage'] {
   // A Team Lead's own request skips the Team Lead stage rather than being
   // auto-approved through it: no decision was made, so none is recorded.
-  return submitterRole === 'team_lead' ? 'reviewer_review' : 'team_lead_review';
+  return initialApprovalStage(submitterRole);
 }
 
 /* -------------------------------------------------------------------------- */

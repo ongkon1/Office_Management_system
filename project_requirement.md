@@ -401,6 +401,40 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 - `REQ-CLIENT-009`: The panel and its Excel, CSV, PDF, and printable outputs must reconcile with authoritative hour and labour-cost reports for identical filters and must include period, filters, timezone, generation timestamp, currency, and policy version.
 - `REQ-CLIENT-010`: Exports must use the existing protected export workflow, record export history, enforce the same authorization as the screen, and prevent unauthorized rows, totals, filenames, or metadata from being inferred.
 
+### 5.18 Requisitions
+
+- `REQ-REQ-001`: The system must allow only an active Employee or an employee with effective Team Lead capability to submit an In-house or New requisition; every other role must be rejected by the service even if it calls the API directly.
+- `REQ-REQ-002`: Every requisition must store its submitter, submitter role at submission, type, item, purpose, urgency, exact approximate amount and currency, model, approval stage, outcome, UTC submission instant, Asia/Dhaka local date and timezone, and audit identity.
+- `REQ-REQ-003`: An In-house requisition must require a last recover date and model; a New requisition must require a model and must not persist an in-house detail row. The database and service must prevent mixed detail variants.
+- `REQ-REQ-004`: Approximate amount must be stored as a non-negative fixed-precision decimal and currency code and must never be parsed, calculated, stored, or aggregated using floating-point money arithmetic.
+- `REQ-REQ-005`: An Employee submission must first reach the effective Team Lead of the employee's primary placement. A Team Lead's own submission must skip Team Lead review and reach the parallel-review stage directly.
+- `REQ-REQ-006`: Team Lead approval must advance an Employee requisition to parallel review. Team Lead rejection must end it as Rejected and must include a reason.
+- `REQ-REQ-007`: Current parallel review must require separate approvals from HR and the Super Administrator. Either reviewer may reject with a reason. Historical Finance Manager review rows must remain readable but no new Finance Manager decision may be assigned.
+- `REQ-REQ-008`: A requisition must become Approved only after every currently required parallel reviewer approves; a rejection at any stage must immediately end it as Rejected.
+- `REQ-REQ-009`: The submitter must be able to withdraw an undecided requisition. A decided or withdrawn requisition must not be reopened or receive another decision.
+- `REQ-REQ-010`: Team Lead reassignment or deactivation must reroute an open Team Lead-stage requisition to the new effective lead; if no effective lead remains, the system must audibly escalate it to parallel review so it cannot become unreviewable.
+- `REQ-REQ-011`: Visibility must be applied before rows, counts, queues, search results, or notifications are produced: the submitter may see the record, its assigned Team Lead may see it, and HR/Super Administrator reviewers may see it only after it reaches their stage.
+- `REQ-REQ-012`: An unauthorized requisition identifier must return the same not-found response as a nonexistent identifier and must reveal no item, amount, submitter, stage, count, or timing distinction.
+- `REQ-REQ-013`: Reviewer decisions must be transactionally serialized and append-only, with at most one decision per required reviewer role; retries or concurrent decisions must return a defined conflict rather than duplicate or overwrite evidence.
+- `REQ-REQ-014`: Submission, rerouting or no-lead escalation, every decision, withdrawal, and any future amount change must be audited with actor or system identity, role where applicable, reason, correlation identifier, and protected before/after state. Submitted amounts are immutable in the current workflow.
+- `REQ-REQ-015`: Employee submission must notify the effective Team Lead; reaching parallel review must notify HR and Super Administrators; a final decision must notify the submitter. Notifications must use deduplicated, fixed safe templates and must pass live record authorization before creation.
+
+### 5.19 Conveyance Claims
+
+- `REQ-CONV-001`: The system must allow only an active Employee or an employee with effective Team Lead capability to submit a conveyance claim; the service must reject every other role even through a direct API request.
+- `REQ-CONV-002`: A claim must store the submitter and their role at submission, business, client, visited instant, travel mode, exact non-negative BDT amount, workflow stage and outcome, server-assigned submission instant, business-local date and timezone, and audit identity.
+- `REQ-CONV-003`: The server must derive the submission instant and must not accept it from the client. The visited date and time must form one Asia/Dhaka instant and must not be in the future.
+- `REQ-CONV-004`: Amounts must be fixed-precision decimal money with a currency code and must never use floating-point arithmetic. Travel mode must be Self, Uber, or Other; Other must require a description, while the other modes must persist no description.
+- `REQ-CONV-005`: Conveyance must use the same approval component and routing rules as requisition: an Employee first reaches their effective Team Lead, a Team Lead's own claim skips that stage, and the parallel stage requires separate HR and Super Administrator approvals.
+- `REQ-CONV-006`: Any reviewer may reject with a required reason, rejection must be terminal, approval must require every current reviewer, and the submitter must be able to withdraw only while the claim is undecided.
+- `REQ-CONV-007`: An optional receipt must use the protected Phase 7 file pipeline, including allowlisted type and size validation, integrity metadata, malware scanning, private storage, and authorized streamed or short-lived download.
+- `REQ-CONV-008`: Receipt state must distinguish absent, uploading or scanning, rejected, and clean. A failed receipt upload must not silently appear attached, and a bound receipt must be immutable after submission in the current workflow.
+- `REQ-CONV-009`: Receipt visibility must be identical to claim visibility and checked at download time. Guessing either a claim or attachment identifier must return the same not-found response as a nonexistent record and must disclose no metadata or timing distinction.
+- `REQ-CONV-010`: Authorization must be applied before claim lists, queue counts, notifications, or future totals. A claim is visible only to its submitter, its effective assigned Team Lead while applicable, and the HR/Super Administrator reviewers after it reaches them.
+- `REQ-CONV-011`: Reviewer decisions must be append-only, transactionally serialized, and unique per reviewer role. Open claims must reroute to a replacement effective Team Lead or audibly escalate to parallel review when no lead remains.
+- `REQ-CONV-012`: Submission, rerouting, no-lead escalation, each decision, withdrawal, receipt binding, receipt download, and any future amount change must create protected audit evidence with actor or system identity, reason where applicable, and before/after state.
+- `REQ-CONV-013`: Notifications must use deduplicated safe templates and live authorization. They must not include the business name, client, amount, receipt metadata, or another field that the recipient has not yet been authorized to read.
+
 ## 6. Core Workflows
 
 ### 6.1 Employee Time Workflow
@@ -486,6 +520,24 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 5. Work without a mapped Client remains visible as **Not assigned to a client**.
 6. The user may request Excel, CSV, PDF, or print output; the output uses the same filters, authorization, totals, metadata, and audit trail as the screen.
 
+### 6.10 Requisition Workflow
+
+1. An Employee or Team Lead chooses In-house or New, enters the required fields, and submits an exact BDT amount.
+2. The service validates identity, role, form variant, amount, date, and effective reporting line before creating one immutable submission record.
+3. An Employee request waits for the effective Team Lead; a Team Lead's own request starts with HR and Super Administrator review.
+4. Team Lead approval advances the request; any rejection ends it. HR and the Super Administrator then decide independently, and approval requires both.
+5. The submitter may withdraw only while no terminal outcome exists. Each transition commits its audit and authorized notifications in the same transaction.
+
+### 6.11 Conveyance Workflow
+
+1. An Employee or Team Lead records the business, client, completed visit date/time, travel mode, exact amount, and optionally selects one receipt.
+2. When selected, the receipt must finish the protected upload pipeline before the claim is submitted; absent, processing, rejected, and clean remain distinguishable states.
+3. The server assigns the submission time, validates that the visit is not in the future, binds the receipt immutably, and creates the claim atomically.
+4. An Employee claim reaches the effective Team Lead; a Team Lead's own claim reaches HR and the Super Administrator directly.
+5. Team Lead approval advances an Employee claim. HR and the Super Administrator decide independently, and both approvals are required.
+6. Any rejection ends the claim with a reason; the submitter may withdraw only before a final decision.
+7. Every protected receipt request repeats live claim authorization and records the successful download.
+
 ## 7. Data Requirements
 
 ### 7.1 Core Entities
@@ -500,6 +552,8 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 | Finance/reporting | CostRate, Budget, PayrollPeriod, ReportDefinition, ReportExport |
 | Collaboration | Document, DocumentVersion, Message, Comment, Announcement, Notification, Attachment |
 | Meetings and AI | Client, MeetingMinute, MeetingMinuteProcessingAttempt, MeetingDecision, GeneratedTaskLink, TeamMatchResult |
+| Requisition | Requisition, RequisitionInHouseDetail, RequisitionNewDetail, RequisitionReview |
+| Conveyance | ConveyanceClaim, ConveyanceReview, protected Attachment |
 | Control | AuditLog, IntegrationConnection, WebhookDelivery, PolicyVersion |
 
 ### 7.2 Relationship and Integrity Rules
@@ -743,6 +797,27 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 - `AC-CLIENT-005`: Given identical authorized filters, the on-screen table, summary, Excel, CSV, PDF, and print output must contain the same rows and totals plus the required provenance metadata and export-history record.
 - `AC-CLIENT-006`: Government-project work, unauthorized rows, counts, filter options, totals, filenames, and timing behavior must remain undiscoverable until the viewer has every required scope in addition to the permitted HR or Super Administrator role.
 
+### 14.7 Requisition Scenarios
+
+- `AC-REQ-001`: Given an Employee submits an In-house requisition with an exact amount of BDT 125000.50, the system must store one in-house detail, no new-item detail, display BDT 125,000.50, and route it only to the effective Team Lead.
+- `AC-REQ-002`: Given the Team Lead approves an Employee requisition, HR and the Super Administrator must each receive one authorized notification and must each record one independent approval before the requisition becomes Approved.
+- `AC-REQ-003`: Given a Team Lead submits their own New requisition, no Team Lead review row or notification must be created and the requisition must enter parallel review directly.
+- `AC-REQ-004`: Given any required reviewer rejects with a reason, the requisition must become Rejected immediately; rejecting without a reason must return field-level guidance and change nothing.
+- `AC-REQ-005`: Given two requests attempt the same reviewer-role decision concurrently, exactly one append-only review must be committed and the other request must receive a conflict result.
+- `AC-REQ-006`: Given an unauthorized viewer requests an existing requisition and a nonexistent identifier, both responses must be indistinguishable and neither list nor queue count may reveal the existing record.
+- `AC-REQ-007`: Given an open Employee requisition's Team Lead changes, the new effective lead must receive it and the prior lead must lose decision authority; if no lead remains, an audited escalation must keep the request reviewable by HR and the Super Administrator.
+
+### 14.8 Conveyance Scenarios
+
+- `AC-CONV-001`: Given an Employee submits a BDT 480.50 Uber claim for a completed visit, the server must preserve the exact amount, assign the submission instant, and expose it only to that employee and the effective Team Lead.
+- `AC-CONV-002`: Given the Team Lead approves an Employee claim, HR and the Super Administrator must each record one independent approval before the claim becomes Approved; a Team Lead's own claim must enter that stage directly.
+- `AC-CONV-003`: Given any required reviewer rejects with a reason, the claim must become Rejected immediately; rejecting without a reason must return field-level guidance and change nothing.
+- `AC-CONV-004`: Given a future visited instant, an invalid money precision, or Other without a description, submission must fail without creating a claim, binding a receipt, or trusting a client-supplied submission timestamp.
+- `AC-CONV-005`: Given a selected receipt, its bytes must pass the shared upload, integrity, type, size, and scan controls; until clean it must remain Processing, and a rejected upload must never appear as an attached receipt.
+- `AC-CONV-006`: Given a receipt attached to an Employee claim still at Team Lead review, its submitter and assigned Team Lead may download it, while HR, Management, and a guessed direct file identifier receive the same response as a nonexistent file. After Team Lead approval, HR and the Super Administrator receive access.
+- `AC-CONV-007`: Given concurrent decisions by the same reviewer role, exactly one append-only decision must commit and the other request must receive a conflict result.
+- `AC-CONV-008`: Given an effective Team Lead changes while an Employee claim is open, the new lead must receive it and the old lead must lose authority; if no lead remains, audited escalation must keep it reviewable by HR and the Super Administrator.
+
 ## 15. Source Coverage Matrix
 
 | Source section | Covered by this document |
@@ -778,6 +853,7 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 | Meeting Minutes to AI Task Generation and Assignment amendment | Sections 2.3, 3, 4.2, 5.16, 6.7, 7, 8, 10, 11-14 |
 | Meeting Minutes Employee read-only amendment, 15 September 2026 | Section 4.2 (matrix and access note), Section 14.5 (`AC-MTG-001`) |
 | Client Panel amendment, 20 September 2026 | Sections 2, 3, 4.2, 5.17, 6.9, 8, 10-14.6 |
+| Requisition and Conveyance workflow amendment, 16 November 2026 | Sections 5.18-5.19, 6.10-6.11, 7, 14.7-14.8 |
 
 ## 16. Requirement Governance
 

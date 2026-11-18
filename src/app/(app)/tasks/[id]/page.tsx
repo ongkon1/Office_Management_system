@@ -8,6 +8,6 @@ import { TeamTaskDetail } from '@/features/team-lead/work-management';
 export default function TaskDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { user } = useSession();
-  if (user?.primaryRole === 'team_lead') return <TeamTaskDetail taskId={id} />;
+  if (user?.primaryRole === 'team_lead' || user?.primaryRole === 'super_admin') return <TeamTaskDetail taskId={id} />;
   return <TaskDetail taskId={id} />;
 }

@@ -219,6 +219,10 @@ export function ConveyanceDetail({ claimId }: { claimId: string }) {
                 No receipt was attached. The upload is optional, so this claim is complete
                 without one.
               </p>
+            ) : data.receipt.state === 'processing' ? (
+              <p className="mt-4 text-body-sm text-ink-muted">The receipt is being checked and will be available after security scanning.</p>
+            ) : data.receipt.state === 'rejected' ? (
+              <Callout tone="warning" className="mt-4">The attached receipt did not pass security checks and cannot be downloaded.</Callout>
             ) : (
               <div className="mt-4 flex flex-wrap items-center gap-3 rounded-md border border-border p-3">
                 <FileText aria-hidden className="size-5 shrink-0 text-ink-muted" />
@@ -230,7 +234,7 @@ export function ConveyanceDetail({ claimId }: { claimId: string }) {
                     {data.receipt.typeLabel} · {data.receipt.sizeLabel}
                   </span>
                 </span>
-                <Badge tone="neutral">Attached</Badge>
+                <LinkButton href={data.receipt.href} variant="secondary" size="sm">Download</LinkButton>
               </div>
             )}
           </Card>

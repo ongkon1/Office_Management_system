@@ -3,7 +3,6 @@ import 'server-only';
 import { randomUUID } from 'node:crypto';
 import type { Pool, RowDataPacket } from 'mysql2/promise';
 import type {
-  DocumentItemView,
   DocumentLibraryView,
   LeaveRequestInput,
   LeaveSelfServiceView,
@@ -12,6 +11,7 @@ import type {
   NotificationGroupKey,
   NotificationItemView,
   SearchEntityKind,
+  SearchOptions,
   SearchResultsView,
   SelfEvaluationFormValues,
   SelfEvaluationView,
@@ -26,17 +26,22 @@ import { formatDate, formatDateRange, formatTimestamp } from '@/lib/format';
 import { toDurationView } from '@/lib/status';
 import { loadActorPolicyContext } from '@/server/authorization/mysql-context';
 import type { ActorPolicyContext } from '@/server/authorization/policy';
-import { reachesEmployee } from '@/server/organization/department-authority';
+import { canOpenRelated } from '@/server/notifications/access';
+import { NOTIFICATION_TEMPLATES, canonicalType, hrefFor, relatedFromStored } from '@/server/notifications/catalogue';
+import { SearchApplication } from '@/server/search/application';
+import { SearchIndexer } from '@/server/search/indexer';
+import { DocumentApplication } from '@/server/documents/application';
+import { FileApplication } from '@/server/files/application';
+import { objectStoreFromEnvironment } from '@/server/files/storage';
+import { scannerFromEnvironment } from '@/server/files/scanner';
+import { MessageApplication } from '@/server/messages/application';
+import { businessDate } from '@/server/supporting/results';
 import { AuthenticationService } from '@/server/authentication/service';
 import { MysqlAuthenticationStore } from '@/server/authentication/mysql-store';
 
 type Row = RowDataPacket & Record<string, unknown>;
-type SqlValue = string | number | boolean | Date | null;
 const EMPTY_EVALUATION: SelfEvaluationFormValues = {
   achievements: '', completedProjects: '', challenges: '', skills: '', trainingNeeds: '', goals: '', supportRequired: '',
-};
-const KIND_LABEL: Record<SearchEntityKind, string> = {
-  employee: 'Employees', division: 'Divisions', project: 'Projects', task: 'Tasks', timesheet: 'Timesheets', remark: 'Remarks', document: 'Documents',
 };
 const REQUEST_LABEL: Record<string, string> = {
   draft: 'Draft', submitted: 'Pending', pending: 'Pending', approved: 'Approved', rejected: 'Rejected',
@@ -87,35 +92,42 @@ export class BackendWorkspaceService implements WorkspaceService {
     return { userId, employeeId: actor.employeeId, divisionIds: actor.divisionIds, projectIds: actor.projectIds, permissions: actor.permissions, actor };
   }
 
-  private notificationGroup(type: string): NotificationGroupKey {
-    if (type.includes('export')) return 'exports';
-    if (type.includes('period')) return 'periods';
-    if (type.includes('evaluation')) return 'evaluation';
-    if (type.includes('request') || type.includes('leave') || type.includes('wfh')) return 'requests';
-    if (type.includes('time') || type.includes('critical') || type.includes('overtime')) return 'time';
-    if (type.includes('task') || type.includes('project')) return 'work';
-    return 'action_required';
-  }
-
+  /**
+   * `BE-0701`, `BE-0705`. Text comes from the catalogue, never the row, so a
+   * stored payload cannot carry more than the fixed template. Each link is
+   * offered only if the recipient can still open the related record today —
+   * a notification about something they have since lost access to stays
+   * readable, with no way into the record.
+   */
   private async notificationCentre(userId: string): Promise<Result<NotificationCentreView>> {
-    if (!await this.viewer(userId)) return absent('Notifications');
+    const viewer = await this.viewer(userId);
+    if (!viewer) return absent('Notifications');
     const [rows] = await this.pool.execute<Row[]>(`SELECT id,notification_type,safe_payload,related_type,related_id,read_at,created_at
       FROM notifications WHERE recipient_user_id=? ORDER BY created_at DESC LIMIT 200`, [userId]);
-    const items: NotificationItemView[] = rows.map(row => {
-      const payload = json<Record<string, unknown>>(row.safe_payload, {});
-      const type = String(row.notification_type);
-      const group = this.notificationGroup(type);
-      return {
-        id: String(row.id), type: type as NotificationItemView['type'],
-        title: String(payload.title ?? type.replaceAll('_', ' ')), body: String(payload.body ?? payload.message ?? 'Open the related record for details.'),
+    const date = businessDate();
+    const opened = new Map<string, boolean>();
+    const items: NotificationItemView[] = [];
+    for (const row of rows) {
+      const type = canonicalType(String(row.notification_type));
+      if (!type) continue;
+      const template = NOTIFICATION_TEMPLATES[type];
+      const payload = json<{ relatedDate?: string | null }>(row.safe_payload, {});
+      const related = relatedFromStored(row.related_type ? String(row.related_type) : null, row.related_id ? String(row.related_id) : null, payload.relatedDate ?? null);
+      const key = related ? JSON.stringify(related) : '';
+      if (related && !opened.has(key)) opened.set(key, await canOpenRelated(this.pool, viewer.actor, related, date));
+      const canOpen = Boolean(related) && opened.get(key) === true;
+      items.push({
+        id: String(row.id), type, title: template.title,
+        body: canOpen || !related ? template.body : `${template.body} You no longer have access to the related record.`,
         createdAtLabel: formatTimestamp(stringInstant(row.created_at)), isRead: Boolean(row.read_at),
-        href: typeof payload.href === 'string' ? payload.href : null,
-        relatedLabel: typeof payload.relatedLabel === 'string' ? payload.relatedLabel : null,
-        group, groupLabel: GROUP_LABEL[group], requiresAction: Boolean(payload.requiresAction ?? group === 'action_required'),
-      };
-    });
-    const groups = ([...new Set(items.map(item => item.group))]).map(key => ({ key, label: GROUP_LABEL[key], items: items.filter(item => item.group === key) }));
-    return success({ unreadCount: items.filter(item => !item.isRead).length, groups });
+        href: canOpen ? hrefFor(related!, viewer.employeeId) : null,
+        relatedLabel: payload.relatedDate ? formatDate(payload.relatedDate) : null,
+        group: template.group, groupLabel: GROUP_LABEL[template.group], requiresAction: template.requiresAction && canOpen,
+      });
+    }
+    const order: readonly NotificationGroupKey[] = ['action_required', 'time', 'work', 'requests', 'evaluation', 'periods', 'exports'];
+    const groups = order.filter((key) => items.some((item) => item.group === key)).map((key) => ({ key, label: GROUP_LABEL[key], items: items.filter((item) => item.group === key) }));
+    return success({ unreadCount: items.filter((item) => !item.isRead).length, groups });
   }
 
   getNotifications(userId: string) { return this.notificationCentre(userId); }
@@ -134,99 +146,50 @@ export class BackendWorkspaceService implements WorkspaceService {
   }
 
   /**
-   * `OH-BE-0309`. An indexed row names the scope it belongs to; this decides
-   * whether the viewer may see it.
-   *
-   * Three things are deliberate. A **department-scoped** row is reachable only
-   * through an effective appointment for that department, or by HR and a Super
-   * Administrator. An **employee-scoped** row is reachable by the same rule
-   * every report and notification uses, so a Team Lead finds their own team
-   * instead of only themselves. And a **division** that the viewer reaches only
-   * through a department appointment still passes, because an appointment never
-   * widens `divisionIds` — the department check above is what bounds it.
+   * `BE-0720`–`BE-0723`. Delegates to the authorized search service, which
+   * re-verifies every candidate against its live record — the index's stored
+   * scope is never trusted (the earlier `OH-BE-0309` filter read it).
    */
-  private visible(viewer: Viewer, scope: Record<string, unknown>) {
-    const divisionId = typeof scope.divisionId === 'string' ? scope.divisionId : null;
-    const projectId = typeof scope.projectId === 'string' ? scope.projectId : null;
-    const employeeId = typeof scope.employeeId === 'string' ? scope.employeeId : null;
-    const departmentId = typeof scope.departmentId === 'string' ? scope.departmentId : null;
-    const wide = viewer.actor.roles.includes('hr_manager') || viewer.actor.roles.includes('super_admin');
-    if (departmentId && !wide && !(viewer.actor.departmentIds?.has(departmentId) ?? false)) return false;
-    if (divisionId && !viewer.divisionIds.has(divisionId) && !wide
-      && !(departmentId && (viewer.actor.departmentIds?.has(departmentId) ?? false))) return false;
-    if (projectId && !viewer.projectIds.has(projectId) && !wide) return false;
-    if (employeeId && !reachesEmployee(viewer.actor, { employeeId, divisionId: divisionId ?? undefined })) return false;
-    if (scope.government === true && !viewer.permissions.has('government.view')) return false;
-    return true;
-  }
-
-  async search(userId: string, term: string, kinds?: readonly SearchEntityKind[]): Promise<Result<SearchResultsView>> {
+  async search(userId: string, term: string, kinds?: readonly SearchEntityKind[], options?: SearchOptions): Promise<Result<SearchResultsView>> {
     const viewer = await this.viewer(userId); if (!viewer) return absent('Search');
     const trimmed = term.trim();
-    if (!trimmed) return success({ term: '', totalCount: 0, groups: [], guidance: 'Type at least one character to search authorized records.' });
-    const [preferences]=await this.pool.execute<Row[]>('SELECT recent_searches FROM user_preferences WHERE user_id=?',[userId]);
-    const recent=json<string[]>(preferences[0]?.recent_searches,[]);
-    const next=[trimmed,...recent.filter(value=>value!==trimmed)].slice(0,5);
-    await this.pool.execute(`INSERT INTO user_preferences(user_id,recent_searches) VALUES(?,?) ON DUPLICATE KEY UPDATE recent_searches=VALUES(recent_searches),version=version+1`,[userId,JSON.stringify(next)]);
-    const pattern = `%${trimmed.replaceAll('%', '\\%').replaceAll('_', '\\_')}%`;
-    const [rows] = await this.pool.execute<Row[]>(`SELECT resource_type,resource_id,title,safe_text,scope_json FROM search_metadata
-      WHERE (title LIKE ? ESCAPE '\\\\' OR safe_text LIKE ? ESCAPE '\\\\') ORDER BY indexed_at DESC LIMIT 100`, [pattern, pattern]);
-    const results = rows.flatMap(row => {
-      const kind = String(row.resource_type) as SearchEntityKind;
-      if (!Object.hasOwn(KIND_LABEL, kind) || (kinds?.length && !kinds.includes(kind))) return [];
-      if (!this.visible(viewer, json<Record<string, unknown>>(row.scope_json, {}))) return [];
-      const id = String(row.resource_id);
-      const href: Record<SearchEntityKind, string> = { employee:`/employees/${id}`,division:`/divisions/${id}`,project:`/projects/${id}`,task:`/tasks/${id}`,timesheet:`/timesheets/${id}`,remark:`/remarks/${id}`,document:'/documents' };
-      return [{ id, kind, kindLabel: KIND_LABEL[kind], title: String(row.title), subtitle: String(row.safe_text ?? ''), href: href[kind], snippet: row.safe_text ? String(row.safe_text).slice(0, 180) : null, isRestricted: false }];
-    });
-    const present = [...new Set(results.map(item => item.kind))];
-    return success({ term: trimmed, totalCount: results.length, groups: present.map(kind => ({ kind, label: KIND_LABEL[kind], results: results.filter(item => item.kind === kind) })), guidance: results.length ? null : 'No results you have access to. Check the spelling or try a shorter term.' });
+    if (trimmed) {
+      const [preferences]=await this.pool.execute<Row[]>('SELECT recent_searches FROM user_preferences WHERE user_id=?',[userId]);
+      const recent=json<string[]>(preferences[0]?.recent_searches,[]);
+      const next=[trimmed.slice(0, 100),...recent.filter(value=>value!==trimmed)].slice(0,5);
+      await this.pool.execute(`INSERT INTO user_preferences(user_id,recent_searches) VALUES(?,?) ON DUPLICATE KEY UPDATE recent_searches=VALUES(recent_searches),version=version+1`,[userId,JSON.stringify(next)]);
+    }
+    return new SearchApplication(this.pool).search(viewer.actor, term, kinds, options);
   }
   async listRecentSearches(userId: string) { if(!await this.viewer(userId))return absent('Search');const [rows]=await this.pool.execute<Row[]>('SELECT recent_searches FROM user_preferences WHERE user_id=?',[userId]);return success<readonly string[]>(json<string[]>(rows[0]?.recent_searches,[])); }
 
-  async getDocuments(userId: string, filters?: { readonly term?: string; readonly scopes?: readonly string[] }): Promise<Result<DocumentLibraryView>> {
-    const viewer = await this.viewer(userId); if (!viewer) return absent('Document library');
-    const values: SqlValue[] = [];
-    let where = 'd.is_active=TRUE';
-    if (filters?.term?.trim()) { where += ' AND (d.title LIKE ? OR a.original_name LIKE ?)'; const p=`%${filters.term.trim()}%`; values.push(p,p); }
-    if (filters?.scopes?.length) { where += ` AND d.scope_type IN (${filters.scopes.map(()=>'?').join(',')})`; values.push(...filters.scopes); }
-    const [rows] = await this.pool.execute<Row[]>(`SELECT d.id,d.title,d.scope_type,d.division_id,d.project_id,d.sensitivity,d.created_at,d.version,
-      dv.name division_name,p.name project_name,p.project_code,a.original_name,a.media_type,a.size_bytes,u.name uploader
-      FROM documents d LEFT JOIN divisions dv ON dv.id=d.division_id LEFT JOIN projects p ON p.id=d.project_id
-      LEFT JOIN document_versions v ON v.document_id=d.id AND v.version_number=(SELECT MAX(v2.version_number) FROM document_versions v2 WHERE v2.document_id=d.id)
-      LEFT JOIN attachments a ON a.id=v.attachment_id LEFT JOIN users u ON u.id=v.created_by_user_id WHERE ${where} ORDER BY d.updated_at DESC`, values);
-    const items: DocumentItemView[] = rows.flatMap(row => {
-      const divisionId = row.division_id ? String(row.division_id) : null, projectId = row.project_id ? String(row.project_id) : null;
-      if ((divisionId && !viewer.divisionIds.has(divisionId)) || (projectId && !viewer.projectIds.has(projectId))) return [];
-      const restricted = String(row.sensitivity) === 'government' && !viewer.permissions.has('government.view');
-      const scope = String(row.scope_type) as DocumentItemView['scope'];
-      const size = Number(row.size_bytes ?? 0);
-      const groupLabel = scope === 'company' ? 'Company documents' : scope === 'division' ? String(row.division_name ?? 'Division') : String(row.project_name ?? 'Project');
-      return [{ id:String(row.id),title:String(row.title),description:null,scope,scopeLabel:scope === 'company' ? 'Company' : `${scope === 'division' ? 'Division' : 'Project'}: ${groupLabel}`,groupLabel,
-        version:String(row.version),fileName:String(row.original_name ?? 'File unavailable'),mediaTypeLabel:String(row.media_type ?? 'Unknown'),sizeLabel:size >= 1_000_000 ? `${(size/1_000_000).toFixed(1)} MB` : `${Math.ceil(size/1000)} KB`,
-        uploadedAtLabel:formatTimestamp(stringInstant(row.created_at)),uploadedByLabel:String(row.uploader ?? 'System'),isRestricted:restricted,
-        restrictionReason:restricted?'This document requires government-project access.':null,canDownload:!restricted,
-        previewPlaceholder:`Preview of ${String(row.original_name ?? row.title)} is not available.` }];
-    });
-    const labels=[...new Set(items.map(item=>item.groupLabel))];
-    return success({ groups:labels.map(label=>({key:label,label,scope:items.find(item=>item.groupLabel===label)!.scope,documents:items.filter(item=>item.groupLabel===label)})),totalCount:items.length,restrictedCount:items.filter(item=>item.isRestricted).length });
-  }
-  async downloadDocument(userId: string, id: string) {
-    const library=await this.getDocuments(userId); if(library.status!=='success') return library;
-    const item=library.data.groups.flatMap(group=>group.documents).find(document=>document.id===id);
-    if(!item)return absent('Document'); if(!item.canDownload)return {status:'permission_denied' as const,code:'FORBIDDEN' as const,message:'You cannot download this document.',requiredPermission:'government.view'};
-    return success({note:`Authorized download: ${item.fileName}. The signed storage URL is issued by the document delivery boundary.`});
+  private documents() {
+    return new DocumentApplication(this.pool, new FileApplication(this.pool, objectStoreFromEnvironment(), scannerFromEnvironment()),
+      undefined, (id) => new SearchIndexer(this.pool).indexOne('document', id).then(() => undefined));
   }
 
+  /** `BE-0713`, `BE-0715`. Only documents the viewer can read are listed, grouped or counted. */
+  async getDocuments(userId: string, filters?: { readonly term?: string; readonly scopes?: readonly string[] }): Promise<Result<DocumentLibraryView>> {
+    const viewer = await this.viewer(userId); if (!viewer) return absent('Document library');
+    const library = await this.documents().library(viewer.actor, filters);
+    if (library.status !== 'success') return library;
+    const items = library.data;
+    const labels = [...new Set(items.map((item) => item.groupLabel))];
+    return success({ groups: labels.map((label) => ({ key: label, label, scope: items.find((item) => item.groupLabel === label)!.scope, documents: items.filter((item) => item.groupLabel === label) })), totalCount: items.length, restrictedCount: 0 });
+  }
+  /** The authenticated route performs the download and its audit; this confirms access first. */
+  async downloadDocument(userId: string, id: string): Promise<Result<{ readonly note: string; readonly href?: string }>> {
+    const viewer = await this.viewer(userId); if (!viewer) return absent('Document');
+    const document = await this.documents().get(viewer.actor, id);
+    if (document.status !== 'success') return document;
+    if (!document.data.isActive || document.data.currentVersion === 0) return conflict('This document has no published version yet.', 'Ask its owner to add a file or link.');
+    return success({ note: `Downloading ${document.data.title}.`, href: `/api/documents?download=${encodeURIComponent(id)}` });
+  }
+
+  /** `BE-0714`. Answers with an empty, explained view while messaging is switched off. */
   async getMessages(userId: string): Promise<Result<MessagePrototypeView>> {
-    const viewer=await this.viewer(userId);if(!viewer)return absent('Messages');
-    const [rows]=await this.pool.execute<Row[]>(`SELECT m.id,m.scope_type,m.scope_id,m.body,m.created_at,m.sender_user_id,u.name sender_name,
-      COALESCE(d.name,p.name,'Direct conversation') scope_name FROM messages m JOIN users u ON u.id=m.sender_user_id
-      LEFT JOIN divisions d ON m.scope_type='division' AND d.id=m.scope_id LEFT JOIN projects p ON m.scope_type='project' AND p.id=m.scope_id
-      ORDER BY m.created_at`,[]);
-    const visible=rows.filter(row=>row.scope_type==='direct' ? String(row.scope_id)===userId||String(row.sender_user_id)===userId : row.scope_type==='division'?viewer.divisionIds.has(String(row.scope_id)):viewer.projectIds.has(String(row.scope_id)));
-    const scopes=[...new Set(visible.map(row=>`${row.scope_type}:${row.scope_id}`))];
-    return success({threads:scopes.map(key=>{const thread=visible.filter(row=>`${row.scope_type}:${row.scope_id}`===key);const first=thread[0];const kind=String(first.scope_type) as 'division'|'project'|'direct';return{id:key,kind,kindLabel:kind==='division'?'Division channel':kind==='project'?'Project channel':'Direct message',title:String(first.scope_name),subtitle:'Authorized conversation',lastMessageAtLabel:formatTimestamp(stringInstant(thread.at(-1)!.created_at)),unreadCount:0,messages:thread.map(row=>({id:String(row.id),authorName:String(row.sender_name),body:String(row.body),atLabel:formatTimestamp(stringInstant(row.created_at)),isOwn:String(row.sender_user_id)===userId}))};}),prototypeNote:'Messages are stored and shown only within the signed-in user\'s authorized scope.',deliveryPhaseLabel:'Server-backed workspace'});
+    const viewer = await this.viewer(userId); if (!viewer) return absent('Messages');
+    return new MessageApplication(this.pool).threads(viewer.actor);
   }
 
   private async requestRows(viewer: Viewer, kind: 'wfh'|'leave'): Promise<SelfRequestView[]> {

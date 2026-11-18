@@ -493,3 +493,25 @@ Also open, and required from the business rather than engineering: authoritative
 | Frontend contracts | `frontend_milestone.md` §2.1, `FE-0014`–`FE-0019` |
 | Meeting Minutes and AI pipeline | `REQ-MTG-001`–`024`, `REQ-DATA-009`–`012`, `AC-MTG-001`–`012`, Frontend Phase 11, Backend Phase 13 |
 | Department hierarchy | `REQ-ORG-011`–`020`, `REQ-RBAC-022`, `REQ-DATA-013`–`015`, `REQ-NAV-007`–`008`, `AC-AUTH-006`–`007`, `AC-WF-012`–`013`, `organization_hierarchy_milestone.md` |
+| Requisition approval | `REQ-REQ-001`–`015`, `AC-REQ-001`–`007`, Backend Phase 10 |
+
+| Conveyance approval and receipts | `REQ-CONV-001`-`013`, `AC-CONV-001`-`008`, Backend Phase 11 |
+
+## 21. Requisition Approval Architecture
+
+Migration `0016` stores a requisition header, exactly one kind-specific detail row, and append-only reviewer decisions. The header captures the submitter role, effective Team Lead assignment, UTC submission instant, Asia/Dhaka local date, timezone, exact decimal amount and currency. In-house and New fields are separate tables so mixed variants are not a representable application state.
+
+`src/lib/approval-chain.ts` is the pure state machine shared by requisition and the future conveyance backend. Employee submissions enter Team Lead review; Team Lead submissions enter parallel review. Current parallel reviewers are HR and Super Administrator, while the retired Finance Manager value remains legal only when reading historical decisions. Each decision locks the header row, appends one unique reviewer-role row, updates the derived stage, writes audit evidence and queues authorized notifications in one transaction. An effective Team Lead change reroutes an open request; if no lead remains, an audited system transition advances it so it cannot be orphaned.
+
+The browser calls `/api/requisitions` through the typed `RequisitionService`. The route derives the actor exclusively from the session, rejects cross-user arguments, and applies record visibility before lists and queue counts. Notification text comes from the fixed Phase 7 catalogue and the recipient is authorized against the live requisition before a notification is stored.
+
+## 22. Conveyance Approval and Receipt Architecture
+
+Migration `0017` stores conveyance claims and append-only reviews. It preserves the submitter role, effective Team Lead, server-assigned UTC submission instant plus Asia/Dhaka local date, visited UTC instant plus local values, constrained travel mode, exact decimal BDT amount, optional protected attachment identifier, stage, outcome, audit actors, version, and queue indexes. Database constraints and immutable-review triggers make invalid travel modes, excessive money precision, and review rewriting unrepresentable through ordinary writes.
+
+Conveyance and requisition both call `src/lib/approval-chain.ts` for initial routing, transition, pending reviewers, visibility, decision authority, and the audit transition shape. Employee submissions first reach the effective Team Lead; a Team Lead's own submission enters parallel HR and Super Administrator review. Decisions lock the claim, append one unique reviewer-role row, update the header, audit, and enqueue safe notifications in one transaction. Open claims are rerouted when department authority changes and are audibly escalated when no effective lead remains.
+
+Receipts extend the existing Phase 7 file owner policy with `conveyance_claim`; there is no second upload system. Before submission, only the employee may upload against their employee identifier. Submission validates the completed attachment and binds it transactionally to the new claim. Thereafter every metadata or byte request resolves live claim visibility first, and unauthorized and nonexistent identifiers share the same result. Only a clean scanned object is streamed or signed for download, each successful protected download is audited, and a bound receipt cannot be deactivated or replaced in the current workflow.
+
+The browser calls `/api/conveyance` through the typed server adapter. File bytes use `/api/files`, so local development and private S3 production retain identical authorization, integrity, scanning, and audit behavior. Lists and queue counts filter unauthorized claims before counting, and notification templates contain no business, client, amount, or receipt details.
+
