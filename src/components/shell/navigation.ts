@@ -253,6 +253,7 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
         { key: 'divisions', label: 'Divisions', href: '/admin/divisions', iconKey: 'building', inMobileBottomNav: true },
         { key: 'departments', label: 'Departments', href: '/admin/departments', iconKey: 'building' },
         { key: 'users', label: 'Users', href: '/admin/users', iconKey: 'user-cog' },
+        { key: 'sessions', label: 'Active Sessions', href: '/admin/sessions', iconKey: 'monitor-smartphone' },
         { key: 'roles', label: 'Roles and Permissions', href: '/admin/roles', iconKey: 'shield' },
         { key: 'policies', label: 'Work Policies', href: '/admin/policies', iconKey: 'settings' },
         { key: 'holidays', label: 'Holidays', href: '/admin/holidays', iconKey: 'calendar-days' },

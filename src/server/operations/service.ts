@@ -213,7 +213,7 @@ export class OperationsService {
     return (
       (
         await this.rows(
-          `SELECT e.*,u.email,u.image_url,u.status user_status,d.id division_id,d.name division_name,d.division_key division_code,d.is_government division_restricted FROM employees e JOIN users u ON u.id=e.user_id LEFT JOIN employee_division_assignments a ON a.employee_id=e.id AND a.is_primary=TRUE AND a.is_active=TRUE AND a.effective_from<=CURRENT_DATE AND (a.effective_to IS NULL OR a.effective_to>=CURRENT_DATE) LEFT JOIN divisions d ON d.id=a.division_id WHERE e.id=?`,
+          `SELECT e.*,u.email,u.image_url,u.status user_status,d.id division_id,d.name division_name,d.division_key division_code,d.is_government division_restricted FROM employees e JOIN users u ON u.id=e.user_id LEFT JOIN employee_division_assignments a ON a.employee_id=e.id AND a.is_primary=TRUE AND a.is_active=TRUE AND a.effective_from<=CURRENT_DATE AND (a.effective_to IS NULL OR a.effective_to>=CURRENT_DATE) LEFT JOIN divisions d ON d.id=a.division_id WHERE e.id=? AND e.status='active' AND u.status='active'`,
           [id],
         )
       )[0] ?? null
@@ -304,7 +304,7 @@ export class OperationsService {
   ) {
     if (!(await this.hrActor(userId))) return denied();
     const rows = await this.rows(
-      `SELECT e.*,u.email,u.image_url,u.status user_status,d.id division_id,d.name division_name,d.division_key division_code,d.is_government division_restricted,GROUP_CONCAT(DISTINCT ad.division_key ORDER BY ad.division_key) division_codes FROM employees e JOIN users u ON u.id=e.user_id LEFT JOIN employee_division_assignments a ON a.employee_id=e.id AND a.is_primary=TRUE AND a.is_active=TRUE AND a.effective_from<=CURRENT_DATE AND (a.effective_to IS NULL OR a.effective_to>=CURRENT_DATE) LEFT JOIN divisions d ON d.id=a.division_id LEFT JOIN employee_division_assignments aa ON aa.employee_id=e.id AND aa.is_active=TRUE AND aa.effective_from<=CURRENT_DATE AND (aa.effective_to IS NULL OR aa.effective_to>=CURRENT_DATE) LEFT JOIN divisions ad ON ad.id=aa.division_id GROUP BY e.id,u.email,u.image_url,u.status,d.id,d.name,d.division_key,d.is_government ORDER BY e.display_name`,
+      `SELECT e.*,u.email,u.image_url,u.status user_status,d.id division_id,d.name division_name,d.division_key division_code,d.is_government division_restricted,GROUP_CONCAT(DISTINCT ad.division_key ORDER BY ad.division_key) division_codes FROM employees e JOIN users u ON u.id=e.user_id LEFT JOIN employee_division_assignments a ON a.employee_id=e.id AND a.is_primary=TRUE AND a.is_active=TRUE AND a.effective_from<=CURRENT_DATE AND (a.effective_to IS NULL OR a.effective_to>=CURRENT_DATE) LEFT JOIN divisions d ON d.id=a.division_id LEFT JOIN employee_division_assignments aa ON aa.employee_id=e.id AND aa.is_active=TRUE AND aa.effective_from<=CURRENT_DATE AND (aa.effective_to IS NULL OR aa.effective_to>=CURRENT_DATE) LEFT JOIN divisions ad ON ad.id=aa.division_id WHERE e.status='active' AND u.status='active' GROUP BY e.id,u.email,u.image_url,u.status,d.id,d.name,d.division_key,d.is_government ORDER BY e.display_name`,
     );
     let result = rows.map((r) => ({
       ...this.mapEmployeeRow(r),

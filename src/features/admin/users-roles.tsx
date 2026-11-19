@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { KeyRound, ShieldAlert, TriangleAlert, UserRoundCog, UserRoundMinus } from 'lucide-react';
+import { Archive, KeyRound, ShieldAlert, TriangleAlert, UserRoundCog } from 'lucide-react';
 import type {
   EmployeeAccessRole,
   PermissionGrantView,
@@ -20,7 +20,7 @@ import { Dialog } from '@/components/feedback/overlay';
 import { DataTable } from '@/components/data/data-table';
 import { Select, Switch, Textarea } from '@/components/forms/inputs';
 import { Field } from '@/components/forms/field';
-import { Button } from '@/components/ui/button';
+import { Button, LinkButton } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar } from '@/components/ui/avatar';
 import { ReportsFallback, ReportsLoading } from '@/features/reports/report-catalogue';
@@ -79,10 +79,10 @@ export function UserAdministration() {
       reload();
       toast.show({
         tone: wasRoleChange ? 'success' : 'warning',
-        title: wasRoleChange ? 'User role updated' : 'User access removed',
+        title: wasRoleChange ? 'User role updated' : 'User archived',
         description: wasRoleChange
           ? 'The new role will apply the next time the user signs in.'
-          : 'The account is inactive. Historical records were retained.',
+          : 'The account now appears only in User Archive. Historical records were retained.',
       });
       return;
     }
@@ -101,6 +101,14 @@ export function UserAdministration() {
         title="Users"
         description="Accounts, their roles, the scope each one carries and any sensitive permissions."
         meta={<Badge tone="neutral">{users.length} accounts</Badge>}
+        actions={
+          <LinkButton
+            href="/admin/users/archive"
+            iconLeading={<Archive aria-hidden className="size-4" />}
+          >
+            User Archive
+          </LinkButton>
+        }
       />
 
       <Callout tone="info" className="mt-5">
@@ -220,14 +228,14 @@ export function UserAdministration() {
                   <Button
                     size="sm"
                     variant="danger"
-                    iconLeading={<UserRoundMinus aria-hidden className="size-4" />}
+                    iconLeading={<Archive aria-hidden className="size-4" />}
                     onClick={() => {
                       setFailure(null);
                       setReason('');
                       setPending({ kind: 'deactivate', account: row });
                     }}
                   >
-                    Remove user
+                    Archive user
                   </Button>
                 )}
               </span>
@@ -282,7 +290,7 @@ export function UserAdministration() {
                     setPending({ kind: 'deactivate', account: row });
                   }}
                 >
-                  Remove user
+                  Archive user
                 </Button>
               )}
             </div>
@@ -298,7 +306,7 @@ export function UserAdministration() {
           setReason('');
           setFailure(null);
         }}
-        title={pending?.kind === 'role' ? 'Change this user’s role?' : 'Remove this user?'}
+        title={pending?.kind === 'role' ? 'Change this user’s role?' : 'Archive this user?'}
         description={pending?.account.employee.fullName}
         dismissOnBackdrop={false}
         footer={
@@ -319,7 +327,7 @@ export function UserAdministration() {
               loading={saving}
               onClick={applyPendingAction}
             >
-              {pending?.kind === 'role' ? 'Save role' : 'Remove access'}
+              {pending?.kind === 'role' ? 'Save role' : 'Archive user'}
             </Button>
           </>
         }
@@ -347,12 +355,13 @@ export function UserAdministration() {
           </div>
         ) : (
           <div className="space-y-4">
-            <Alert tone="warning" title="This deactivates access; it does not delete history">
-              The user will no longer be able to sign in. Their timesheets, assignments, tasks,
-              approvals and audit records will remain available.
+            <Alert tone="warning" title="Archiving removes operational access, not history">
+              The user will no longer be able to sign in and will be hidden from normal employee,
+              user, session, search and assignment views. Their historical records remain attributed
+              to them for payroll and audit purposes.
             </Alert>
             <Field
-              label="Reason for removal"
+              label="Reason for archiving"
               required
               helperText="This reason is stored in the audit record."
               error={failure && reason.trim().length < 5 ? failure : undefined}
@@ -366,6 +375,78 @@ export function UserAdministration() {
           </div>
         )}
       </Dialog>
+    </PageContainer>
+  );
+}
+
+/** Super Administrator-only holding area for deactivated employee accounts. */
+export function UserArchive() {
+  const { user } = useSession();
+  const { state } = useAsync(
+    () => mockAdminService.listArchivedUsers(user?.userId ?? ''),
+    [user?.userId],
+  );
+
+  if (state.status === 'loading') return <ReportsLoading label="archived users" />;
+  if (state.status !== 'success') {
+    return <ReportsFallback result={state.failure} subject="User Archive" />;
+  }
+
+  return (
+    <PageContainer width="full">
+      <PageHeader
+        title="User Archive"
+        description="Deactivated employee accounts retained for historical payroll and audit records."
+        meta={<Badge tone="neutral">{state.data.length} archived</Badge>}
+        actions={<LinkButton href="/admin/users">Back to users</LinkButton>}
+      />
+
+      <Callout tone="info" className="mt-5">
+        Archived people cannot sign in and are excluded from operational directories, selectors,
+        active sessions and search. Their past work remains correctly attributed.
+      </Callout>
+
+      <DataTable<UserAdminView>
+        className="mt-5"
+        caption="Archived user accounts"
+        rows={state.data}
+        getRowId={(row) => row.userId}
+        emptyState={{ title: 'No archived users', description: 'Archived accounts will appear here.' }}
+        columns={[
+          {
+            key: 'user',
+            header: 'Archived account',
+            alwaysVisible: true,
+            render: (row) => (
+              <span className="flex min-w-0 items-center gap-2.5">
+                <Avatar name={row.employee.fullName} size="sm" />
+                <span className="min-w-0">
+                  <span className="block truncate font-medium text-ink">{row.employee.fullName}</span>
+                  <span className="block truncate text-caption text-ink-muted">{row.email}</span>
+                </span>
+              </span>
+            ),
+          },
+          { key: 'role', header: 'Previous role', render: (row) => row.roleLabels.join(', ') },
+          {
+            key: 'last-sign-in',
+            header: 'Last sign in',
+            hideBelow: 'md',
+            render: (row) => row.lastLoginLabel ?? 'Never',
+          },
+          { key: 'status', header: 'Status', render: () => <Badge tone="neutral">Archived</Badge> },
+        ]}
+        renderMobileCard={(row) => (
+          <div className="flex min-w-0 items-start justify-between gap-3">
+            <span className="min-w-0">
+              <span className="block truncate font-medium text-ink">{row.employee.fullName}</span>
+              <span className="block truncate text-caption text-ink-muted">{row.email}</span>
+              <span className="mt-1 block text-caption text-ink-muted">{row.roleLabels.join(', ')}</span>
+            </span>
+            <Badge tone="neutral">Archived</Badge>
+          </div>
+        )}
+      />
     </PageContainer>
   );
 }

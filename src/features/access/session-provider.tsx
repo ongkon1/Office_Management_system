@@ -109,6 +109,33 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     sessionStore.set(session);
   }, []);
 
+  // Presence heartbeat. The server's session row is the source of truth for
+  // the administrator's Online/Idle view and for forced logout. Hidden tabs
+  // do not claim activity; returning to the tab validates the session at once.
+  React.useEffect(() => {
+    if (!user) return;
+    let active = true;
+    let checking = false;
+    const check = async () => {
+      if (!active || checking || document.visibilityState !== 'visible') return;
+      checking = true;
+      const result = await serverAuthService.getSession();
+      checking = false;
+      if (!active) return;
+      if (result.status !== 'success' || result.data === null) applySession(null);
+    };
+    const interval = window.setInterval(() => void check(), 2 * 60_000);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') void check();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [user, applySession]);
+
   const login = React.useCallback<SessionContextValue['login']>(
     async (input) => {
       const result = await serverAuthService.login(input);

@@ -11,7 +11,7 @@ export interface AuthenticationStore {
   recordSecurityEvent(input: { userId: string | null; eventType: string; identifierHash?: string | null; originHash?: string | null; correlationId: string }): Promise<void>;
   registerFailure(userId: string, lockedUntil: Date | null): Promise<void>;
   clearFailures(userId: string): Promise<void>;
-  createSession(input: { id: string; userId: string; tokenHash: string; expiresAt: Date; originHash: string; rotatedFrom: string | null }): Promise<void>;
+  createSession(input: { id: string; userId: string; tokenHash: string; expiresAt: Date; originHash: string; userAgent: string | null; rotatedFrom: string | null }): Promise<void>;
   findSession(tokenHash: string): Promise<{ readonly id: string; readonly userId: string; readonly expiresAt: Date; readonly revokedAt: Date | null; readonly lastSeenAt: Date } | null>;
   touchSession(id: string, seenAt: Date): Promise<void>;
   revokeSession(tokenHash: string): Promise<void>;
@@ -31,7 +31,7 @@ export class AuthenticationService {
     private readonly rateLimiter?: AuthenticationRateLimiter,
   ) {}
 
-  async login(identifier: string, password: string, origin: string, correlationId = randomUUID()) {
+  async login(identifier: string, password: string, origin: string, userAgent: string | null = null, correlationId = randomUUID()) {
     const normalized = identifier.trim().toLowerCase(); const identifierHash = secretHash(normalized); const originHash = secretHash(origin);
     const limited = await this.rateLimiter?.check(identifierHash, originHash, 'login');
     if (limited?.status === 'error') return limited;
@@ -49,12 +49,12 @@ export class AuthenticationService {
     await this.store.clearFailures(account.userId);
     await this.store.recordAttempt({ userId: account.userId, identifierHash, outcome: 'success', originHash, correlationId });
     if (account.twoFactorEnabled) return { status: 'unauthenticated' as const, code: 'UNAUTHENTICATED' as const, message: 'Two-factor verification required.', reason: 'two_factor_required' as const, pendingUserId: account.userId };
-    return this.issueSession(account.userId, originHash, null);
+    return this.issueSession(account.userId, originHash, null, userAgent);
   }
 
-  async issueSession(userId: string, originHash: string, rotatedFrom: string | null) {
+  async issueSession(userId: string, originHash: string, rotatedFrom: string | null, userAgent: string | null = null) {
     const token = randomOpaqueToken();
-    await this.store.createSession({ id: randomUUID(), userId, tokenHash: secretHash(token), expiresAt: new Date(this.now().getTime() + 8 * 60 * 60_000), originHash, rotatedFrom });
+    await this.store.createSession({ id: randomUUID(), userId, tokenHash: secretHash(token), expiresAt: new Date(this.now().getTime() + 8 * 60 * 60_000), originHash, userAgent: userAgent?.slice(0, 512) ?? null, rotatedFrom });
     await this.store.recordSecurityEvent({userId,eventType:rotatedFrom?'session_rotated':'session_created',originHash,correlationId:randomUUID()});
     return { status: 'success' as const, data: { token, userId, expiresAt: new Date(this.now().getTime() + 8 * 60 * 60_000).toISOString() } };
   }
@@ -71,11 +71,11 @@ export class AuthenticationService {
     return { status: 'success' as const, data: { userId: session.userId, sessionId: session.id, expiresAt: session.expiresAt.toISOString() } };
   }
 
-  async rotateSession(token: string, origin: string) {
+  async rotateSession(token: string, origin: string, userAgent: string | null = null) {
     const current = await this.store.findSession(secretHash(token));
     if (!current || current.revokedAt || current.expiresAt <= this.now()) return { status: 'unauthenticated' as const, reason: 'session_expired' as const };
     await this.store.revokeSession(secretHash(token));
-    return this.issueSession(current.userId, secretHash(origin), current.id);
+    return this.issueSession(current.userId, secretHash(origin), current.id, userAgent);
   }
 
   async logout(token: string) { const current=await this.store.findSession(secretHash(token)); await this.store.revokeSession(secretHash(token)); await this.store.recordSecurityEvent({userId:current?.userId??null,eventType:'session_revoked',correlationId:randomUUID()}); return { status: 'success' as const, data: undefined }; }
@@ -95,7 +95,7 @@ export class AuthenticationService {
     return consumed ? { status: 'success' as const, data: undefined } : genericLoginFailure;
   }
 
-  async changePassword(userId: string, currentPassword: string, newPassword: string, origin = 'unknown') {
+  async changePassword(userId: string, currentPassword: string, newPassword: string, origin = 'unknown', userAgent: string | null = null) {
     const account = await this.store.findAccountByUserId(userId);
     if (!account || account.state !== 'active' || !(await verifyPassword(currentPassword, account.passwordHash))) {
       return { status: 'validation_failure' as const, code: 'VALIDATION_FAILED' as const, message: 'Password was not changed.', fieldErrors: [{ field: 'currentPassword', code: 'INVALID_CURRENT_PASSWORD', message: 'The current password is not correct.', guidance: 'Enter the password you currently use to sign in.' }], focusField: 'currentPassword' as const };
@@ -104,6 +104,6 @@ export class AuthenticationService {
     if (await verifyPassword(newPassword, account.passwordHash)) return { status: 'validation_failure' as const, code: 'VALIDATION_FAILED' as const, message: 'Password was not changed.', fieldErrors: [{ field: 'newPassword', code: 'PASSWORD_UNCHANGED', message: 'The new password matches the current password.', guidance: 'Choose a different password.' }], focusField: 'newPassword' as const };
     await this.store.changePassword(userId, await hashPassword(newPassword));
     await this.store.recordSecurityEvent({ userId, eventType: 'password_changed', originHash: secretHash(origin), correlationId: randomUUID() });
-    return this.issueSession(userId, secretHash(origin), null);
+    return this.issueSession(userId, secretHash(origin), null, userAgent);
   }
 }

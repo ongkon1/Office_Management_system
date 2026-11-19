@@ -115,8 +115,8 @@ function employeeRef(employeeId: string) {
   };
 }
 
-function userViews(): readonly UserAdminView[] {
-  return listDemoAccounts().map<UserAdminView>((account) => ({
+function userViews(archived = false): readonly UserAdminView[] {
+  return listDemoAccounts().filter((account) => archived ? account.status === 'inactive' : account.status !== 'inactive').map<UserAdminView>((account) => ({
     userId: account.userId,
     employee: employeeRef(account.employeeId),
     email: account.email,
@@ -820,6 +820,12 @@ export const mockAdminService: AdminService = {
     return success(userViews());
   },
 
+  async listArchivedUsers(userId) {
+    await delay();
+    if (!isAdministrator(userId)) return denied(ADMIN_DENIAL.message, ADMIN_DENIAL.guidance);
+    return success(userViews(true));
+  },
+
   async updateEmployeeAccessRole(userId, targetUserId, role: EmployeeAccessRole) {
     await delay();
     if (!isAdministrator(userId)) return denied(ADMIN_DENIAL.message, ADMIN_DENIAL.guidance);
@@ -864,7 +870,7 @@ export const mockAdminService: AdminService = {
       return {
         status: 'conflict' as const,
         code: 'CONFLICT' as const,
-        message: 'You cannot remove your own account access.',
+        message: 'You cannot archive your own account.',
         guidance: 'Ask another Super Administrator to manage this account.',
       };
     }
@@ -872,15 +878,15 @@ export const mockAdminService: AdminService = {
       return {
         status: 'conflict' as const,
         code: 'CONFLICT' as const,
-        message: 'This account is already inactive.',
-        guidance: 'No further removal action is required.',
+        message: 'This account is already archived.',
+        guidance: 'No further archive action is required.',
       };
     }
     const cleanReason = reason.trim();
     if (cleanReason.length < 5) {
       return invalid(
         'reason',
-        'Enter a reason for removing this user\u2019s access.',
+        'Enter a reason for archiving this user.',
         'Use at least 5 characters so the audit record explains the decision.',
       );
     }
@@ -895,6 +901,18 @@ export const mockAdminService: AdminService = {
       { status: 'inactive' },
     );
     return success(userViews());
+  },
+
+  async listSessions(userId) {
+    await delay();
+    if (!isAdministrator(userId)) return denied(ADMIN_DENIAL.message, ADMIN_DENIAL.guidance);
+    return success([]);
+  },
+
+  async forceLogoutSession(userId) {
+    await delay();
+    if (!isAdministrator(userId)) return denied(ADMIN_DENIAL.message, ADMIN_DENIAL.guidance);
+    return success(undefined);
   },
 
   async listRoles(userId) {

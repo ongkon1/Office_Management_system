@@ -37,6 +37,7 @@ const bodySchema=z.discriminatedUnion('action',[
 ]);
 
 function source(request:NextRequest){return request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? request.headers.get('x-real-ip') ?? 'unknown';}
+function userAgent(request:NextRequest){return request.headers.get('user-agent')?.slice(0,512) ?? null;}
 function setSession(response:NextResponse,token:string,rememberMe=true){const definition=cookieDefinition();response.cookies.set(definition.name,token,{httpOnly:definition.httpOnly,secure:definition.secure,sameSite:definition.sameSite,path:definition.path,...(rememberMe?{maxAge:definition.maxAge}:{})});}
 function clearSession(response:NextResponse){const definition=cookieDefinition();response.cookies.set(definition.name,'',{httpOnly:true,secure:definition.secure,sameSite:'lax',path:'/',maxAge:0});}
 function challengeSecret(){const value=process.env.BETTER_AUTH_SECRET;if(!value||value.length<32)throw new Error('BETTER_AUTH_SECRET is not configured');return value;}
@@ -66,7 +67,7 @@ export async function POST(request:NextRequest){
     const auth=createAuthenticationService(db().pool); const origin=source(request);
     switch(parsed.action){
       case 'login': {
-        const result=await auth.login(parsed.input.identifier,parsed.input.password,origin);
+        const result=await auth.login(parsed.input.identifier,parsed.input.password,origin,userAgent(request));
         if(result.status==='permission_denied') return json(result,403);
         if(result.status==='error') return json(result,429);
         if(result.status==='unauthenticated') {
@@ -78,7 +79,7 @@ export async function POST(request:NextRequest){
         const response=json({status:'success',data:{requiresTwoFactor:false,user:sessionUser.data}} as const); setSession(response,result.data.token,parsed.input.rememberMe); return response;
       }
       case 'refresh': {
-        const token=sessionToken(request); if(!token)return noSession(); const rotated=await auth.rotateSession(token,origin); if(rotated.status!=='success'){const response=noSession();clearSession(response);return response;}
+        const token=sessionToken(request); if(!token)return noSession(); const rotated=await auth.rotateSession(token,origin,userAgent(request)); if(rotated.status!=='success'){const response=noSession();clearSession(response);return response;}
         const validated=await auth.validateSession(rotated.data.token); if(validated.status!=='success')return noSession(); const result=await userResult(validated.data.userId,rotated.data.expiresAt); const response=json(result); if(result.status==='success')setSession(response,rotated.data.token); return response;
       }
       case 'logout': {const token=sessionToken(request);if(token)await auth.logout(token);const response=json({status:'success',data:undefined} as const);clearSession(response);return response;}
@@ -86,7 +87,7 @@ export async function POST(request:NextRequest){
       case 'reset-password': return json(await auth.resetPassword(parsed.input.identifier,parsed.input.token,parsed.input.password));
       case 'change-password': {
         const token=sessionToken(request);if(!token)return noSession();const current=await auth.validateSession(token);if(current.status!=='success')return noSession();
-        const changed=await auth.changePassword(current.data.userId,parsed.input.currentPassword,parsed.input.newPassword,origin);if(changed.status!=='success')return json(changed,changed.status==='validation_failure'?400:401);
+        const changed=await auth.changePassword(current.data.userId,parsed.input.currentPassword,parsed.input.newPassword,origin,userAgent(request));if(changed.status!=='success')return json(changed,changed.status==='validation_failure'?400:401);
         const response=json({status:'success',data:undefined} as const);setSession(response,changed.data.token);return response;
       }
       case 'verify-two-factor': {
@@ -94,7 +95,7 @@ export async function POST(request:NextRequest){
         const authStore=new MysqlAuthenticationStore(db().pool);const limited=await new AuthenticationRateLimiter(authStore).check(secretHash(userId),secretHash(origin),'two_factor');if(limited.status==='error')return json(limited,429);
         const twoFactor=createTwoFactorService(db().pool);const verified=/^\d{6}$/.test(parsed.input.code)?await twoFactor.verify(userId,parsed.input.code):await twoFactor.recover(userId,parsed.input.code);
         if(!verified)return json({status:'validation_failure',code:'VALIDATION_FAILED',message:'That code is not valid.',fieldErrors:[{field:'code',code:'INVALID_CODE',message:'That code is not valid or has expired.',guidance:'Check the current authenticator code or use an unused recovery code.'}],focusField:'code'} as const,400);
-        await authStore.recordSecurityEvent({userId,eventType:'two_factor_verified',originHash:secretHash(origin),correlationId:randomUUID()});const issued=await auth.issueSession(userId,secretHash(origin),null);const user=await userResult(userId,issued.data.expiresAt);if(user.status!=='success')return json(user,401);const response=json(user);setSession(response,issued.data.token);clearChallenge(response);return response;
+        await authStore.recordSecurityEvent({userId,eventType:'two_factor_verified',originHash:secretHash(origin),correlationId:randomUUID()});const issued=await auth.issueSession(userId,secretHash(origin),null,userAgent(request));const user=await userResult(userId,issued.data.expiresAt);if(user.status!=='success')return json(user,401);const response=json(user);setSession(response,issued.data.token);clearChallenge(response);return response;
       }
       case 'resend-two-factor': return json({status:'success',data:{nextResendAvailableAt:new Date(Date.now()+30_000).toISOString()}} as const);
     }

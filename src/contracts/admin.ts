@@ -144,6 +144,23 @@ export interface UserAdminView {
   readonly sensitivePermissions: readonly string[];
 }
 
+export type SessionStatus = 'online' | 'idle' | 'expired';
+
+export interface AdminSessionView {
+  readonly sessionId: string;
+  readonly userId: string;
+  readonly employee: EmployeeRef;
+  readonly roleLabel: string;
+  readonly browserLabel: string;
+  readonly deviceLabel: string;
+  readonly status: SessionStatus;
+  readonly statusLabel: 'Online' | 'Idle' | 'Expired';
+  readonly lastActivityLabel: string;
+  readonly expiresAtLabel: string;
+  readonly isCurrentSession: boolean;
+  readonly canForceLogout: boolean;
+}
+
 /** Roles that a Super Administrator may assign from user management. */
 export type EmployeeAccessRole = 'employee' | 'team_lead' | 'hr_manager';
 
@@ -302,6 +319,7 @@ export interface AdminService {
   ): Promise<Result<readonly DivisionAdminView[]>>;
 
   listUsers(userId: string): Promise<Result<readonly UserAdminView[]>>;
+  listArchivedUsers(userId: string): Promise<Result<readonly UserAdminView[]>>;
   updateEmployeeAccessRole(
     userId: string,
     targetUserId: string,
@@ -312,6 +330,8 @@ export interface AdminService {
     targetUserId: string,
     reason: string,
   ): Promise<Result<readonly UserAdminView[]>>;
+  listSessions(userId: string): Promise<Result<readonly AdminSessionView[]>>;
+  forceLogoutSession(userId: string, sessionId: string): Promise<Result<void>>;
   listRoles(userId: string): Promise<Result<readonly RoleAdminView[]>>;
   setRolePermission(
     userId: string,

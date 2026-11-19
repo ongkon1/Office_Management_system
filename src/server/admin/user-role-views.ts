@@ -5,6 +5,7 @@ import type { Pool, PoolConnection, RowDataPacket } from 'mysql2/promise';
 import { isDuplicateKeyError, nextRecordCode } from '@/server/organization/record-codes';
 import type {
   AdminService,
+  AdminSessionView,
   AuditFilters,
   AuditLogView,
   BrandLogoAsset,
@@ -23,6 +24,7 @@ import type { PermissionKey, RoleKey, StoredRoleKey } from '@/contracts/domain';
 import type { Result } from '@/contracts/results';
 import { success } from '@/contracts/results';
 import { formatDate, formatTimestamp } from '@/lib/format';
+import { sessionPresenceStatus, summarizeUserAgent } from '@/lib/session-presence';
 import { loadActorPolicyContext } from '@/server/authorization/mysql-context';
 import { AuditWriter, MysqlAuditSink } from '@/server/audit/writer';
 import { AuthenticationService } from '@/server/authentication/service';
@@ -36,6 +38,12 @@ interface UserRow extends RowDataPacket {
 interface DivisionRow extends RowDataPacket { user_id: string; id: string; name: string; code: string; restricted: number }
 interface PermissionRow extends RowDataPacket { role_key: StoredRoleKey; permission_key: string; name: string; sensitivity: string; granted: number }
 interface RoleRow extends RowDataPacket { id: string; role_key: StoredRoleKey; name: string; is_active: number; user_count: number }
+interface SessionAdminRow extends RowDataPacket {
+  session_id: string; user_id: string; expires_at: Date; revoked_at: Date | null;
+  last_seen_at: Date; user_agent: string | null; employee_id: string;
+  employee_code: string; display_name: string; job_title: string | null;
+  image_url: string | null; roles: string | null;
+}
 
 const ROLE_LABEL: Readonly<Record<StoredRoleKey, string>> = {
   super_admin: 'Super Administrator', team_lead: 'Team Lead', employee: 'Employee',
@@ -83,6 +91,15 @@ export class BackendUserRoleAdmin implements AdminService {
 
   private async authenticated(userId:string){const actor=await this.actor();return actor?.userId===userId?actor:null;}
 
+  private async administratorSession(userId: string) {
+    const session = await this.auth.validateSession(this.sessionToken);
+    if (session.status !== 'success') return null;
+    const actor = await loadActorPolicyContext(this.pool, session.data.userId, new Date().toISOString().slice(0, 10));
+    return actor?.userId === userId && actor.roles.includes('super_admin')
+      ? { actor, sessionId: session.data.sessionId }
+      : null;
+  }
+
   async getBranding(userId:string):Promise<Result<OrganizationBrandingView>>{if(!await this.authenticated(userId))return absent();const [rows]=await this.pool.execute<(RowDataPacket&{logo_payload:unknown})[]>('SELECT logo_payload FROM organization_branding WHERE id=1');const value=rows[0]?.logo_payload;const logo=value?(typeof value==='string'?JSON.parse(value):value) as BrandLogoAsset:null;return success({productName:'PowerInAI',logo});}
   async updateBranding(userId:string,logo:BrandLogoAsset|null){const actor=await this.administrator(userId);if(!actor)return denied();if(logo){if(!['image/png','image/jpeg','image/webp'].includes(logo.mediaType))return invalid('logo','Choose a PNG, JPEG, or WebP logo.','Convert the image and try again.');if(!Number.isSafeInteger(logo.sizeBytes)||logo.sizeBytes<=0||logo.sizeBytes>1_048_576)return invalid('logo','The logo must be no larger than 1 MB.','Compress or resize the image.');if(!logo.dataUrl.startsWith(`data:${logo.mediaType};base64,`))return invalid('logo','The selected logo could not be read safely.','Choose the original image file again.');}await this.pool.execute('UPDATE organization_branding SET logo_payload=?,updated_by_user_id=?,version=version+1 WHERE id=1',[logo?JSON.stringify(logo):null,userId]);await this.audit.append({actorUserId:actor.userId,action:'branding.updated',resourceType:'organization_branding',resourceId:null,scope:{},correlationId:randomUUID(),before:'protected',after:logo?{fileName:logo.fileName}:null});return this.getBranding(userId);}
 
@@ -109,7 +126,7 @@ export class BackendUserRoleAdmin implements AdminService {
         a.role_in_division,a.is_primary,a.allocation_percent_basis_points,a.effective_from,a.effective_to
       FROM employee_division_assignments a JOIN employees e ON e.id=a.employee_id JOIN users u ON u.id=e.user_id
       LEFT JOIN departments dep ON dep.id=a.department_id
-      WHERE a.division_id=? AND a.is_active=TRUE AND a.effective_from<=CURRENT_DATE AND (a.effective_to IS NULL OR a.effective_to>=CURRENT_DATE)
+      WHERE a.division_id=? AND a.is_active=TRUE AND e.status='active' AND u.status='active' AND a.effective_from<=CURRENT_DATE AND (a.effective_to IS NULL OR a.effective_to>=CURRENT_DATE)
       ORDER BY e.display_name`,[id]);
     const [projects]=await this.pool.execute<Row[]>(`SELECT p.id,p.project_code,p.name,p.status,m.display_name manager_name,
         (SELECT COUNT(*) FROM tasks t WHERE t.project_id=p.id AND t.is_active=TRUE AND t.status<>'completed') open_tasks
@@ -155,13 +172,13 @@ export class BackendUserRoleAdmin implements AdminService {
   }
   async setDivisionActive(userId:string,id:string,isActive:boolean){const actor=await this.administrator(userId);if(!actor)return denied();const current=(await this.divisionViews()).find(item=>item.id===id);if(!current)return absent();if(!isActive&&current.deactivationBlockers.length)return conflict(`${current.name} still has active references.`,current.deactivationBlockers.join(' '));await this.pool.execute('UPDATE divisions SET is_active=?,version=version+1 WHERE id=?',[isActive,id]);await this.audit.append({actorUserId:actor.userId,action:isActive?'division.activated':'division.deactivated',resourceType:'division',resourceId:id,scope:{},correlationId:randomUUID(),before:{isActive:current.isActive},after:{isActive}});return this.listDivisions(userId);}
 
-  async listUsers(userId: string): Promise<Result<readonly UserAdminView[]>> {
-    if (!await this.administrator(userId)) return denied();
+  private async userViews(archived: boolean): Promise<readonly UserAdminView[]> {
     const [users] = await this.pool.execute<UserRow[]>(`SELECT u.id user_id,e.id employee_id,e.employee_code,e.display_name,e.job_title,u.image_url,u.email,u.status,
       u.two_factor_enabled,u.last_login_at,r.role_key
       FROM users u JOIN employees e ON e.user_id=u.id
       LEFT JOIN user_roles ur ON ur.user_id=u.id AND ur.effective_from<=CURRENT_DATE AND (ur.effective_to IS NULL OR ur.effective_to>=CURRENT_DATE)
       LEFT JOIN roles r ON r.id=ur.role_id
+      WHERE ${archived ? "u.status='inactive' OR e.status='inactive'" : "u.status<>'inactive' AND e.status='active'"}
       ORDER BY e.display_name,r.role_key`);
     const [divisions] = await this.pool.execute<DivisionRow[]>(`SELECT e.user_id,d.id,d.name,d.division_key code,d.is_government restricted
       FROM employees e JOIN employee_division_assignments a ON a.employee_id=e.id AND a.is_active=TRUE
@@ -173,7 +190,7 @@ export class BackendUserRoleAdmin implements AdminService {
       AND (g.effective_to IS NULL OR g.effective_to>=CURRENT_DATE)`);
     const grouped = new Map<string, UserRow[]>();
     for (const row of users) grouped.set(row.user_id, [...(grouped.get(row.user_id) ?? []), row]);
-    return success([...grouped.values()].map(rows => {
+    return [...grouped.values()].map(rows => {
       const first = rows[0];
       const roles = [...new Set(rows.map(row => row.role_key).filter((role): role is RoleKey => role !== null && role !== 'finance_manager'))];
       const primaryRole = (['super_admin','hr_manager','team_lead','management','employee'] as RoleKey[]).find(role => roles.includes(role)) ?? 'employee';
@@ -186,7 +203,17 @@ export class BackendUserRoleAdmin implements AdminService {
         scopeSummary:ROLE_SCOPE[primaryRole], divisions:divisionRefs,
         sensitivePermissions:grants.filter(g => g.user_id === first.user_id).map(g => g.permission_key),
       };
-    }));
+    });
+  }
+
+  async listUsers(userId: string): Promise<Result<readonly UserAdminView[]>> {
+    if (!await this.administrator(userId)) return denied();
+    return success(await this.userViews(false));
+  }
+
+  async listArchivedUsers(userId: string): Promise<Result<readonly UserAdminView[]>> {
+    if (!await this.administrator(userId)) return denied();
+    return success(await this.userViews(true));
   }
 
   async updateEmployeeAccessRole(userId: string, targetUserId: string, role: EmployeeAccessRole) {
@@ -214,11 +241,11 @@ export class BackendUserRoleAdmin implements AdminService {
 
   async deactivateUser(userId: string, targetUserId: string, reason: string) {
     const actor=await this.administrator(userId); if(!actor)return denied();
-    if(targetUserId===userId)return conflict('You cannot remove your own account access.','Ask another Super Administrator to manage this account.');
-    if(reason.trim().length<5)return invalid('reason','Enter a reason for removing this user\'s access.','Use at least 5 characters for the audit record.');
+    if(targetUserId===userId)return conflict('You cannot archive your own account.','Ask another Super Administrator to manage this account.');
+    if(reason.trim().length<5)return invalid('reason','Enter a reason for archiving this user.','Use at least 5 characters for the audit record.');
     const changed=await this.transaction(async connection=>{
       const [rows]=await connection.execute<(RowDataPacket&{status:string;employee_id:string})[]>('SELECT u.status,e.id employee_id FROM users u JOIN employees e ON e.user_id=u.id WHERE u.id=? FOR UPDATE',[targetUserId]);
-      if(!rows[0])return absent(); if(rows[0].status==='inactive')return conflict('This account is already inactive.','No further removal action is required.');
+      if(!rows[0])return absent(); if(rows[0].status==='inactive')return conflict('This account is already archived.','No further archive action is required.');
       await connection.execute("UPDATE users SET status='inactive',version=version+1 WHERE id=?",[targetUserId]);
       await connection.execute("UPDATE employees SET status='inactive',version=version+1 WHERE user_id=?",[targetUserId]);
       await connection.execute('UPDATE auth_sessions SET revoked_at=COALESCE(revoked_at,UTC_TIMESTAMP(6)) WHERE user_id=?',[targetUserId]);
@@ -227,6 +254,70 @@ export class BackendUserRoleAdmin implements AdminService {
     if(changed.status!=='success')return changed;
     await this.audit.append({actorUserId:actor.userId,action:'user.deactivated',resourceType:'user',resourceId:targetUserId,scope:{},reason:reason.trim(),correlationId:randomUUID(),before:{status:changed.data.previousStatus},after:{status:'inactive'}});
     return this.listUsers(userId);
+  }
+
+  async listSessions(userId: string): Promise<Result<readonly AdminSessionView[]>> {
+    const administrator = await this.administratorSession(userId);
+    if (!administrator) return denied();
+    const [rows] = await this.pool.execute<SessionAdminRow[]>(`SELECT s.id session_id,s.user_id,s.expires_at,s.revoked_at,s.last_seen_at,s.user_agent,
+      e.id employee_id,e.employee_code,e.display_name,e.job_title,u.image_url,
+      GROUP_CONCAT(DISTINCT r.role_key ORDER BY r.role_key SEPARATOR ',') roles
+      FROM auth_sessions s JOIN users u ON u.id=s.user_id JOIN employees e ON e.user_id=u.id
+      LEFT JOIN user_roles ur ON ur.user_id=u.id AND ur.effective_from<=CURRENT_DATE AND (ur.effective_to IS NULL OR ur.effective_to>=CURRENT_DATE)
+      LEFT JOIN roles r ON r.id=ur.role_id
+      WHERE u.status='active' AND e.status='active'
+      AND (s.expires_at>UTC_TIMESTAMP(6) OR s.created_at>=DATE_SUB(UTC_TIMESTAMP(6),INTERVAL 30 DAY))
+      GROUP BY s.id,s.user_id,s.expires_at,s.revoked_at,s.last_seen_at,s.user_agent,e.id,e.employee_code,e.display_name,e.job_title,u.image_url
+      ORDER BY s.last_seen_at DESC LIMIT 500`);
+    const now = new Date();
+    const rolePriority: readonly RoleKey[] = ['super_admin','hr_manager','management','team_lead','employee'];
+    const rank: Readonly<Record<AdminSessionView['status'], number>> = { online: 0, idle: 1, expired: 2 };
+    return success(rows.map((row): AdminSessionView => {
+      const status = sessionPresenceStatus({ lastSeenAt: row.last_seen_at, expiresAt: row.expires_at, revokedAt: row.revoked_at }, now);
+      const roles = (row.roles?.split(',') ?? []).filter((role): role is RoleKey => rolePriority.includes(role as RoleKey));
+      const primaryRole = rolePriority.find((role) => roles.includes(role)) ?? 'employee';
+      const userAgent = summarizeUserAgent(row.user_agent);
+      return {
+        sessionId: row.session_id,
+        userId: row.user_id,
+        employee: { id: row.employee_id, employeeCode: row.employee_code, fullName: row.display_name, designation: row.job_title, avatarUrl: row.image_url },
+        roleLabel: ROLE_LABEL[primaryRole],
+        ...userAgent,
+        status,
+        statusLabel: status === 'online' ? 'Online' : status === 'idle' ? 'Idle' : 'Expired',
+        lastActivityLabel: formatTimestamp(row.last_seen_at.toISOString()),
+        expiresAtLabel: formatTimestamp(row.expires_at.toISOString()),
+        isCurrentSession: row.session_id === administrator.sessionId,
+        canForceLogout: status !== 'expired' && row.session_id !== administrator.sessionId,
+      };
+    }).sort((left, right) => rank[left.status] - rank[right.status]));
+  }
+
+  async forceLogoutSession(userId: string, sessionId: string): Promise<Result<void>> {
+    const administrator = await this.administratorSession(userId);
+    if (!administrator) return denied();
+    if (sessionId === administrator.sessionId) return conflict('You cannot force logout your current session.','Use Sign out from the account menu instead.');
+    const [rows] = await this.pool.execute<(RowDataPacket & { user_id: string; expires_at: Date; revoked_at: Date | null })[]>(
+      'SELECT user_id,expires_at,revoked_at FROM auth_sessions WHERE id=? LIMIT 1', [sessionId],
+    );
+    const target = rows[0];
+    if (!target) return absent();
+    if (target.revoked_at || target.expires_at <= new Date()) return conflict('This session has already expired.','Refresh the session list to see its latest status.');
+    const [result] = await this.pool.execute<import('mysql2/promise').ResultSetHeader>(
+      'UPDATE auth_sessions SET revoked_at=UTC_TIMESTAMP(6) WHERE id=? AND revoked_at IS NULL AND expires_at>UTC_TIMESTAMP(6)', [sessionId],
+    );
+    if (result.affectedRows !== 1) return conflict('This session is no longer active.','Refresh the session list and try again.');
+    await this.audit.append({
+      actorUserId: administrator.actor.userId,
+      action: 'session.force_logged_out',
+      resourceType: 'auth_session',
+      resourceId: sessionId,
+      scope: {},
+      correlationId: randomUUID(),
+      before: { userId: target.user_id, status: 'active' },
+      after: { userId: target.user_id, status: 'revoked' },
+    });
+    return success(undefined);
   }
 
   async listRoles(userId: string): Promise<Result<readonly RoleAdminView[]>> {

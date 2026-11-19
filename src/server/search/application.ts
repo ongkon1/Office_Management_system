@@ -138,7 +138,7 @@ export class SearchApplication {
     const one = async (sql: string) => (await this.pool.execute<Row[]>(sql, [id]))[0][0] ?? null;
     switch (kind) {
       case 'employee': {
-        const row = await one('SELECT id,display_name,employee_code,job_title FROM employees WHERE id=?');
+        const row = await one("SELECT e.id,e.display_name,e.employee_code,e.job_title FROM employees e JOIN users u ON u.id=e.user_id WHERE e.id=? AND e.status='active' AND u.status='active'");
         if (!row || !(await employeeReach(this.pool, actor, id))) return null;
         return { title: String(row.display_name), subtitle: `${row.employee_code}${row.job_title ? ` · ${row.job_title}` : ''}`, text: `${row.employee_code} ${row.job_title ?? ''}`, href: `/employees/${id}` };
       }

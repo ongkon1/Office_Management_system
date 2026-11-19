@@ -100,6 +100,13 @@ describe('buildNavigation', () => {
     expect(hrefs).toContain('/team/timesheets');
     expect(selectBottomNavItems(groups).map((item) => item.href)).toContain('/timesheets');
   });
+
+  it('shows active sessions only in Super Administrator navigation', () => {
+    for (const role of ALL_ROLES) {
+      const hrefs = hrefsFor({ role, flags: DEMO_FEATURE_FLAGS, permissions: [] });
+      expect(hrefs.includes('/admin/sessions')).toBe(role === 'super_admin');
+    }
+  });
 });
 
 describe('selectBottomNavItems', () => {

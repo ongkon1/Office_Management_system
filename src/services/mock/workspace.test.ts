@@ -624,7 +624,7 @@ describe('roles and permissions (FE-0731)', () => {
     expect(protectedRole.status).toBe('conflict');
   });
 
-  it('deactivates instead of deleting a user and records the reason', async () => {
+  it('archives instead of deleting a user, excludes them from active users and records the reason', async () => {
     const removed = await mockAdminService.deactivateUser(
       ADMIN,
       'usr-1002',
@@ -633,8 +633,18 @@ describe('roles and permissions (FE-0731)', () => {
     expect(removed.status).toBe('success');
     if (removed.status === 'success') {
       const account = removed.data.find((item) => item.userId === 'usr-1002');
-      expect(account?.status).toBe('inactive');
-      expect(removed.data).toHaveLength(13);
+      expect(account).toBeUndefined();
+      expect(removed.data.every((item) => item.status !== 'inactive')).toBe(true);
+    }
+
+    const archive = await mockAdminService.listArchivedUsers(ADMIN);
+    expect(archive.status).toBe('success');
+    if (archive.status === 'success') {
+      expect(archive.data).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ userId: 'usr-1002', status: 'inactive' }),
+        ]),
+      );
     }
 
     const audit = await mockAdminService.getAuditLog(ADMIN, {
