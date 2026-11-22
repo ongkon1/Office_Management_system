@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { Pool, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
+import type { Pool, PoolConnection, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 import type { RaisedTask, TaskReviewRepository } from './task-review';
 import { primaryLeadOfEmployee } from './department-authority';
 
@@ -11,8 +11,14 @@ interface TaskRow extends RowDataPacket {
 }
 
 export class MysqlTaskReviewRepository implements TaskReviewRepository {
+  /**
+   * A pool, or one transaction's connection: raising a task runs entirely on
+   * the connection so the task, its audit, its notification and its
+   * idempotency record commit together. Deciding needs the pool, because it
+   * opens a transaction of its own.
+   */
   constructor(
-    private pool: Pool,
+    private pool: Pool | PoolConnection,
     private today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date()),
   ) {}
 
@@ -108,6 +114,7 @@ export class MysqlTaskReviewRepository implements TaskReviewRepository {
   }
 
   async decideAtomic(input: Parameters<TaskReviewRepository['decideAtomic']>[0]) {
+    if (!('getConnection' in this.pool)) throw new Error('Deciding a task review opens its own transaction; construct the repository with a pool.');
     const connection = await this.pool.getConnection();
     try {
       await connection.beginTransaction();

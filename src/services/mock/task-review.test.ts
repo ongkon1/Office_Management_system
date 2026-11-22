@@ -441,3 +441,14 @@ describe('the employee sees why a task is blocked', () => {
     expect(decided.data.reviewerName).toBe('Farhana Islam');
   });
 });
+
+describe('a repeated submit raises one task', () => {
+  it('returns the first task for the same request key, and refuses the key for different content', async () => {
+    const first = await mockTaskReviewService.create(EMPLOYEE, FORM, { idempotencyKey: 'repeat-0001' });
+    const again = await mockTaskReviewService.create(EMPLOYEE, FORM, { idempotencyKey: 'repeat-0001' });
+    expect(first.status).toBe('success');
+    expect(again).toEqual(first);
+    const changed = await mockTaskReviewService.create(EMPLOYEE, { ...FORM, title: 'Something else' }, { idempotencyKey: 'repeat-0001' });
+    expect(changed.status).toBe('conflict');
+  });
+});

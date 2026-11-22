@@ -640,6 +640,7 @@ export function TeamTaskBoard() {
       <TaskWorkflowBoard
         tasks={boardTasks}
         actorRole="team_lead"
+        viewerEmployeeId={user?.employeeId ?? null}
         onMoved={reload}
       />
       <Dialog
@@ -730,7 +731,7 @@ export function TeamTaskDetail({ taskId }: { taskId: string }) {
         <aside className="space-y-5">
           <Card>
             <CardHeader title="Change status" description="Every move is confirmed and creates no active time." />
-            <TaskDetailTransitions task={workflowTask} actorRole="team_lead" onMoved={reload} />
+            <TaskDetailTransitions task={workflowTask} actorRole="team_lead" viewerEmployeeId={user?.employeeId ?? null} onMoved={reload} />
           </Card>
           <Card>
             <CardHeader title="Supporting members" />
@@ -765,10 +766,11 @@ function teamBoardTask(task: TeamTaskView, viewerEmployeeId: string): WorkflowBo
     title: task.title,
     href: `/tasks/${task.id}`,
     project: {
+      id: task.projectId,
       code: projectCode || task.projectId,
       name: projectNameParts.join(' · ') || task.projectLabel,
     },
-    division: { name: task.division.name, code: task.division.code },
+    division: { id: task.division.id, name: task.division.name, code: task.division.code },
     assignee: task.assignee ? { id: task.assignee.id, fullName: task.assignee.fullName } : null,
     status: task.status,
     estimated: task.estimated,

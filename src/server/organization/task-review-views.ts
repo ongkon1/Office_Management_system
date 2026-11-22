@@ -1,5 +1,5 @@
 import 'server-only';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, RowDataPacket } from 'mysql2/promise';
 import type { TaskReviewService, EmployeeTaskOptionsView, TaskReviewQueueView, TaskReviewStateView } from '@/contracts/task-review';
 import type { Result } from '@/contracts/results';
@@ -23,7 +23,46 @@ export class BackendTaskReviewViews implements TaskReviewService {
   constructor(private readonly pool:Pool,private readonly sessionToken:string){this.auth=new AuthenticationService(new MysqlAuthenticationStore(pool));this.repo=new MysqlTaskReviewRepository(pool);this.app=new TaskReviewApplicationService(this.repo,new MysqlTaskReviewEffects(pool,new AuditWriter(new MysqlAuditSink(pool))));}
   private async identity(userId:string){const session=await this.auth.validateSession(this.sessionToken);return session.status==='success'&&session.data.userId===userId;}
   async options(userId:string):Promise<Result<EmployeeTaskOptionsView>>{if(!await this.identity(userId))return absent();const employee=await this.repo.employeeForUser(userId);if(!employee)return absent();const marks=employee.divisionIds.map(()=>'?').join(',')||"''";const [rows]=await this.pool.execute<Row[]>(`SELECT id,project_code,name,end_date FROM projects WHERE is_active=TRUE AND status='active' AND accepts_time_entries=TRUE AND division_id IN (${marks}) ORDER BY project_code`,employee.divisionIds);let reviewerName:string|null=null;if(!employee.isTeamLead&&employee.leadEmployeeId){const [lead]=await this.pool.execute<Row[]>('SELECT display_name FROM employees WHERE id=?',[employee.leadEmployeeId]);reviewerName=lead[0]?String(lead[0].display_name):null;}const requiresReview=!employee.isTeamLead;return success({projects:rows.map(row=>({value:String(row.id),label:`${String(row.project_code)} · ${String(row.name)}`})),canCreate:rows.length>0&&(!requiresReview||Boolean(employee.leadEmployeeId)),createBlockedReason:requiresReview&&!employee.leadEmployeeId?'You have no Team Lead assigned. Contact HR.':rows.length?null:'You are not assigned to a division with an active project.',requiresReview,reviewerName,maxDueDateHint:businessToday()});}
-  async create(userId:string,input:Parameters<TaskReviewService['create']>[1]){if(!await this.identity(userId))return absent();return this.app.raise(userId,input);}
+  /**
+   * Raise a self-task exactly once.
+   *
+   * Everything — the task, its audit entry, the Team Lead's notification and
+   * the idempotency record — commits in one transaction. Before this, the task
+   * was saved first and the rest ran separately, so a later failure left a
+   * saved task behind a "could not be completed" message, and every retry
+   * created another one; the form's idempotency key was also dropped here.
+   * A repeated key with the same input now returns the first task; a repeated
+   * key with different input is a conflict; two racing requests with one key
+   * meet at the record's unique index and only the first commits.
+   */
+  async create(userId:string,input:Parameters<TaskReviewService['create']>[1],options?:Parameters<TaskReviewService['create']>[2]):Promise<Result<{ readonly id: string }>>{
+    if(!await this.identity(userId))return absent();
+    const key=options?.idempotencyKey?.trim()??'';
+    if(key.length>128)return{status:'validation_failure',code:'VALIDATION_FAILED',message:'The request could not be identified.',focusField:'title',fieldErrors:[{field:'title',code:'INVALID_IDEMPOTENCY_KEY',message:'The request could not be identified.',guidance:'Reload the page and raise the task again.'}]};
+    const requestHash=createHash('sha256').update(JSON.stringify(input)).digest('hex');
+    if(key){const replay=await this.replayRaise(userId,key,requestHash);if(replay)return replay;}
+    const connection=await this.pool.getConnection();
+    try{
+      await connection.beginTransaction();
+      const app=new TaskReviewApplicationService(new MysqlTaskReviewRepository(connection),new MysqlTaskReviewEffects(connection,new AuditWriter(new MysqlAuditSink(connection))));
+      const result=await app.raise(userId,input);
+      if(result.status!=='success'){await connection.rollback();return result;}
+      if(key)await connection.execute("INSERT INTO idempotency_records(id,actor_user_id,operation_key,idempotency_key,request_hash,response_status,response_body,expires_at) VALUES(?,?,'task.raise',?,?,?,?,DATE_ADD(UTC_TIMESTAMP(6),INTERVAL 30 DAY))",[randomUUID(),userId,key,requestHash,result.status,JSON.stringify(result)]);
+      await connection.commit();
+      return result;
+    }catch(error){
+      await connection.rollback();
+      // A concurrent request with the same key committed first: answer with its task.
+      if(key&&(error as {errno?:number}).errno===1062){const replay=await this.replayRaise(userId,key,requestHash);if(replay)return replay;}
+      throw error;
+    }finally{connection.release();}
+  }
+  private async replayRaise(userId:string,key:string,requestHash:string):Promise<Result<{ readonly id: string }>|null>{
+    const [rows]=await this.pool.execute<Row[]>("SELECT request_hash,response_body FROM idempotency_records WHERE actor_user_id=? AND operation_key='task.raise' AND idempotency_key=?",[userId,key]);
+    if(!rows[0])return null;
+    if(rows[0].request_hash!==requestHash)return{status:'conflict',code:'CONFLICT',message:'This request was already used for a different task.',guidance:'Reload the page and raise the task again.'};
+    return (typeof rows[0].response_body==='string'?JSON.parse(rows[0].response_body):rows[0].response_body) as Result<{ readonly id: string }>;
+  }
   async queue(userId:string):Promise<Result<TaskReviewQueueView>>{if(!await this.identity(userId))return absent();const employee=await this.repo.employeeForUser(userId);if(!employee||!employee.isTeamLead)return success({rows:[],awaitingCount:0,href:'/tasks'});const [rows]=await this.pool.execute<Row[]>(`SELECT t.id,t.title,t.priority,t.due_date,t.estimated_minutes,t.description,t.created_at,p.project_code,p.name project_name,d.division_key,e.display_name creator_name FROM tasks t JOIN projects p ON p.id=t.project_id JOIN divisions d ON d.id=t.division_id JOIN employees e ON e.id=t.creator_employee_id JOIN employee_division_assignments a ON a.employee_id=t.creator_employee_id AND a.is_active=TRUE AND a.effective_from<=CURRENT_DATE AND (a.effective_to IS NULL OR a.effective_to>=CURRENT_DATE) LEFT JOIN departments dept ON dept.id=a.department_id AND dept.is_active=TRUE LEFT JOIN department_lead_assignments dla ON dla.department_id=dept.id AND dla.effective_from<=CURRENT_DATE AND (dla.effective_to IS NULL OR dla.effective_to>=CURRENT_DATE) WHERE t.review_state='pending_review' AND COALESCE(dla.lead_employee_id,a.lead_employee_id)=? GROUP BY t.id ORDER BY t.created_at`,[employee.id]);const result=rows.map(row=>({id:String(row.id),title:String(row.title),projectLabel:`${String(row.project_code)} · ${String(row.project_name)}`,divisionCode:String(row.division_key),requestedByName:String(row.creator_name),priority:String(row.priority??'medium') as TaskReviewQueueView['rows'][number]['priority'],dueDateLabel:row.due_date?formatDate(row.due_date instanceof Date?row.due_date.toISOString().slice(0,10):String(row.due_date)):null,estimated:toDurationView(Number(row.estimated_minutes??0)),description:row.description?String(row.description):null,requestedAtLabel:formatTimestamp(row.created_at instanceof Date?row.created_at.toISOString():String(row.created_at)),href:`/tasks/${String(row.id)}`}));return success({rows:result,awaitingCount:result.length,href:'/tasks'});}
   async decide(userId:string,taskId:string,input:Parameters<TaskReviewService['decide']>[2]){if(!await this.identity(userId))return absent();const result=await this.app.decide(userId,taskId,{...input,idempotencyKey:randomUUID()});if(result.status!=='success')return result;const [rows]=await this.pool.execute<Row[]>(`SELECT t.review_state,t.review_note,t.reviewed_at,e.display_name reviewer_name FROM tasks t LEFT JOIN employees e ON e.id=t.reviewer_employee_id WHERE t.id=?`,[taskId]);return rows[0]?success(stateView(rows[0] as Row&{review_state:unknown})):absent();}
 }

@@ -33,8 +33,8 @@ function employeeBoardTask(task: TaskSummaryView): WorkflowBoardTask {
     version: task.version,
     title: task.title,
     href: task.href,
-    project: { name: task.project.name, code: task.project.code },
-    division: { name: task.division.name, code: task.division.code },
+    project: { id: task.project.id, name: task.project.name, code: task.project.code },
+    division: { id: task.division.id, name: task.division.name, code: task.division.code },
     assignee: task.assignee ? { id: task.assignee.id, fullName: task.assignee.fullName } : null,
     status: task.status,
     estimated: task.estimated,
@@ -91,6 +91,7 @@ export function TaskList({ employeeId }: { employeeId: string }) {
       <TaskWorkflowBoard
         tasks={state.data.map(employeeBoardTask)}
         actorRole={user?.primaryRole ?? 'employee'}
+        viewerEmployeeId={user?.employeeId ?? null}
         onMoved={reload}
       />
     </PageContainer>
@@ -198,6 +199,7 @@ export function TaskDetail({ taskId }: { taskId: string }) {
       <TaskDetailTransitions
         task={workflowTask}
         actorRole={user?.primaryRole ?? 'employee'}
+        viewerEmployeeId={user?.employeeId ?? null}
         onMoved={reload}
       />
 

@@ -6,6 +6,8 @@ Covers `FE-0009` (role-to-navigation map), `FE-0010` (screen flows), `FE-0011` (
 
 Navigation is permission-aware (`REQ-NAV-005`): unauthorized destinations are hidden from navigation **and** still return an explicit denied state on direct routing. Flagged destinations disappear entirely when their feature flag is off.
 
+Within each role, the desktop sidebar is ordered by frequency of use: daily operational work first, review and reporting second, and occasional administration or self-service last. Scope remains explicit in the group labels so moving an item higher never blurs personal, team, or organization-wide data.
+
 Meeting Minutes (`/meeting-minutes`, flag `meetingMinutes`) is in every active role's navigation (`REQ-NAV-006`). Employee and Management/View-Only are read-only in it. No role gives it a mobile bottom-navigation slot; below 768 px it is reached from the navigation drawer. Its routes and rules are in Section 3.6.
 
 ### 1.1 Employee (`REQ-NAV-001`)
@@ -32,19 +34,23 @@ Default route after login: `/dashboard`.
 | Order | Label | Route | Flag | Mobile bottom nav |
 |---:|---|---|---|---|
 | 1 | Dashboard | `/dashboard` | — | Yes |
-| 2 | My Team | `/team` | — | Yes |
-| 3 | Team Timesheets | `/team/timesheets` | — | Yes |
-| 4 | Projects | `/projects` | — | Yes |
-| 5 | Tasks | `/tasks` | — | No |
-| 6 | Meeting Minutes | `/meeting-minutes` | `meetingMinutes` | No (drawer) |
-| 7 | Workload | `/workload` | `workloadPlanning` | No |
+| 2 | My Timesheet | `/timesheets` | — | Yes |
+| 3 | My Tasks | `/tasks` | — | No |
+| 4 | My Team | `/team` | — | Yes |
+| 5 | Team Timesheets | `/team/timesheets` | — | Yes |
+| 6 | Projects | `/projects` | — | Yes |
+| 7 | Meeting Minutes | `/meeting-minutes` | `meetingMinutes` | No (drawer) |
 | 8 | Requests | `/requests` | `wfhRequests` or `leaveManagement` | No |
-| 9 | Evaluations | `/evaluations` | `evaluations` | No |
+| 9 | Workload | `/workload` | `workloadPlanning` | No |
 | 10 | Reports | `/reports` | — | No |
-| 11 | Documents | `/documents` | `documents` | No |
-| 12 | Messages | `/messages` | `messages` | No |
+| 11 | Evaluations | `/evaluations` | `evaluations` | No |
+| 12 | Requisition | `/requisitions` | `requisitions` | No |
+| 13 | Conveyance | `/conveyance` | `conveyance` | No |
+| 14 | WFH | `/wfh` | `wfhRequests` | No |
+| 15 | Leave | `/leave` | `leaveManagement` | No |
+| 16 | Settings | `/settings` | — | No |
 
-A Team Lead is also an employee: their own timesheet, tasks, WFH, and leave remain reachable from the profile menu, in a distinct "My work" group, so personal and team scope never blur.
+A Team Lead is also an employee: their timesheet and personal tasks sit directly below Dashboard in a distinct **My work** group. Team destinations remain in **Team work**, while WFH, leave, and settings remain in **Self service**, so personal and team scope never blur.
 
 Default route after login: `/dashboard`.
 
@@ -56,10 +62,10 @@ Default route after login: `/dashboard`.
 | 2 | Employees | `/employees` | — | Yes |
 | 3 | Timesheets | `/hr/timesheets` | — | Yes |
 | 4 | Attendance | `/attendance` | `attendance` | Yes |
-| 5 | WFH | `/wfh` | `wfhRequests` | No |
-| 6 | Leave | `/leave` | `leaveManagement` | No |
-| 7 | Evaluations | `/evaluations` | `evaluations` | No |
-| 8 | Reports | `/reports` | — | No |
+| 5 | Reports | `/reports` | — | No |
+| 6 | WFH | `/wfh` | `wfhRequests` | No |
+| 7 | Leave | `/leave` | `leaveManagement` | No |
+| 8 | Evaluations | `/evaluations` | `evaluations` | No |
 | 9 | Holidays | `/admin/holidays` | — | No |
 | 10 | Documents | `/documents` | `documents` | No |
 | 11 | Meeting Minutes | `/meeting-minutes` | `meetingMinutes` | No (drawer) |
@@ -101,16 +107,23 @@ Default route after login: `/dashboard`.
 | Order | Label | Route |
 |---:|---|---|
 | 1 | Dashboard | `/dashboard` |
-| 2 | Divisions | `/admin/divisions` |
-| 3 | Users | `/admin/users` |
-| 4 | Roles and Permissions | `/admin/roles` |
-| 5 | Work Policies | `/admin/policies` |
-| 6 | Holidays | `/admin/holidays` |
-| 7 | Audit Log | `/admin/audit` |
-| 8 | Integrations | `/admin/integrations` (flagged, placeholder) |
-| 9 | Employees | `/employees` |
-| 10 | Reports | `/reports` |
-| 11 | Meeting Minutes | `/meeting-minutes` (flagged) |
+| 2 | Tasks | `/tasks` |
+| 3 | Employees | `/employees` |
+| 4 | Projects | `/projects` |
+| 5 | Reports | `/reports` |
+| 6 | Requisition | `/requisitions` (flagged) |
+| 7 | Conveyance | `/conveyance` (flagged) |
+| 8 | Meeting Minutes | `/meeting-minutes` (flagged) |
+| 9 | Users | `/admin/users` |
+| 10 | Departments | `/admin/departments` |
+| 11 | Divisions | `/admin/divisions` |
+| 12 | Active Sessions | `/admin/sessions` |
+| 13 | Work Policies | `/admin/policies` |
+| 14 | Holidays | `/admin/holidays` |
+| 15 | Roles and Permissions | `/admin/roles` |
+| 16 | Audit Log | `/admin/audit` |
+| 17 | Settings | `/settings` |
+| 18 | Integrations | `/admin/integrations` (flagged) |
 
 Meeting Minutes sits in the primary group, above the administration items.
 

@@ -210,6 +210,11 @@ function validate(input: EmployeeTaskFormInput, allowedProjectIds: readonly stri
 }
 
 let sequence = 500;
+/**
+ * Raised tasks by request key, so a repeated submit returns the first task —
+ * the same rule the MySQL service applies (`task.raise` idempotency records).
+ */
+let raisedByKey = new Map<string, { readonly fingerprint: string; readonly id: string }>();
 const nextId = () => `tsk-${(sequence += 1)}`;
 
 export const mockTaskReviewService: TaskReviewService = {
@@ -258,10 +263,18 @@ export const mockTaskReviewService: TaskReviewService = {
     } satisfies EmployeeTaskOptionsView);
   },
 
-  async create(userId, input) {
+  async create(userId, input, options) {
     await delay();
     const viewer = viewerOf(userId);
     if (!viewer) return notFound();
+    const requestKey = options?.idempotencyKey ? `${userId}:${options.idempotencyKey}` : null;
+    const fingerprint = JSON.stringify(input);
+    const earlier = requestKey ? raisedByKey.get(requestKey) : undefined;
+    if (earlier) {
+      return earlier.fingerprint === fingerprint
+        ? success({ id: earlier.id })
+        : conflict('This request was already used for a different task.', 'Reload the page and raise the task again.');
+    }
 
     if (viewer.primaryRole !== 'employee' && viewer.primaryRole !== 'team_lead') {
       return denied(
@@ -319,6 +332,7 @@ export const mockTaskReviewService: TaskReviewService = {
     };
 
     mockStore.addTask(task as ReturnType<typeof mockStore.tasks>[number]);
+    if (requestKey) raisedByKey.set(requestKey, { fingerprint, id: task.id });
     return success({ id: task.id });
   },
 
@@ -399,4 +413,5 @@ export const mockTaskReviewService: TaskReviewService = {
 /** Test seam mirroring the other mock services. */
 export function resetTaskReviewState(): void {
   sequence = 500;
+  raisedByKey = new Map();
 }

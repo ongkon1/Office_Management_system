@@ -106,7 +106,11 @@ export interface TaskReviewService {
   /** Projects and review policy for the signed-in person's self-task form. */
   options(userId: string): Promise<Result<EmployeeTaskOptionsView>>;
   /** Creates a self-assigned task; ordinary employees require review, Team Leads do not. */
-  create(userId: string, input: EmployeeTaskFormInput): Promise<Result<{ readonly id: string }>>;
+  create(
+    userId: string,
+    input: EmployeeTaskFormInput,
+    options?: { readonly idempotencyKey: string },
+  ): Promise<Result<{ readonly id: string }>>;
   /** Tasks awaiting this Team Lead's endorsement. */
   queue(userId: string): Promise<Result<TaskReviewQueueView>>;
   decide(

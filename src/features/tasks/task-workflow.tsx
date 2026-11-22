@@ -16,7 +16,7 @@ import {
   TriangleAlert,
   UserRound,
 } from 'lucide-react';
-import type { RoleKey, TaskStatus } from '@/contracts/domain';
+import type { RoleKey, TaskStatus, WorkLocation } from '@/contracts/domain';
 import type { Failure } from '@/contracts/results';
 import {
   canTransition,
@@ -30,15 +30,15 @@ import { Dialog } from '@/components/feedback/overlay';
 import { Tabs } from '@/components/feedback/disclosure';
 import { useToast } from '@/components/feedback/toast';
 import { Field } from '@/components/forms/field';
-import { Textarea } from '@/components/forms/inputs';
+import { DurationInput, Input, Select, Textarea } from '@/components/forms/inputs';
 import { Badge, type BadgeTone } from '@/components/ui/badge';
 import { Button, LinkButton } from '@/components/ui/button';
 import { Duration } from '@/components/ui/misc';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/cn';
 import { businessToday } from '@/lib/business-date';
-import { formatTimestamp, NOT_RECORDED } from '@/lib/format';
-import { TASK_STATUS_LABEL } from '@/lib/status';
+import { formatDuration, formatTimestamp, NOT_RECORDED } from '@/lib/format';
+import { TASK_STATUS_LABEL, WORK_LOCATION_LABEL } from '@/lib/status';
 import { timesheetService as mockTimesheetService } from '@/services/runtime/timesheet';
 import { useAsync } from '@/lib/use-async';
 
@@ -55,8 +55,9 @@ export interface WorkflowBoardTask {
   readonly version: number;
   readonly title: string;
   readonly href: string;
-  readonly project: { readonly name: string; readonly code: string };
-  readonly division: { readonly name: string; readonly code: string };
+  /** `id` is what a completion work log is recorded against; optional for older callers. */
+  readonly project: { readonly id?: string; readonly name: string; readonly code: string };
+  readonly division: { readonly id?: string; readonly name: string; readonly code: string };
   /** Null for an unassigned task (`REQ-MTG-014`), shown as "Unassigned". */
   readonly assignee: { readonly id: string; readonly fullName: string } | null;
   readonly status: TaskStatus;
@@ -315,6 +316,13 @@ function TaskCard({
   );
 }
 
+/** The field-level message a validation failure carries for one field, if any. */
+function fieldMessage(failure: Failure | null, field: string) {
+  return failure?.status === 'validation_failure'
+    ? failure.fieldErrors.find((error) => error.field === field)?.message
+    : undefined;
+}
+
 interface TransitionRequest {
   readonly task: WorkflowBoardTask;
   readonly toStatus: TaskStatus;
@@ -323,11 +331,14 @@ interface TransitionRequest {
 function TransitionPanel({
   request,
   actorRole,
+  viewerEmployeeId: viewerEmployeeIdProp,
   onClose,
   onMoved,
 }: {
   request: TransitionRequest;
   actorRole: RoleKey;
+  /** Who is completing the task; time can be logged only for oneself. */
+  viewerEmployeeId?: string | null;
   onClose: () => void;
   onMoved: () => void;
 }) {
@@ -341,9 +352,28 @@ function TransitionPanel({
   const [idempotencyKey] = React.useState(
     () => `task-transition:${task.id}:${task.status}:${toStatus}:${crypto.randomUUID()}`,
   );
-  // The lock that matters is the assignee's. An unassigned task has none to
-  // check, and its start is refused by the service anyway.
-  const assigneeId = task.assignee?.id ?? '';
+  /*
+   * Completing can record the last of the work at the same time. The minutes
+   * are an ordinary work log — saved first, through the same rules as the
+   * timesheet (24-hour day, overtime reason, locked period) — and only then is
+   * the task completed. The transition itself still adds no time.
+   */
+  const viewerEmployeeId = viewerEmployeeIdProp ?? '';
+  const canLogOnCompletion = toStatus === 'completed' && task.status === 'in_progress'
+    && task.canLogWorkWhenInProgress && Boolean(viewerEmployeeId && task.project.id && task.division.id);
+  const [logMinutes, setLogMinutes] = React.useState<number | null>(null);
+  const [completedWork, setCompletedWork] = React.useState('');
+  const [workLocation, setWorkLocation] = React.useState<WorkLocation>('office');
+  const [overtimeReason, setOvertimeReason] = React.useState('');
+  const [criticalExplanation, setCriticalExplanation] = React.useState('');
+  const [needsOvertimeReason, setNeedsOvertimeReason] = React.useState(false);
+  const [needsCriticalExplanation, setNeedsCriticalExplanation] = React.useState(false);
+  // Set once the work log is saved, so a retried completion never logs twice.
+  const [loggedMinutes, setLoggedMinutes] = React.useState<number | null>(null);
+  const [workLogKey] = React.useState(() => `task-completion-log:${task.id}:${crypto.randomUUID()}`);
+  // The lock that matters is the person logging; otherwise the assignee's. An
+  // unassigned task has none to check, and its start is refused by the service anyway.
+  const assigneeId = canLogOnCompletion ? viewerEmployeeId : task.assignee?.id ?? '';
   const currentDate = businessToday();
   const day = useAsync(
     () => mockTimesheetService.getDay({ employeeId: assigneeId, date: currentDate }),
@@ -370,8 +400,36 @@ function TransitionPanel({
       return;
     }
 
+    const willLog = canLogOnCompletion && !todayLocked && logMinutes !== null && logMinutes > 0 && loggedMinutes === null;
+    if (willLog && !completedWork.trim()) {
+      setFailure({
+        status: 'validation_failure', code: 'VALIDATION_FAILED', message: 'Say what you finished.', focusField: 'completedWork',
+        fieldErrors: [{ field: 'completedWork', code: 'REQUIRED', message: 'Describe the work you finished today.', guidance: 'It is saved with the time on your timesheet.' }],
+      });
+      return;
+    }
+
     setSubmitting(true);
     setFailure(null);
+    if (willLog) {
+      const saved = await mockTimesheetService.createWorkLog({
+        employeeId: viewerEmployeeId, workDate: currentDate, divisionId: task.division.id!, projectId: task.project.id!, taskId: task.id,
+        durationMinutes: logMinutes!, workLocation, workDescription: `Final work on ${task.title}`, completedWork: completedWork.trim(),
+        supportingLink: null, attachmentIds: [], overtimeReason: overtimeReason.trim() || null,
+        criticalExplanation: criticalExplanation.trim() || null, source: 'manual', idempotencyKey: workLogKey,
+      });
+      if (saved.status !== 'success') {
+        // Day-level rules surface as fields: offer the one the service asked for.
+        if (saved.status === 'validation_failure') {
+          if (saved.fieldErrors.some((error) => error.field === 'overtimeReason')) setNeedsOvertimeReason(true);
+          if (saved.fieldErrors.some((error) => error.field === 'criticalExplanation')) setNeedsCriticalExplanation(true);
+        }
+        setSubmitting(false);
+        setFailure(saved);
+        return;
+      }
+      setLoggedMinutes(logMinutes);
+    }
     const result = await mockTimesheetService.transitionTask({
       taskId: task.id,
       expectedVersion: task.version,
@@ -385,10 +443,13 @@ function TransitionPanel({
     if (result.status === 'success') {
       setCompleted(true);
       onMoved();
+      const recorded = loggedMinutes ?? (willLog ? logMinutes : null);
       toast.show({
         tone: 'success',
         title: `${label} successful`,
-        description: `${task.title} is now ${TASK_STATUS_LABEL[toStatus]}. No active time was added.`,
+        description: recorded
+          ? `${formatDuration(recorded)} logged on today's timesheet, and ${task.title} is now ${TASK_STATUS_LABEL[toStatus]}.`
+          : `${task.title} is now ${TASK_STATUS_LABEL[toStatus]}. No active time was added.`,
       });
       return;
     }
@@ -410,7 +471,9 @@ function TransitionPanel({
         footer={<Button variant="primary" onClick={onClose}>Done</Button>}
       >
         <Alert tone="success" title="Task status updated">
-          This transition created no active time. It is recorded separately in task history.
+          {loggedMinutes
+            ? `${formatDuration(loggedMinutes)} was saved as a work log for today; the status change itself added no time.`
+            : 'This transition created no active time. It is recorded separately in task history.'}
         </Alert>
         {toStatus === 'in_progress' && task.canLogWorkWhenInProgress && (
           <div className="mt-4">
@@ -505,6 +568,51 @@ function TransitionPanel({
             <Alert tone="warning" title="Work-log availability unavailable" className="mt-3">
               You may still complete the task. Check the timesheet separately before recording final work.
             </Alert>
+          ) : canLogOnCompletion ? (
+            loggedMinutes !== null ? (
+              <p role="status" className="mt-2 text-body-sm text-ink">
+                {formatDuration(loggedMinutes)} is saved on today&apos;s timesheet. Complete the task to finish.
+              </p>
+            ) : (
+              <div className="mt-3 space-y-3">
+                <p className="text-caption text-ink-muted">
+                  Optional. Time entered here is saved as a work log for today, then the task is completed.
+                </p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="Time spent today" helperText="Hours and minutes, for example 1:30." error={fieldMessage(failure, 'durationMinutes')}>
+                    <DurationInput value={logMinutes} onValueChange={setLogMinutes} disabled={submitting} />
+                  </Field>
+                  <Field label="Work location">
+                    <Select
+                      value={workLocation}
+                      onChange={(event) => setWorkLocation(event.target.value as WorkLocation)}
+                      options={(Object.keys(WORK_LOCATION_LABEL) as WorkLocation[]).map((value) => ({ value, label: WORK_LOCATION_LABEL[value] }))}
+                      disabled={submitting}
+                    />
+                  </Field>
+                </div>
+                {logMinutes !== null && logMinutes > 0 && (
+                  <Field label="What you finished" required error={fieldMessage(failure, 'completedWork')}>
+                    <Input value={completedWork} onChange={(event) => setCompletedWork(event.target.value)} disabled={submitting} />
+                  </Field>
+                )}
+                {needsOvertimeReason && (
+                  <Field label="Overtime reason" required helperText="Today goes above eight hours." error={fieldMessage(failure, 'overtimeReason')}>
+                    <Input value={overtimeReason} onChange={(event) => setOvertimeReason(event.target.value)} disabled={submitting} />
+                  </Field>
+                )}
+                {needsCriticalExplanation && (
+                  <Field label="Critical-time explanation" required helperText="Today goes above twelve hours; your Team Lead and HR are notified." error={fieldMessage(failure, 'criticalExplanation')}>
+                    <Input value={criticalExplanation} onChange={(event) => setCriticalExplanation(event.target.value)} disabled={submitting} />
+                  </Field>
+                )}
+                {logMinutes !== null && logMinutes > 0 && (
+                  <p className="text-caption text-ink-muted">
+                    Task total after completing: <span className="tabular font-semibold text-ink">{formatDuration(task.actual.minutes + logMinutes)}</span>
+                  </p>
+                )}
+              </div>
+            )
           ) : (
             <LinkButton
               href={`/timesheets/${currentDate}?task=${task.id}`}
@@ -544,10 +652,13 @@ function TransitionPanel({
 export function TaskWorkflowBoard({
   tasks,
   actorRole,
+  viewerEmployeeId = null,
   onMoved,
 }: {
   tasks: readonly WorkflowBoardTask[];
   actorRole: RoleKey;
+  /** The signed-in employee; completing can log their final work for today. */
+  viewerEmployeeId?: string | null;
   onMoved: () => void;
 }) {
   const [filter, setFilter] = React.useState<TaskBoardFilter>('all');
@@ -698,6 +809,7 @@ export function TaskWorkflowBoard({
           key={`${request.task.id}:${request.task.status}:${request.toStatus}`}
           request={request}
           actorRole={actorRole}
+          viewerEmployeeId={viewerEmployeeId}
           onClose={() => setRequest(null)}
           onMoved={onMoved}
         />
@@ -795,10 +907,13 @@ export function TaskHistoryTimeline({ taskId }: { taskId: string }) {
 export function TaskDetailTransitions({
   task,
   actorRole,
+  viewerEmployeeId = null,
   onMoved,
 }: {
   task: WorkflowBoardTask;
   actorRole: RoleKey;
+  /** The signed-in employee; completing can log their final work for today. */
+  viewerEmployeeId?: string | null;
   onMoved: () => void;
 }) {
   const [request, setRequest] = React.useState<TransitionRequest | null>(null);
@@ -810,6 +925,7 @@ export function TaskDetailTransitions({
           key={`${request.task.id}:${request.task.status}:${request.toStatus}`}
           request={request}
           actorRole={actorRole}
+          viewerEmployeeId={viewerEmployeeId}
           onClose={() => setRequest(null)}
           onMoved={onMoved}
         />

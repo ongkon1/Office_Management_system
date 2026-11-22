@@ -46,6 +46,8 @@ export function RaiseTaskButton({ onCreated }: { onCreated: () => void }) {
   const [errors, setErrors] = React.useState<readonly FormError[]>([]);
   const [blocked, setBlocked] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
+  const submittingRef = React.useRef(false);
+  const requestKeyRef = React.useRef('');
 
   const { state } = useAsync(
     () => mockTaskReviewService.options(user?.userId ?? ''),
@@ -69,14 +71,24 @@ export function RaiseTaskButton({ onCreated }: { onCreated: () => void }) {
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    // State updates are intentionally not the only guard: two submit events
+    // can arrive before React paints the loading state. The ref closes that
+    // small window synchronously.
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    if (!requestKeyRef.current) requestKeyRef.current = crypto.randomUUID();
     setErrors([]);
     setBlocked(null);
     setBusy(true);
 
-    const result = await mockTaskReviewService.create(user?.userId ?? '', form);
-    setBusy(false);
+    const result = await mockTaskReviewService.create(user?.userId ?? '', form, {
+      idempotencyKey: requestKeyRef.current,
+    });
 
     if (result.status === 'success') {
+      submittingRef.current = false;
+      requestKeyRef.current = '';
+      setBusy(false);
       setOpen(false);
       setForm(EMPTY);
       onCreated();
@@ -91,6 +103,9 @@ export function RaiseTaskButton({ onCreated }: { onCreated: () => void }) {
     }
 
     if (result.status === 'validation_failure') {
+      submittingRef.current = false;
+      requestKeyRef.current = '';
+      setBusy(false);
       setErrors(
         result.fieldErrors.map((error) => ({
           field: error.field,
@@ -100,6 +115,11 @@ export function RaiseTaskButton({ onCreated }: { onCreated: () => void }) {
       return;
     }
 
+    submittingRef.current = false;
+    // Keep the key after a retryable dependency failure: the server may have
+    // committed the first request even if its response was interrupted.
+    if (result.status !== 'error' || !result.retryable) requestKeyRef.current = '';
+    setBusy(false);
     setBlocked(
       'guidance' in result ? `${result.message} ${result.guidance ?? ''}`.trim() : result.message,
     );
@@ -111,7 +131,10 @@ export function RaiseTaskButton({ onCreated }: { onCreated: () => void }) {
     <>
       <Button
         variant="primary"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          requestKeyRef.current = crypto.randomUUID();
+          setOpen(true);
+        }}
         iconLeading={<Plus aria-hidden className="size-4" />}
       >
         {options.requiresReview ? 'Raise a task' : 'Create my task'}
@@ -119,7 +142,11 @@ export function RaiseTaskButton({ onCreated }: { onCreated: () => void }) {
 
       <Dialog
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={() => {
+          if (busy) return;
+          requestKeyRef.current = '';
+          setOpen(false);
+        }}
         title={options.requiresReview ? 'Raise a task' : 'Create my task'}
         description={
           options.requiresReview
@@ -220,7 +247,15 @@ export function RaiseTaskButton({ onCreated }: { onCreated: () => void }) {
           </Field>
 
           <div className="flex flex-wrap justify-end gap-3">
-            <Button type="button" variant="secondary" onClick={() => setOpen(false)}>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={busy}
+              onClick={() => {
+                requestKeyRef.current = '';
+                setOpen(false);
+              }}
+            >
               Cancel
             </Button>
             <Button type="submit" variant="primary" loading={busy}>

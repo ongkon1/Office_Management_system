@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { redactProtected } from '@/server/security/redaction';
-import type { Pool } from 'mysql2/promise';
+import type { Pool, PoolConnection } from 'mysql2/promise';
 
 export interface AuditEventInput {
   readonly actorUserId: string | null; readonly impersonatorUserId?: string | null; readonly action: string;
@@ -20,7 +20,8 @@ export class AuditWriter {
 
 /** The database trigger makes these rows append-only; this adapter exposes no update/delete API. */
 export class MysqlAuditSink implements AuditSink {
-  constructor(private readonly pool: Pool) {}
+  /** A pool, or a transaction's connection so the evidence commits with the change. */
+  constructor(private readonly pool: Pick<Pool | PoolConnection, 'execute'>) {}
   async append(event: Readonly<Record<string, unknown>>): Promise<void> {
     const scalar = (key: string) => typeof event[key] === 'string' ? event[key] as string : null;
     await this.pool.execute(

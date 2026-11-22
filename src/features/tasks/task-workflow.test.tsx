@@ -40,7 +40,7 @@ function boardTask(
   };
 }
 
-function renderBoard(task: WorkflowBoardTask, onMoved = vi.fn()) {
+function renderBoard(task: WorkflowBoardTask, onMoved = vi.fn(), viewerEmployeeId: string | null = null) {
   return {
     onMoved,
     ...render(
@@ -48,6 +48,7 @@ function renderBoard(task: WorkflowBoardTask, onMoved = vi.fn()) {
         <TaskWorkflowBoard
           tasks={[task]}
           actorRole="employee"
+          viewerEmployeeId={viewerEmployeeId}
           onMoved={onMoved}
         />
       </ToastProvider>,
@@ -256,6 +257,61 @@ describe('task workflow board', () => {
 
     expect(await within(dialog).findByText('The board is out of date')).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Reload board' })).toBeInTheDocument();
+    await settleStoreRefresh();
+  });
+});
+
+describe('completing a task can log its final work', () => {
+  const owned = () => boardTask({
+    project: { id: 'prj-vp2', name: 'Vision Platform v2', code: 'PIA-VP2' },
+    division: { id: 'pia', name: 'PowerInAI', code: 'PIA' },
+  });
+  const activeToday = async () => {
+    const day = await mockTimesheetService.getDay({ employeeId: 'emp-1001', date: '2026-09-02' });
+    if (day.status !== 'success') throw new Error('day');
+    return day.data.summary.active.minutes;
+  };
+  async function openComplete() {
+    const user = userEvent.setup();
+    renderBoard(owned(), vi.fn(), 'emp-1001');
+    await screen.findAllByText('Latest note:');
+    await user.click(within(screen.getByLabelText('Task status board')).getByRole('button', { name: 'Complete' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Complete task' });
+    return { user, dialog, field: await within(dialog).findByLabelText('Time spent today') };
+  }
+
+  it('saves the time as a work log for today, then completes the task', async () => {
+    const before = await activeToday();
+    const { user, dialog, field } = await openComplete();
+    await user.type(field, '1:30');
+    await user.tab();
+    await user.type(within(dialog).getByLabelText(/What you finished/), 'Benchmark results written up');
+    await submitTransition(within(dialog).getByRole('button', { name: 'Complete' }));
+    await screen.findByText('1:30 was saved as a work log for today; the status change itself added no time.');
+    expect(await activeToday()).toBe(before + 90);
+    const history = await mockTimesheetService.getTaskHistory('tsk-1');
+    if (history.status !== 'success') throw new Error('history');
+    expect(history.data.items.filter((item) => item.kind === 'transition').map((item) => item.transition.toStatus)).toContain('completed');
+    await settleStoreRefresh();
+  });
+
+  it('completes without adding time when the field is left empty', async () => {
+    const before = await activeToday();
+    const { dialog } = await openComplete();
+    await submitTransition(within(dialog).getByRole('button', { name: 'Complete' }));
+    await screen.findByText('This transition created no active time. It is recorded separately in task history.');
+    expect(await activeToday()).toBe(before);
+    await settleStoreRefresh();
+  });
+
+  it('asks what was finished before logging, and logs nothing until it is given', async () => {
+    const before = await activeToday();
+    const { user, dialog, field } = await openComplete();
+    await user.type(field, '0:45');
+    await user.tab();
+    await submitTransition(within(dialog).getByRole('button', { name: 'Complete' }));
+    expect(await within(dialog).findByText('Describe the work you finished today.')).toBeInTheDocument();
+    expect(await activeToday()).toBe(before);
     await settleStoreRefresh();
   });
 });

@@ -33,18 +33,6 @@ export interface NavGroupDefinition {
   readonly items: readonly NavDefinition[];
 }
 
-const EMPLOYEE_SELF_GROUP: NavGroupDefinition = {
-  key: 'my-work',
-  label: 'My work',
-  items: [
-    { key: 'my-timesheet', label: 'My Timesheet', href: '/timesheets', iconKey: 'clock', inMobileBottomNav: true },
-    { key: 'my-tasks', label: 'My Tasks', href: '/tasks', iconKey: 'check-square' },
-    { key: 'my-wfh', label: 'WFH', href: '/wfh', iconKey: 'house', flag: 'wfhRequests' },
-    { key: 'my-leave', label: 'Leave', href: '/leave', iconKey: 'calendar-off', flag: 'leaveManagement' },
-    { key: 'my-settings', label: 'Settings', href: '/settings', iconKey: 'settings' },
-  ],
-};
-
 const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
   employee: [
     {
@@ -88,6 +76,20 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
       label: null,
       items: [
         { key: 'dashboard', label: 'Dashboard', href: '/dashboard', iconKey: 'layout-dashboard', inMobileBottomNav: true },
+      ],
+    },
+    {
+      key: 'my-work',
+      label: 'My work',
+      items: [
+        { key: 'my-timesheet', label: 'My Timesheet', href: '/timesheets', iconKey: 'clock', inMobileBottomNav: true },
+        { key: 'my-tasks', label: 'My Tasks', href: '/tasks', iconKey: 'check-square' },
+      ],
+    },
+    {
+      key: 'team-work',
+      label: 'Team work',
+      items: [
         { key: 'team', label: 'My Team', href: '/team', iconKey: 'users', inMobileBottomNav: true },
         { key: 'team-timesheets', label: 'Team Timesheets', href: '/team/timesheets', iconKey: 'clock', inMobileBottomNav: true },
         { key: 'projects', label: 'Projects', href: '/projects', iconKey: 'folder-kanban', inMobileBottomNav: true },
@@ -98,15 +100,23 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
       key: 'review',
       label: 'Review',
       items: [
-        { key: 'workload', label: 'Workload', href: '/workload', iconKey: 'gauge', flag: 'workloadPlanning' },
         { key: 'requests', label: 'Requests', href: '/requests', iconKey: 'inbox', flag: 'wfhRequests' },
-        { key: 'evaluations', label: 'Evaluations', href: '/evaluations', iconKey: 'award', flag: 'evaluations' },
+        { key: 'workload', label: 'Workload', href: '/workload', iconKey: 'gauge', flag: 'workloadPlanning' },
         { key: 'reports', label: 'Reports', href: '/reports', iconKey: 'file-chart-column' },
+        { key: 'evaluations', label: 'Evaluations', href: '/evaluations', iconKey: 'award', flag: 'evaluations' },
         { key: 'requisitions', label: 'Requisition', href: '/requisitions', iconKey: 'package-open', flag: 'requisitions' },
         { key: 'conveyance', label: 'Conveyance', href: '/conveyance', iconKey: 'car-front', flag: 'conveyance' },
       ],
     },
-    EMPLOYEE_SELF_GROUP,
+    {
+      key: 'self-service',
+      label: 'Self service',
+      items: [
+        { key: 'my-wfh', label: 'WFH', href: '/wfh', iconKey: 'house', flag: 'wfhRequests' },
+        { key: 'my-leave', label: 'Leave', href: '/leave', iconKey: 'calendar-off', flag: 'leaveManagement' },
+        { key: 'my-settings', label: 'Settings', href: '/settings', iconKey: 'settings' },
+      ],
+    },
   ],
 
   hr_manager: [
@@ -118,6 +128,7 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
         { key: 'employees', label: 'Employees', href: '/employees', iconKey: 'users', inMobileBottomNav: true },
         { key: 'hr-timesheets', label: 'Timesheets', href: '/hr/timesheets', iconKey: 'clock', inMobileBottomNav: true },
         { key: 'attendance', label: 'Attendance', href: '/attendance', iconKey: 'calendar-check', flag: 'attendance', inMobileBottomNav: true },
+        { key: 'reports', label: 'Reports', href: '/reports', iconKey: 'file-chart-column' },
       ],
     },
     {
@@ -131,17 +142,6 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
         { key: 'conveyance', label: 'Conveyance', href: '/conveyance', iconKey: 'car-front', flag: 'conveyance' },
       ],
     },
-    {
-      key: 'admin',
-      label: 'Administration',
-      items: [
-        { key: 'reports', label: 'Reports', href: '/reports', iconKey: 'file-chart-column' },
-        { key: 'holidays', label: 'Holidays', href: '/admin/holidays', iconKey: 'calendar-days' },
-        { key: 'documents', label: 'Documents', href: '/documents', iconKey: 'folder', flag: 'documents' },
-        { key: 'settings', label: 'Settings', href: '/settings', iconKey: 'settings' },
-        { key: 'meeting-minutes', label: 'Meeting Minutes', href: '/meeting-minutes', iconKey: 'clipboard-list', flag: 'meetingMinutes' },
-      ],
-    },
     /*
      * Finance, absorbed into HR (`FE-1003`).
      *
@@ -152,8 +152,8 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
      */
 
     {
-      key: 'primary',
-      label: null,
+      key: 'finance',
+      label: 'Finance',
       items: [
         { key: 'finance', label: 'Finance Dashboard', href: '/finance', iconKey: 'layout-dashboard', inMobileBottomNav: true },
         { key: 'hours', label: 'Employee Hours', href: '/finance/hours', iconKey: 'clock', inMobileBottomNav: true },
@@ -206,11 +206,13 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
       ],
     },
     {
-      key: 'review',
-      label: 'Review',
+      key: 'admin',
+      label: 'Administration',
       items: [
-        { key: 'requisitions', label: 'Requisition', href: '/requisitions', iconKey: 'package-open', flag: 'requisitions' },
-        { key: 'conveyance', label: 'Conveyance', href: '/conveyance', iconKey: 'car-front', flag: 'conveyance' },
+        { key: 'holidays', label: 'Holidays', href: '/admin/holidays', iconKey: 'calendar-days' },
+        { key: 'documents', label: 'Documents', href: '/documents', iconKey: 'folder', flag: 'documents' },
+        { key: 'meeting-minutes', label: 'Meeting Minutes', href: '/meeting-minutes', iconKey: 'clipboard-list', flag: 'meetingMinutes' },
+        { key: 'settings', label: 'Settings', href: '/settings', iconKey: 'settings' },
       ],
     },
   ],
@@ -236,9 +238,9 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
       label: null,
       items: [
         { key: 'dashboard', label: 'Dashboard', href: '/dashboard', iconKey: 'layout-dashboard', inMobileBottomNav: true },
-        { key: 'employees', label: 'Employees', href: '/employees', iconKey: 'users', inMobileBottomNav: true },
         // Organisation-wide oversight: every task and project, across all divisions.
         { key: 'tasks', label: 'Tasks', href: '/tasks', iconKey: 'check-square' },
+        { key: 'employees', label: 'Employees', href: '/employees', iconKey: 'users', inMobileBottomNav: true },
         { key: 'projects', label: 'Projects', href: '/projects', iconKey: 'folder-kanban' },
         { key: 'reports', label: 'Reports', href: '/reports', iconKey: 'file-chart-column' },
         { key: 'requisitions', label: 'Requisition', href: '/requisitions', iconKey: 'package-open', flag: 'requisitions' },
@@ -250,13 +252,13 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
       key: 'administration',
       label: 'Administration',
       items: [
-        { key: 'divisions', label: 'Divisions', href: '/admin/divisions', iconKey: 'building', inMobileBottomNav: true },
-        { key: 'departments', label: 'Departments', href: '/admin/departments', iconKey: 'building' },
         { key: 'users', label: 'Users', href: '/admin/users', iconKey: 'user-cog' },
+        { key: 'departments', label: 'Departments', href: '/admin/departments', iconKey: 'building' },
+        { key: 'divisions', label: 'Divisions', href: '/admin/divisions', iconKey: 'building', inMobileBottomNav: true },
         { key: 'sessions', label: 'Active Sessions', href: '/admin/sessions', iconKey: 'monitor-smartphone' },
-        { key: 'roles', label: 'Roles and Permissions', href: '/admin/roles', iconKey: 'shield' },
         { key: 'policies', label: 'Work Policies', href: '/admin/policies', iconKey: 'settings' },
         { key: 'holidays', label: 'Holidays', href: '/admin/holidays', iconKey: 'calendar-days' },
+        { key: 'roles', label: 'Roles and Permissions', href: '/admin/roles', iconKey: 'shield' },
         { key: 'audit', label: 'Audit Log', href: '/admin/audit', iconKey: 'scroll-text', inMobileBottomNav: true },
         { key: 'settings', label: 'Settings', href: '/settings', iconKey: 'settings' },
         {

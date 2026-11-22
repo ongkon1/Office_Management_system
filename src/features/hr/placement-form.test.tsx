@@ -34,10 +34,10 @@ beforeEach(() => {
   session.userId = 'usr-3001';
 });
 
-function renderEmployee(employeeId = 'emp-1001') {
+function renderEmployee(employeeId = 'emp-1001', initialTab?: string) {
   return render(
     <ToastProvider>
-      <EmployeeDetail employeeId={employeeId} />
+      <EmployeeDetail employeeId={employeeId} initialTab={initialTab} />
     </ToastProvider>,
   );
 }
@@ -64,6 +64,28 @@ async function openAssignmentForm() {
 }
 
 describe('the assignment form owns placement (OH-FE-0301, OH-FE-0302)', () => {
+  it('opens Assignments directly after employee creation', async () => {
+    renderEmployee('emp-1001', 'assignments');
+
+    expect(await screen.findByRole('tab', { name: /Assignments/i })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: 'Add assignment' })).toBeInTheDocument();
+  });
+
+  it('offers a prominent shortcut from the employee header to division assignments', async () => {
+    renderEmployee();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Manage divisions' }));
+
+    expect(await screen.findByRole('tab', { name: /Assignments/i })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: 'Add assignment' })).toBeInTheDocument();
+  });
+
   it('offers only active departments of the selected division, and no Team Lead field', async () => {
     renderEmployee();
     const dialog = await openAssignmentForm();

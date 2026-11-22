@@ -427,7 +427,14 @@ export function EmployeeForm({ employeeId }: { employeeId?: string }) {
         title: employeeId ? 'Employee record updated' : 'Employee record created',
         description: `${result.data.employee.fullName} · ${result.data.employee.employeeCode}`,
       });
-      router.push(`/employees/${result.data.employee.id}`);
+      // A newly created employee already has one primary placement. Open the
+      // assignment workspace immediately so adding a second division is an
+      // obvious continuation of the same flow rather than a hidden tab.
+      router.push(
+        employeeId
+          ? `/employees/${result.data.employee.id}`
+          : `/employees/${result.data.employee.id}?tab=assignments`,
+      );
       return;
     }
     if (result.status === 'validation_failure') {
@@ -502,7 +509,20 @@ export function EmployeeForm({ employeeId }: { employeeId?: string }) {
         </Card>
 
         <Card>
-          <CardHeader title="Employment" description="Type, start date and record status." />
+          <CardHeader
+            title="Employment"
+            description="Type, start date and record status."
+            actions={employeeId ? (
+              <LinkButton
+                variant="secondary"
+                size="sm"
+                href={`/employees/${employeeId}?tab=assignments`}
+                iconLeading={<Plus aria-hidden className="size-4" />}
+              >
+                Manage divisions
+              </LinkButton>
+            ) : undefined}
+          />
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <Field label="Employment type">
               <Select
@@ -1145,9 +1165,17 @@ const DETAIL_TABS = [
   { key: 'audit', label: 'Record history' },
 ];
 
-export function EmployeeDetail({ employeeId }: { employeeId: string }) {
+export function EmployeeDetail({
+  employeeId,
+  initialTab = 'overview',
+}: {
+  employeeId: string;
+  initialTab?: string;
+}) {
   const { user } = useSession();
-  const [tab, setTab] = React.useState('overview');
+  const [tab, setTab] = React.useState(() =>
+    DETAIL_TABS.some((item) => item.key === initialTab) ? initialTab : 'overview',
+  );
   const [assignmentOverride, setAssignmentOverride] =
     React.useState<readonly HrAssignmentView[] | null>(null);
 
@@ -1186,13 +1214,23 @@ export function EmployeeDetail({ employeeId }: { employeeId: string }) {
           </>
         }
         actions={
-          <LinkButton
-            variant="secondary"
-            href={`/employees/${employeeId}/edit`}
-            iconLeading={<Pencil aria-hidden className="size-4" />}
-          >
-            Edit profile
-          </LinkButton>
+          <>
+            <Button
+              type="button"
+              variant="primary"
+              iconLeading={<Plus aria-hidden className="size-4" />}
+              onClick={() => setTab('assignments')}
+            >
+              Manage divisions
+            </Button>
+            <LinkButton
+              variant="secondary"
+              href={`/employees/${employeeId}/edit`}
+              iconLeading={<Pencil aria-hidden className="size-4" />}
+            >
+              Edit profile
+            </LinkButton>
+          </>
         }
       />
 

@@ -21,6 +21,7 @@ const HR = '30000000-0000-4000-8000-000000000004';
 const POWERINAI = '10000000-0000-4000-8000-000000000001';
 const WESTERNCF = '10000000-0000-4000-8000-000000000005';
 const TECHNICAL = '22000000-0000-4000-8000-000000000001';
+const WESTERNCF_SALES = '22000000-0000-4000-8000-000000000008';
 const LEAD_EMPLOYEE = '40000000-0000-4000-8000-000000000002';
 
 let db: Awaited<ReturnType<typeof createIsolatedDatabase>>;
@@ -84,6 +85,38 @@ describe('creating an employee places them in their primary division', () => {
 
     const listed = await service.listEmployees(HR, { divisionIds: [POWERINAI] });
     expect(listed.status === 'success' && listed.data.some((row) => row.employee.id === created.data.employee.id)).toBe(true);
+  });
+
+  it('adds a second active division assignment after the employee is created', async () => {
+    const service = createOperationsService(pool, tokens[HR]);
+    const [employees] = await pool.execute<RowDataPacket[]>(
+      `SELECT e.id FROM employees e
+       JOIN users u ON u.id=e.user_id
+       WHERE u.email_normalized='starter@powerin.ai'`,
+    );
+    const employeeId = String(employees[0]?.id ?? '');
+    expect(employeeId).not.toBe('');
+
+    const assigned = await service.saveAssignment(HR, {
+      employeeId,
+      divisionId: WESTERNCF,
+      departmentId: WESTERNCF_SALES,
+      isPrimary: false,
+      allocationPercent: 20,
+      expectedWeeklyMinutes: 420,
+      startDate: '2026-10-01',
+      endDate: null,
+      isTemporary: false,
+      isActive: true,
+      roleInDivision: '',
+    });
+
+    expect(assigned.status, JSON.stringify(assigned)).toBe('success');
+    if (assigned.status !== 'success') return;
+    expect(assigned.data.filter((assignment) => assignment.isEffectiveToday)).toHaveLength(2);
+    expect(assigned.data.map((assignment) => assignment.division.id)).toEqual(
+      expect.arrayContaining([POWERINAI, WESTERNCF]),
+    );
   });
 
   it('refuses a missing or mismatched placement without creating the account', async () => {

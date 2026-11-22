@@ -101,6 +101,34 @@ describe('buildNavigation', () => {
     expect(selectBottomNavItems(groups).map((item) => item.href)).toContain('/timesheets');
   });
 
+  it('puts each role\'s frequent operational destinations before secondary administration', () => {
+    expect(hrefsFor({ role: 'employee', flags: DEMO_FEATURE_FLAGS, permissions: [] }).slice(0, 3)).toEqual([
+      '/dashboard',
+      '/timesheets',
+      '/tasks',
+    ]);
+
+    expect(hrefsFor({ role: 'team_lead', flags: DEMO_FEATURE_FLAGS, permissions: [] }).slice(0, 5)).toEqual([
+      '/dashboard',
+      '/timesheets',
+      '/tasks',
+      '/team',
+      '/team/timesheets',
+    ]);
+
+    expect(hrefsFor({ role: 'hr_manager', flags: DEMO_FEATURE_FLAGS, permissions: [] }).slice(0, 5)).toEqual([
+      '/hr',
+      '/employees',
+      '/hr/timesheets',
+      '/attendance',
+      '/reports',
+    ]);
+
+    const adminHrefs = hrefsFor({ role: 'super_admin', flags: DEMO_FEATURE_FLAGS, permissions: [] });
+    expect(adminHrefs.slice(0, 4)).toEqual(['/dashboard', '/tasks', '/employees', '/projects']);
+    expect(adminHrefs.indexOf('/admin/users')).toBeLessThan(adminHrefs.indexOf('/admin/roles'));
+  });
+
   it('shows active sessions only in Super Administrator navigation', () => {
     for (const role of ALL_ROLES) {
       const hrefs = hrefsFor({ role, flags: DEMO_FEATURE_FLAGS, permissions: [] });

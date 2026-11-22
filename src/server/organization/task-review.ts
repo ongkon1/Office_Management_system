@@ -100,7 +100,8 @@ export class TaskReviewApplicationService {
     if (!['low', 'medium', 'high', 'urgent'].includes(input.priority)) {
       return validation('priority', 'INVALID_PRIORITY', 'Choose a valid priority.', 'Select Low, Medium, High, or Urgent.');
     }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(input.dueDate) || input.dueDate < this.currentDate()) {
+    // The due date is optional (the form says so); when given, it is today or later.
+    if (input.dueDate && (!/^\d{4}-\d{2}-\d{2}$/.test(input.dueDate) || input.dueDate < this.currentDate())) {
       return validation('dueDate', 'INVALID_DUE_DATE', 'Choose today or a later due date.', 'Use the date picker to choose a valid business date.');
     }
     const description = input.description.trim();

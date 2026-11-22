@@ -1,7 +1,11 @@
-'use client';
-import { use } from 'react';
 import { EmployeeDetail } from '@/features/hr/employees';
-export default function EmployeeDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
-  return <EmployeeDetail employeeId={id} />;
+
+export default async function EmployeeDetailPage({ params, searchParams }: PageProps<'/employees/[id]'>) {
+  const [{ id }, query] = await Promise.all([params, searchParams]);
+  return (
+    <EmployeeDetail
+      employeeId={id}
+      initialTab={typeof query.tab === 'string' ? query.tab : undefined}
+    />
+  );
 }
