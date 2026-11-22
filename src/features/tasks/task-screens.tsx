@@ -30,6 +30,7 @@ import { businessToday } from '@/lib/business-date';
 function employeeBoardTask(task: TaskSummaryView): WorkflowBoardTask {
   return {
     id: task.id,
+    version: task.version,
     title: task.title,
     href: task.href,
     project: { name: task.project.name, code: task.project.code },

@@ -362,6 +362,7 @@ function task(
 ): Task {
   return {
     id,
+    version: 1,
     title,
     divisionId,
     projectId,

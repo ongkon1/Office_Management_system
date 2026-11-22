@@ -25,6 +25,7 @@ import type {
 import { RETIRED_ROLE_LABEL, SENSITIVE_PERMISSIONS } from '@/contracts/domain';
 import type {
   AdminService,
+  AdminSessionView,
   AuditEventView,
   BrandLogoAsset,
   AuditLogView,
@@ -906,7 +907,20 @@ export const mockAdminService: AdminService = {
   async listSessions(userId) {
     await delay();
     if (!isAdministrator(userId)) return denied(ADMIN_DENIAL.message, ADMIN_DENIAL.guidance);
-    return success([]);
+    return success(userViews().map((account): AdminSessionView => ({
+      sessionId: account.userId === userId ? `mock-current:${account.userId}` : `none:${account.userId}`,
+      userId: account.userId,
+      employee: account.employee,
+      roleLabel: account.roleLabels[0] ?? 'Employee',
+      browserLabel: account.userId === userId ? 'Development browser' : 'No active session',
+      deviceLabel: account.userId === userId ? 'Development device' : 'No known device',
+      status: account.userId === userId ? 'online' : 'expired',
+      statusLabel: account.userId === userId ? 'Online' : 'Expired',
+      lastActivityLabel: account.userId === userId ? 'Just now' : 'Never signed in',
+      expiresAtLabel: account.userId === userId ? 'Development session' : 'Not applicable',
+      isCurrentSession: account.userId === userId,
+      canForceLogout: false,
+    })));
   },
 
   async forceLogoutSession(userId) {

@@ -52,6 +52,7 @@ export type TaskBoardFilter =
 
 export interface WorkflowBoardTask {
   readonly id: string;
+  readonly version: number;
   readonly title: string;
   readonly href: string;
   readonly project: { readonly name: string; readonly code: string };
@@ -373,6 +374,7 @@ function TransitionPanel({
     setFailure(null);
     const result = await mockTimesheetService.transitionTask({
       taskId: task.id,
+      expectedVersion: task.version,
       fromStatus: task.status,
       toStatus,
       actorRole,

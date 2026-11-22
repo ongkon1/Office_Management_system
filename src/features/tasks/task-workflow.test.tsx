@@ -21,6 +21,7 @@ function boardTask(
 ): WorkflowBoardTask {
   return {
     id: 'tsk-1',
+    version: 1,
     title: 'Model evaluation harness',
     href: '/tasks/tsk-1',
     project: { name: 'Vision Platform v2', code: 'PIA-VP2' },
@@ -237,6 +238,7 @@ describe('task workflow board', () => {
     await act(async () => {
       moved = await mockTimesheetService.transitionTask({
         taskId: 'tsk-1',
+        expectedVersion: 1,
         fromStatus: 'in_progress',
         toStatus: 'completed',
         actorRole: 'employee',

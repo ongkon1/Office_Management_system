@@ -87,6 +87,7 @@ export function toTaskSummary(task: Task): TaskSummaryView {
 
   return {
     id: task.id,
+    version: task.version ?? 1,
     title: task.title,
     project: project
       ? { id: project.id, name: project.name, code: project.code, divisionId: project.divisionId }

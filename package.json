@@ -27,6 +27,7 @@
     "db:rollback": "node --env-file-if-exists=.env.local scripts/db-rollback.mjs",
     "db:seed": "node --env-file-if-exists=.env.local scripts/db-seed.mjs",
     "db:department-report": "node --env-file-if-exists=.env.local scripts/db-department-migration-report.mjs",
+    "db:role-consolidation-report": "node --env-file-if-exists=.env.local scripts/db-role-consolidation-report.mjs",
     "db:harden-task-work": "node --env-file-if-exists=.env.local scripts/db-harden-task-work-grants.mjs",
     "db:import": "node --env-file-if-exists=.env.local scripts/db-import.mjs",
     "db:validate": "node scripts/validate-migrations.mjs",

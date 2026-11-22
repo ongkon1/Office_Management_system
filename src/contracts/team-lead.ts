@@ -108,6 +108,8 @@ export interface ProjectFormOptionsView {
 
 export interface TeamTaskView {
   readonly id: string;
+  /** Required by task mutations so stale screens cannot overwrite newer work. */
+  readonly version: number;
   readonly title: string;
   readonly projectId: string;
   readonly projectLabel: string;

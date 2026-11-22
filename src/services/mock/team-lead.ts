@@ -329,6 +329,7 @@ function taskView(task: Task): TeamTaskView {
   const actualMinutes = actualTaskMinutes(task.id);
   return {
     id: task.id,
+    version: task.version ?? 1,
     title: task.title,
     projectId: task.projectId,
     projectLabel: project ? `${project.code} · ${project.name}` : task.projectId,

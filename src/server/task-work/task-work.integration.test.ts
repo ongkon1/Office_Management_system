@@ -54,7 +54,9 @@ describe('MBE-0301/0302/0303/0309 transition matrix', () => {
         expect(result.status).toBe('validation_failure'); if (result.status === 'validation_failure') expect(result.fieldErrors[0]).toMatchObject({ field: 'note', code: 'TRANSITION_NOTE_REQUIRED' });
     });
     it('requires an optimistic version and rejects an unapproved task', async () => {
-        const id = await task(); expect((await service().transition({ ...move(id), expectedVersion: undefined })).status).toBe('validation_failure');
+        const id = await task();
+        const missingVersion = { ...move(id), expectedVersion: undefined } as unknown as TaskTransitionInput;
+        expect((await service().transition(missingVersion)).status).toBe('validation_failure');
         await pool.execute("UPDATE tasks SET review_state='pending_review' WHERE id=?", [id]);
         expect((await service().transition(move(id))).status).toBe('validation_failure');
     });

@@ -21,4 +21,9 @@ describe('shared approval chain',()=>{
     expect(canDecideApproval(afterLead,{userId:'u-admin',employeeId:'e-admin',reviewerRole:'super_admin'})).toBe(true);
     expect(canDecideApproval(afterLead,{userId:'u-fin',employeeId:'e-fin',reviewerRole:'finance_manager'})).toBe(false);
   });
+  it('keeps a Finance-era mid-chain decision as history while still waiting for current HR and Super Admin decisions',()=>{
+    const record:Approvable={...base,stage:'reviewer_review',reviews:[review('team_lead','approved'),review('finance_manager','approved')]};
+    expect(pendingApprovalRoles(record)).toEqual(['hr_manager','super_admin']);
+    expect(canDecideApproval(record,{userId:'u-hr',employeeId:'e-hr',reviewerRole:'hr_manager'})).toBe(true);
+  });
 });

@@ -31,6 +31,7 @@ function task(
 ): TeamTaskView {
   return {
     id,
+    version: 1,
     title,
     projectId: 'prj-1',
     projectLabel: 'PRJ-1 · Portal rollout',

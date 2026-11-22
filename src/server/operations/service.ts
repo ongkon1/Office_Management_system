@@ -1481,6 +1481,7 @@ export class OperationsService {
     ]);
     return {
       id,
+      version: Number(r.version),
       title: String(r.title),
       projectId: String(r.project_id),
       projectLabel: String(r.project_name),

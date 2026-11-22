@@ -209,6 +209,7 @@ describe('an unapproved task cannot receive time', () => {
 
     const started = await mockTimesheetService.transitionTask({
       taskId: created.data.id,
+      expectedVersion: 1,
       fromStatus: 'pending',
       toStatus: 'in_progress',
       actorRole: 'employee',

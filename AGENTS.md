@@ -305,7 +305,7 @@ React Compiler lint errors (`set-state-in-effect`, render-phase mutation) are re
 | Backend | 9 — Production readiness and frontend cutover | In progress (7/18 · `BE-0901`–`BE-0905`, `BE-0911`, and `BE-0912` done; `BE-0910` remains `[~]` pending owner source data) |
 | Backend | 10 — Requisition | Done (20/20 · migration `0016`, authenticated runtime, shared approval engine and database integration tests) |
 | Backend | 11 — Conveyance | Done (22/22 · migration `0017`, shared approval engine, claim-bound Phase 7 receipts, evidence in `docs/backend/phase-11/verification.md`) |
-| Backend | 12 — Role consolidation: Finance into HR | Pending (0/11) — new milestone |
+| Backend | 12 — Role consolidation: Finance into HR | Done (11/11 · migration `0018`, reversible audit/reconciliation evidence, historical values preserved; cost remains per-user until Phase 14) |
 | Backend | 13 — Meeting Minutes and AI task generation | Pending (0/34) |
 | Backend | 14 — Client Panel reporting | Pending (0/23) — new milestone; cuts over with frontend Phase 12 |
 | Modify | B1 — Backend schema and data migration | Technical implementation done (9/10); HR rehearsal sign-off pending |

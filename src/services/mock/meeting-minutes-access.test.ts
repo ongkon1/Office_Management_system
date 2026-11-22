@@ -167,6 +167,7 @@ describe('an unassigned task in the task module (FE-1130)', () => {
   it('cannot be started until someone is assigned', async () => {
     const result = await mockTimesheetService.transitionTask({
       taskId: 'tsk-17',
+      expectedVersion: 1,
       fromStatus: 'pending',
       toStatus: 'in_progress',
       actorRole: 'team_lead',

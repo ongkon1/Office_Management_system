@@ -738,6 +738,7 @@ function teamBoardTask(task: TeamTaskView, viewerEmployeeId: string): WorkflowBo
       task.supportingMembers.some((member) => member.id === viewerEmployeeId));
   return {
     id: task.id,
+    version: task.version,
     title: task.title,
     href: `/tasks/${task.id}`,
     project: {

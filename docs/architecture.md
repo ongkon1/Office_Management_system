@@ -503,6 +503,16 @@ Migration `0016` stores a requisition header, exactly one kind-specific detail r
 
 `src/lib/approval-chain.ts` is the pure state machine shared by requisition and the future conveyance backend. Employee submissions enter Team Lead review; Team Lead submissions enter parallel review. Current parallel reviewers are HR and Super Administrator, while the retired Finance Manager value remains legal only when reading historical decisions. Each decision locks the header row, appends one unique reviewer-role row, updates the derived stage, writes audit evidence and queues authorized notifications in one transaction. An effective Team Lead change reroutes an open request; if no lead remains, an audited system transition advances it so it cannot be orphaned.
 
+Backend Phase 12 makes that role retirement durable in migration `0018`. The
+`roles` row remains as an inactive historical dictionary value, while each
+current holder receives an effective HR assignment. Migration evidence records
+whether HR and `finance.cost.view` existed beforehand; only cost access supplied
+by the retired role is reproduced as a personal unscoped grant. Finance-era
+review and audit records are never rewritten. The recovery script removes only
+assignments and grants created by the migration and reactivates the historical
+role. Phase 14 remains a separate atomic authorization cutover that grants
+`finance.cost.view` to HR and Super Administrator by role.
+
 The browser calls `/api/requisitions` through the typed `RequisitionService`. The route derives the actor exclusively from the session, rejects cross-user arguments, and applies record visibility before lists and queue counts. Notification text comes from the fixed Phase 7 catalogue and the recipient is authorized against the live requisition before a notification is stored.
 
 ## 22. Conveyance Approval and Receipt Architecture

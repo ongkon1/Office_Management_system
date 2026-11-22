@@ -305,6 +305,8 @@ export interface EntryCalculationPreview {
 
 export interface TaskSummaryView {
   readonly id: string;
+  /** Required by task mutations so stale screens cannot overwrite newer work. */
+  readonly version: number;
   readonly title: string;
   readonly project: ProjectRef;
   readonly division: DivisionRef;

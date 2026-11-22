@@ -970,6 +970,29 @@ const mockTimesheetServiceImpl = {
     if (!task) {
       return { status: 'not_found' as const, code: 'NOT_FOUND' as const, message: 'That task was not found.' };
     }
+    if (!Number.isInteger(input.expectedVersion) || input.expectedVersion < 1) {
+      return {
+        status: 'validation_failure' as const,
+        code: 'VALIDATION_FAILED' as const,
+        message: 'The task version is missing.',
+        fieldErrors: [{
+          field: 'expectedVersion',
+          code: 'INVALID_INPUT',
+          message: 'The task version is missing.',
+          guidance: 'Reload the task board and try the move again.',
+        }],
+        focusField: 'expectedVersion',
+      };
+    }
+    const currentVersion = task.version ?? 1;
+    if (currentVersion !== input.expectedVersion) {
+      return {
+        status: 'conflict' as const,
+        code: 'CONFLICT' as const,
+        message: 'This task changed after you opened it.',
+        guidance: 'Reload the task board and apply the move to the latest version.',
+      };
+    }
     if (task.status !== input.fromStatus) {
       return {
         status: 'conflict' as const,
@@ -1062,6 +1085,7 @@ const mockTimesheetServiceImpl = {
     transitionKeys.set(input.idempotencyKey, transition.id);
     mockStore.updateTask(task.id, {
       ...task,
+      version: currentVersion + 1,
       status: input.toStatus,
       completedDate: input.toStatus === 'completed' ? DEMO_TODAY : null,
       updatedAt: stamp,

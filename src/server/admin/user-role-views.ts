@@ -39,8 +39,8 @@ interface DivisionRow extends RowDataPacket { user_id: string; id: string; name:
 interface PermissionRow extends RowDataPacket { role_key: StoredRoleKey; permission_key: string; name: string; sensitivity: string; granted: number }
 interface RoleRow extends RowDataPacket { id: string; role_key: StoredRoleKey; name: string; is_active: number; user_count: number }
 interface SessionAdminRow extends RowDataPacket {
-  session_id: string; user_id: string; expires_at: Date; revoked_at: Date | null;
-  last_seen_at: Date; user_agent: string | null; employee_id: string;
+  session_id: string | null; user_id: string; expires_at: Date | null; revoked_at: Date | null;
+  last_seen_at: Date | null; user_agent: string | null; employee_id: string;
   employee_code: string; display_name: string; job_title: string | null;
   image_url: string | null; roles: string | null;
 }
@@ -259,36 +259,41 @@ export class BackendUserRoleAdmin implements AdminService {
   async listSessions(userId: string): Promise<Result<readonly AdminSessionView[]>> {
     const administrator = await this.administratorSession(userId);
     if (!administrator) return denied();
-    const [rows] = await this.pool.execute<SessionAdminRow[]>(`SELECT s.id session_id,s.user_id,s.expires_at,s.revoked_at,s.last_seen_at,s.user_agent,
+    const [rows] = await this.pool.execute<SessionAdminRow[]>(`SELECT s.id session_id,u.id user_id,s.expires_at,s.revoked_at,s.last_seen_at,s.user_agent,
       e.id employee_id,e.employee_code,e.display_name,e.job_title,u.image_url,
       GROUP_CONCAT(DISTINCT r.role_key ORDER BY r.role_key SEPARATOR ',') roles
-      FROM auth_sessions s JOIN users u ON u.id=s.user_id JOIN employees e ON e.user_id=u.id
+      FROM users u JOIN employees e ON e.user_id=u.id
+      LEFT JOIN auth_sessions s ON s.user_id=u.id
+        AND (s.expires_at>UTC_TIMESTAMP(6) OR s.created_at>=DATE_SUB(UTC_TIMESTAMP(6),INTERVAL 30 DAY))
       LEFT JOIN user_roles ur ON ur.user_id=u.id AND ur.effective_from<=CURRENT_DATE AND (ur.effective_to IS NULL OR ur.effective_to>=CURRENT_DATE)
       LEFT JOIN roles r ON r.id=ur.role_id
       WHERE u.status='active' AND e.status='active'
-      AND (s.expires_at>UTC_TIMESTAMP(6) OR s.created_at>=DATE_SUB(UTC_TIMESTAMP(6),INTERVAL 30 DAY))
-      GROUP BY s.id,s.user_id,s.expires_at,s.revoked_at,s.last_seen_at,s.user_agent,e.id,e.employee_code,e.display_name,e.job_title,u.image_url
-      ORDER BY s.last_seen_at DESC LIMIT 500`);
+      GROUP BY s.id,u.id,s.expires_at,s.revoked_at,s.last_seen_at,s.user_agent,e.id,e.employee_code,e.display_name,e.job_title,u.image_url
+      ORDER BY s.last_seen_at DESC`);
     const now = new Date();
     const rolePriority: readonly RoleKey[] = ['super_admin','hr_manager','management','team_lead','employee'];
     const rank: Readonly<Record<AdminSessionView['status'], number>> = { online: 0, idle: 1, expired: 2 };
     return success(rows.map((row): AdminSessionView => {
-      const status = sessionPresenceStatus({ lastSeenAt: row.last_seen_at, expiresAt: row.expires_at, revokedAt: row.revoked_at }, now);
+      const status = row.session_id && row.last_seen_at && row.expires_at
+        ? sessionPresenceStatus({ lastSeenAt: row.last_seen_at, expiresAt: row.expires_at, revokedAt: row.revoked_at }, now)
+        : 'expired';
       const roles = (row.roles?.split(',') ?? []).filter((role): role is RoleKey => rolePriority.includes(role as RoleKey));
       const primaryRole = rolePriority.find((role) => roles.includes(role)) ?? 'employee';
-      const userAgent = summarizeUserAgent(row.user_agent);
+      const userAgent = row.session_id
+        ? summarizeUserAgent(row.user_agent)
+        : { browserLabel: 'No active session', deviceLabel: 'No known device' };
       return {
-        sessionId: row.session_id,
+        sessionId: row.session_id ?? `none:${row.user_id}`,
         userId: row.user_id,
         employee: { id: row.employee_id, employeeCode: row.employee_code, fullName: row.display_name, designation: row.job_title, avatarUrl: row.image_url },
         roleLabel: ROLE_LABEL[primaryRole],
         ...userAgent,
         status,
         statusLabel: status === 'online' ? 'Online' : status === 'idle' ? 'Idle' : 'Expired',
-        lastActivityLabel: formatTimestamp(row.last_seen_at.toISOString()),
-        expiresAtLabel: formatTimestamp(row.expires_at.toISOString()),
+        lastActivityLabel: row.last_seen_at ? formatTimestamp(row.last_seen_at.toISOString()) : 'Never signed in',
+        expiresAtLabel: row.expires_at ? formatTimestamp(row.expires_at.toISOString()) : 'Not applicable',
         isCurrentSession: row.session_id === administrator.sessionId,
-        canForceLogout: status !== 'expired' && row.session_id !== administrator.sessionId,
+        canForceLogout: Boolean(row.session_id) && status !== 'expired' && row.session_id !== administrator.sessionId,
       };
     }).sort((left, right) => rank[left.status] - rank[right.status]));
   }

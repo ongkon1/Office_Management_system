@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { LogOut, MonitorSmartphone, RefreshCw } from 'lucide-react';
 import type { AdminSessionView } from '@/contracts/admin';
+import { groupSessionsByUser, type AdminUserPresenceView } from './session-users';
 import { adminService } from '@/services/runtime/admin';
 import { useAsync } from '@/lib/use-async';
 import { useSession } from '@/features/access/session-provider';
@@ -25,7 +26,7 @@ const STATUS_TONE: Readonly<Record<AdminSessionView['status'], BadgeTone>> = {
 export function SessionAdministration() {
   const { user } = useSession();
   const toast = useToast();
-  const [selected, setSelected] = React.useState<AdminSessionView | null>(null);
+  const [selected, setSelected] = React.useState<AdminUserPresenceView | null>(null);
   const [saving, setSaving] = React.useState(false);
   const [failure, setFailure] = React.useState<string | null>(null);
   const { state, reload } = useAsync(
@@ -37,15 +38,23 @@ export function SessionAdministration() {
     if (!selected) return;
     setSaving(true);
     setFailure(null);
-    const result = await adminService.forceLogoutSession(user?.userId ?? '', selected.sessionId);
+    const actionable = selected.sessions.filter((session) => session.canForceLogout);
+    const results = await Promise.all(
+      actionable.map((session) =>
+        adminService.forceLogoutSession(user?.userId ?? '', session.sessionId),
+      ),
+    );
     setSaving(false);
-    if (result.status === 'success') {
+    const result = results.find(
+      (item) => item.status !== 'success' && item.status !== 'conflict' && item.status !== 'not_found',
+    );
+    if (!result) {
       setSelected(null);
       reload();
       toast.show({
         tone: 'success',
-        title: 'Session ended',
-        description: `${selected.employee.fullName} will be asked to sign in again.`,
+        title: actionable.length === 1 ? 'Session ended' : 'Sessions ended',
+        description: `${selected.employee.fullName} will be asked to sign in again on the affected devices.`,
       });
       return;
     }
@@ -55,25 +64,26 @@ export function SessionAdministration() {
   if (state.status === 'loading') return <ReportsLoading label="active sessions" />;
   if (state.status !== 'success') return <ReportsFallback result={state.failure} subject="Sessions" />;
 
-  const sessions = state.data;
-  const online = sessions.filter((session) => session.status === 'online').length;
-  const idle = sessions.filter((session) => session.status === 'idle').length;
+  const people = groupSessionsByUser(state.data);
+  const online = people.filter((person) => person.status === 'online').length;
+  const idle = people.filter((person) => person.status === 'idle').length;
+  const expired = people.filter((person) => person.status === 'expired').length;
 
-  const statusBadge = (session: AdminSessionView) => (
+  const statusBadge = (person: AdminUserPresenceView) => (
     <span className="flex flex-wrap items-center gap-1.5">
-      <Badge tone={STATUS_TONE[session.status]}>{session.statusLabel}</Badge>
-      {session.isCurrentSession && <Badge tone="info">Current session</Badge>}
+      <Badge tone={STATUS_TONE[person.status]}>{person.statusLabel}</Badge>
+      {person.isCurrentSession && <Badge tone="info">Current user</Badge>}
     </span>
   );
 
-  const action = (session: AdminSessionView) => session.canForceLogout ? (
+  const action = (person: AdminUserPresenceView) => person.canForceLogout ? (
     <Button
       size="sm"
       variant="danger"
       iconLeading={<LogOut aria-hidden className="size-4" />}
       onClick={() => {
         setFailure(null);
-        setSelected(session);
+        setSelected(person);
       }}
     >
       Force logout
@@ -83,13 +93,14 @@ export function SessionAdministration() {
   return (
     <PageContainer width="full">
       <PageHeader
-        title="Active sessions"
-        description="See which accounts are signed in and end a session when access should stop immediately."
-        crumbs={[{ label: 'Administration' }, { label: 'Active sessions' }]}
+        title="User session status"
+        description="See every active user once, their current login status, and the devices they have used."
+        crumbs={[{ label: 'Administration' }, { label: 'User session status' }]}
         meta={
           <>
             <Badge tone="success">{online} online</Badge>
             <Badge tone="warning">{idle} idle</Badge>
+            <Badge tone="neutral">{expired} expired</Badge>
           </>
         }
         actions={
@@ -104,7 +115,7 @@ export function SessionAdministration() {
       />
 
       <Callout tone="info" className="mt-5">
-        Online means activity within the last five minutes. Idle means the session is still valid but has not been active recently. Expired sessions can no longer access the application.
+        Each user appears once, even when signed in on several devices. Online means at least one session was active within the last five minutes. Idle means the user still has a valid session but has not been active recently. Expired means no known session can access the application.
       </Callout>
 
       {failure && (
@@ -113,12 +124,12 @@ export function SessionAdministration() {
         </Alert>
       )}
 
-      <DataTable<AdminSessionView>
+      <DataTable<AdminUserPresenceView>
         className="mt-5"
         caption="User login sessions"
-        rows={sessions}
-        getRowId={(row) => row.sessionId}
-        emptyState={{ title: 'No login sessions', description: 'Sessions will appear after a user signs in.' }}
+        rows={people}
+        getRowId={(row) => row.userId}
+        emptyState={{ title: 'No active users', description: 'Active user accounts will appear here.' }}
         columns={[
           {
             key: 'employee', header: 'Employee and role', alwaysVisible: true,
@@ -144,7 +155,7 @@ export function SessionAdministration() {
               </span>
             ),
           },
-          { key: 'status', header: 'Session status', render: statusBadge },
+          { key: 'status', header: 'User status', render: statusBadge },
           { key: 'actions', header: 'Actions', alwaysVisible: true, align: 'right', render: action },
         ]}
         renderMobileCard={(row) => (
@@ -182,7 +193,7 @@ export function SessionAdministration() {
         }
       >
         <p className="text-body-sm text-ink-muted">
-          This ends the selected {selected?.browserLabel} session on {selected?.deviceLabel}. Unsaved work in that session may be lost, and the user must sign in again.
+          This ends all eligible sessions for this user across {selected?.deviceLabel}. Your own current administrator session is always protected. Unsaved work on affected devices may be lost, and the user must sign in again.
         </p>
       </Dialog>
     </PageContainer>

@@ -6,14 +6,14 @@ INSERT INTO divisions(id,division_key,name,is_government) VALUES
 ('10000000-0000-4000-8000-000000000005','westerncf','WesternCF',FALSE)
 ON DUPLICATE KEY UPDATE name=VALUES(name),is_government=VALUES(is_government);
 
-INSERT INTO roles(id,role_key,name) VALUES
-('20000000-0000-4000-8000-000000000001','super_admin','Super Administrator'),
-('20000000-0000-4000-8000-000000000002','team_lead','Team Lead'),
-('20000000-0000-4000-8000-000000000003','employee','Employee'),
-('20000000-0000-4000-8000-000000000004','hr_manager','HR Manager'),
-('20000000-0000-4000-8000-000000000005','finance_manager','Finance Manager'),
-('20000000-0000-4000-8000-000000000006','management','Management/View-Only')
-ON DUPLICATE KEY UPDATE name=VALUES(name);
+INSERT INTO roles(id,role_key,name,is_active) VALUES
+('20000000-0000-4000-8000-000000000001','super_admin','Super Administrator',TRUE),
+('20000000-0000-4000-8000-000000000002','team_lead','Team Lead',TRUE),
+('20000000-0000-4000-8000-000000000003','employee','Employee',TRUE),
+('20000000-0000-4000-8000-000000000004','hr_manager','HR Manager',TRUE),
+('20000000-0000-4000-8000-000000000005','finance_manager','Finance Manager',FALSE),
+('20000000-0000-4000-8000-000000000006','management','Management/View-Only',TRUE)
+ON DUPLICATE KEY UPDATE name=VALUES(name),is_active=VALUES(is_active);
 
 INSERT INTO permissions(id,permission_key,name,sensitivity) VALUES
 ('21000000-0000-4000-8000-000000000001','time.own.manage','Manage own time','normal'),
@@ -46,15 +46,27 @@ INSERT INTO users(id,name,email,email_normalized,employee_identifier,status) VAL
 ('30000000-0000-4000-8000-000000000011','Maliha Sultana','maliha@powerin.ai','maliha@powerin.ai','EMP-006','active')
 ON DUPLICATE KEY UPDATE name=VALUES(name),email=VALUES(email),email_normalized=VALUES(email_normalized),employee_identifier=VALUES(employee_identifier),status=VALUES(status);
 
-INSERT INTO employees(id,user_id,employee_code,display_name,job_title,hire_date) SELECT CONCAT('40000000-0000-4000-8000-',LPAD(CAST(n AS CHAR),12,'0')),CONCAT('30000000-0000-4000-8000-',LPAD(CAST(n AS CHAR),12,'0')),employee_code,name,CASE WHEN n=2 THEN 'Team Lead' WHEN n=4 THEN 'HR Manager' WHEN n=5 THEN 'Finance Manager' ELSE 'Software Professional' END,'2024-01-01' FROM (SELECT 1 n,'ADM-001' employee_code UNION ALL SELECT 2,'TL-001' UNION ALL SELECT 3,'EMP-001' UNION ALL SELECT 4,'HR-001' UNION ALL SELECT 5,'FIN-001' UNION ALL SELECT 6,'MGT-001' UNION ALL SELECT 7,'EMP-002' UNION ALL SELECT 8,'EMP-003' UNION ALL SELECT 9,'EMP-004' UNION ALL SELECT 10,'EMP-005' UNION ALL SELECT 11,'EMP-006') seed JOIN users u ON u.employee_identifier=seed.employee_code ON DUPLICATE KEY UPDATE display_name=VALUES(display_name),job_title=VALUES(job_title);
+INSERT INTO employees(id,user_id,employee_code,display_name,job_title,hire_date) SELECT CONCAT('40000000-0000-4000-8000-',LPAD(CAST(n AS CHAR),12,'0')),CONCAT('30000000-0000-4000-8000-',LPAD(CAST(n AS CHAR),12,'0')),employee_code,name,CASE WHEN n=2 THEN 'Team Lead' WHEN n=4 THEN 'HR Manager' WHEN n=5 THEN 'HR Finance Specialist' ELSE 'Software Professional' END,'2024-01-01' FROM (SELECT 1 n,'ADM-001' employee_code UNION ALL SELECT 2,'TL-001' UNION ALL SELECT 3,'EMP-001' UNION ALL SELECT 4,'HR-001' UNION ALL SELECT 5,'FIN-001' UNION ALL SELECT 6,'MGT-001' UNION ALL SELECT 7,'EMP-002' UNION ALL SELECT 8,'EMP-003' UNION ALL SELECT 9,'EMP-004' UNION ALL SELECT 10,'EMP-005' UNION ALL SELECT 11,'EMP-006') seed JOIN users u ON u.employee_identifier=seed.employee_code ON DUPLICATE KEY UPDATE display_name=VALUES(display_name),job_title=VALUES(job_title);
 
 INSERT IGNORE INTO user_roles(id,user_id,role_id,effective_from) VALUES
 ('50000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001','2026-01-01'),
 ('50000000-0000-4000-8000-000000000002','30000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000002','2026-01-01'),
 ('50000000-0000-4000-8000-000000000003','30000000-0000-4000-8000-000000000003','20000000-0000-4000-8000-000000000003','2026-01-01'),
 ('50000000-0000-4000-8000-000000000004','30000000-0000-4000-8000-000000000004','20000000-0000-4000-8000-000000000004','2026-01-01'),
-('50000000-0000-4000-8000-000000000005','30000000-0000-4000-8000-000000000005','20000000-0000-4000-8000-000000000005','2026-01-01'),
+('50000000-0000-4000-8000-000000000005','30000000-0000-4000-8000-000000000005','20000000-0000-4000-8000-000000000004','2026-01-01'),
 ('50000000-0000-4000-8000-000000000006','30000000-0000-4000-8000-000000000006','20000000-0000-4000-8000-000000000006','2026-01-01');
+
+-- BE-1208: two HR accounts prove cost access remains a separate per-user
+-- permission until Backend Phase 14. User 5 has it; user 4 does not.
+INSERT INTO scoped_grants(id,user_id,permission_id,effective_from)
+SELECT '51000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000005','21000000-0000-4000-8000-000000000004','2026-01-01'
+WHERE NOT EXISTS (
+  SELECT 1 FROM scoped_grants
+  WHERE user_id='30000000-0000-4000-8000-000000000005'
+    AND permission_id='21000000-0000-4000-8000-000000000004'
+    AND division_id IS NULL AND project_id IS NULL
+    AND effective_from<='2026-09-02' AND (effective_to IS NULL OR effective_to>='2026-09-02')
+);
 
 INSERT INTO policy_versions(id,policy_key,version_number,effective_from,timezone,required_active_minutes,recognized_break_minutes,scheduled_minutes,overtime_limit_minutes,configuration) VALUES ('60000000-0000-4000-8000-000000000001','standard-day',1,'2026-01-01','Asia/Dhaka',420,60,480,720,JSON_OBJECT('crossMidnight','attribute_to_start_date')) ON DUPLICATE KEY UPDATE configuration=VALUES(configuration);
 INSERT IGNORE INTO work_policies(id,division_id,policy_version_id,effective_from) VALUES ('61000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000001','60000000-0000-4000-8000-000000000001','2026-01-01');

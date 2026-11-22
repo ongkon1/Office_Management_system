@@ -72,6 +72,9 @@ try {
         // identity. Runtime services may inspect status, but cannot alter the
         // batch ledger, approvals, crosswalks or rollback fingerprints.
         !table.startsWith('import_') &&
+        // Phase 12 role/permission reconciliation is migration evidence. The
+        // runtime may report it, but cannot change what the cutover recorded.
+        table !== 'role_consolidation_migration_users' &&
         table !== 'time_capture_cutovers' &&
         table !== 'schema_migrations'
       ) {
@@ -81,7 +84,7 @@ try {
   }
 
   console.log(
-    `Hardened ${accounts.length} runtime account(s): task transitions are insert-only; timer sessions and import evidence are read-only.`,
+    `Hardened ${accounts.length} runtime account(s): task transitions are insert-only; timer sessions and migration/import evidence are read-only.`,
   );
 } finally {
   await connection.end();

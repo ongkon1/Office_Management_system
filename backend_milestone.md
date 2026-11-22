@@ -685,25 +685,25 @@ A role that has been used cannot simply be deleted. `finance_manager` is recorde
 
 ### Tasks
 
-- [ ] `BE-1201` Retire `finance_manager` as an assignable role while keeping it a legal stored value, so historical rows stay readable and no migration rewrites recorded history.
-- [ ] `BE-1202` Write a reversible migration that grants every current Finance Manager the HR role, and record for each user whether they held `finance.cost.view`, so the grant can be reproduced and audited.
-- [ ] `BE-1203` **Do not grant `finance.cost.view` to the HR role in this phase.** The consolidation migration carries the permission across only for users who already had it. The amended `REQ-RBAC-017` does grant it through the HR Manager and Super Administrator roles, but that is a separate, wider data-access change delivered by Phase 14 with its own reversible migration and its own frontend cutover; doing it here would widen access during a migration whose purpose is to change nothing but the role.
-- [ ] `BE-1204` Update `src/server/authorization/policy.ts` so every rule that admitted a Finance Manager now admits HR, and confirm no rule silently widens beyond that.
-- [ ] `BE-1205` Update the approval chain's parallel reviewer set to match the frontend decision in `FE-1001`, and define what happens to a requisition or conveyance that is **mid-chain at migration time** and still waiting on a Finance decision.
-- [ ] `BE-1206` Keep every cost, rate, budget, payroll and export endpoint gated on `finance.cost.view` itself rather than on a role name, and re-verify each returns the redacted shape without it. This holds after Phase 14 too: the role changes who *holds* the permission, never how an endpoint checks it.
-- [ ] `BE-1207` Preserve audit history: a decision recorded by a Finance Manager keeps its actor role, and the migration itself is audited with actor, reason and before/after.
-- [ ] `BE-1208` Update seed data so the demo has an HR account with the financial permission and an HR account without it.
-- [ ] `BE-1209` Add authorization tests proving an account without `finance.cost.view` is refused every cost, rate, budget and protected-export endpoint — the regression that would otherwise ship silently. Use an HR account without the permission while this phase's policy stands; once Phase 14 grants it by role, the same tests must be re-pointed at an active role that still lacks it, because an HR account can no longer be that subject.
-- [ ] `BE-1210` Add a migration test proving a Finance-era requisition, conveyance and audit row still reads correctly after the role is retired.
-- [ ] `BE-1211` Add a rehearsal migration against production-like data with owner sign-off on the resulting role and permission assignments.
+- [x] `BE-1201` Retire `finance_manager` as an assignable role while keeping it a legal stored value, so historical rows stay readable and no migration rewrites recorded history.
+- [x] `BE-1202` Write a reversible migration that grants every current Finance Manager the HR role, and record for each user whether they held `finance.cost.view`, so the grant can be reproduced and audited.
+- [x] `BE-1203` **Do not grant `finance.cost.view` to the HR role in this phase.** The consolidation migration carries the permission across only for users who already had it. The amended `REQ-RBAC-017` does grant it through the HR Manager and Super Administrator roles, but that is a separate, wider data-access change delivered by Phase 14 with its own reversible migration and its own frontend cutover; doing it here would widen access during a migration whose purpose is to change nothing but the role.
+- [x] `BE-1204` Update `src/server/authorization/policy.ts` so every rule that admitted a Finance Manager now admits HR, and confirm no rule silently widens beyond that.
+- [x] `BE-1205` Update the approval chain's parallel reviewer set to match the frontend decision in `FE-1001`, and define what happens to a requisition or conveyance that is **mid-chain at migration time** and still waiting on a Finance decision.
+- [x] `BE-1206` Keep every cost, rate, budget, payroll and export endpoint gated on `finance.cost.view` itself rather than on a role name, and re-verify each returns the redacted shape without it. This holds after Phase 14 too: the role changes who *holds* the permission, never how an endpoint checks it.
+- [x] `BE-1207` Preserve audit history: a decision recorded by a Finance Manager keeps its actor role, and the migration itself is audited with actor, reason and before/after.
+- [x] `BE-1208` Update seed data so the demo has an HR account with the financial permission and an HR account without it.
+- [x] `BE-1209` Add authorization tests proving an account without `finance.cost.view` is refused every cost, rate, budget and protected-export endpoint — the regression that would otherwise ship silently. Use an HR account without the permission while this phase's policy stands; once Phase 14 grants it by role, the same tests must be re-pointed at an active role that still lacks it, because an HR account can no longer be that subject.
+- [x] `BE-1210` Add a migration test proving a Finance-era requisition, conveyance and audit row still reads correctly after the role is retired.
+- [x] `BE-1211` Add a rehearsal migration against production-like data with owner sign-off on the resulting role and permission assignments.
 
 ### Phase 12 Exit Criteria
 
-- [ ] No new user can be assigned the Finance Manager role.
-- [ ] Every former Finance Manager can do their work as an HR user.
-- [ ] No HR user gained cost, salary, rate or budget access purely from the migration.
-- [ ] Historical records naming the Finance Manager role still read correctly.
-- [ ] The migration is reversible and audited, and a rehearsal was signed off.
+- [x] No new user can be assigned the Finance Manager role.
+- [x] Every former Finance Manager can do their work as an HR user.
+- [x] No HR user gained cost, salary, rate or budget access purely from the migration.
+- [x] Historical records naming the Finance Manager role still read correctly.
+- [x] The migration is reversible and audited, and a rehearsal was signed off.
 
 ## Phase 13 - Meeting Minutes and AI Task Generation
 
@@ -945,7 +945,7 @@ The server half of Frontend Phase 12. It answers one authorized question — act
 | Phase 9 - Production Readiness and Frontend Cutover | In progress | 7/18 |
 | Phase 10 - Requisition | Done | 20/20 |
 | Phase 11 - Conveyance | Done | 22/22 |
-| Phase 12 - Role Consolidation: Finance into HR | Pending | 0/11 |
+| Phase 12 - Role Consolidation: Finance into HR | Done | 11/11 |
 | Phase 13 - Meeting Minutes and AI Task Generation | Pending | 0/34 |
 | Phase 14 - Client Panel Reporting | Pending | 0/23 |
 

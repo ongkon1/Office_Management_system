@@ -86,6 +86,9 @@ if (!grantHardener.includes("table.startsWith('department_migration_')")) {
 if (!grantHardener.includes("table.startsWith('import_')")) {
   throw new Error('Runtime grant hardener must keep production import evidence read-only.');
 }
+if (!grantHardener.includes("table !== 'role_consolidation_migration_users'")) {
+  throw new Error('Runtime grant hardener must keep role-consolidation evidence read-only.');
+}
 
 const importMigration = readFileSync(join(root, '0015_production_data_imports.sql'), 'utf8');
 for (const required of [
@@ -130,6 +133,26 @@ for (const required of [
   if (!conveyanceMigration.includes(required)) {
     throw new Error(`Migration 0017 is missing required conveyance invariant: ${required}`);
   }
+}
+
+const roleConsolidationMigration = readFileSync(join(root, '0018_finance_role_consolidation.sql'), 'utf8');
+for (const required of [
+  'role_consolidation_migration_users',
+  'had_role_cost_permission',
+  'had_personal_cost_grant',
+  'created_hr_role_id',
+  'created_cost_grant_id',
+  "role_key='finance_manager'",
+  "role_key='hr_manager'",
+  "permission_key='finance.cost.view'",
+  'role.finance_consolidated',
+]) {
+  if (!roleConsolidationMigration.includes(required)) {
+    throw new Error(`Migration 0018 is missing required role-consolidation invariant: ${required}`);
+  }
+}
+if (/UPDATE\s+(?:requisition_reviews|conveyance_reviews|audit_events)/i.test(roleConsolidationMigration)) {
+  throw new Error('Migration 0018 must not rewrite recorded Finance-era history.');
 }
 
 console.log(`Migration validation passed: ${migrations.length} forward migration(s) and matching recovery scripts checked.`);

@@ -43,6 +43,7 @@ import { TeamTaskBoard } from './work-management';
 function task(id: string, title: string, employeeId: string, employeeName: string): TeamTaskView {
   return {
     id,
+    version: 1,
     title,
     projectId: 'prj-1',
     projectLabel: 'PRJ-1 · Portal rollout',

@@ -184,6 +184,7 @@ describe('task-based mock service boundary', () => {
     });
     const moved = await mockTimesheetService.transitionTask({
       taskId: 'tsk-1',
+      expectedVersion: 1,
       fromStatus: 'in_progress',
       toStatus: 'completed',
       actorRole: 'employee',
@@ -206,6 +207,7 @@ describe('task-based mock service boundary', () => {
     const idempotencyKey = `transition-retry-${Math.random()}`;
     const input = {
       taskId: 'tsk-1',
+      expectedVersion: 1,
       fromStatus: 'in_progress' as const,
       toStatus: 'completed' as const,
       actorRole: 'employee' as const,
@@ -230,6 +232,7 @@ describe('task-based mock service boundary', () => {
   it('requires a reopen reason and preserves the original completion event', async () => {
     const withoutReason = await mockTimesheetService.transitionTask({
       taskId: 'tsk-8',
+      expectedVersion: 1,
       fromStatus: 'completed',
       toStatus: 'in_progress',
       actorRole: 'employee',
@@ -240,6 +243,7 @@ describe('task-based mock service boundary', () => {
 
     const reopened = await mockTimesheetService.transitionTask({
       taskId: 'tsk-8',
+      expectedVersion: 1,
       fromStatus: 'completed',
       toStatus: 'in_progress',
       actorRole: 'employee',
@@ -262,6 +266,7 @@ describe('task-based mock service boundary', () => {
   it('refuses starting an unreviewed employee-raised task and direct completion by an employee', async () => {
     const awaitingReview = await mockTimesheetService.transitionTask({
       taskId: 'tsk-10',
+      expectedVersion: 1,
       fromStatus: 'pending',
       toStatus: 'in_progress',
       actorRole: 'employee',
@@ -270,6 +275,7 @@ describe('task-based mock service boundary', () => {
     });
     const directComplete = await mockTimesheetService.transitionTask({
       taskId: 'tsk-10',
+      expectedVersion: 1,
       fromStatus: 'pending',
       toStatus: 'completed',
       actorRole: 'employee',

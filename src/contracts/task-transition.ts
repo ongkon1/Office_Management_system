@@ -32,7 +32,8 @@ export interface TaskTransitionInput {
   readonly actorRole: RoleKey;
   readonly note: string | null;
   readonly idempotencyKey: string;
-  readonly expectedVersion?: number;
+  /** Version read with the task; required to reject stale board mutations. */
+  readonly expectedVersion: number;
 }
 
 export const TASK_TRANSITION_RULES = [
