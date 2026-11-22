@@ -218,8 +218,14 @@ function hasLeadScope(userId: string): boolean {
  * of the rule — Meeting Minutes uses it to decide which generated tasks a
  * viewer may open (`FE-1123`). `getTask` below answers from it too.
  */
-export function teamLeadCanOpenTask(userId: string, task: { readonly divisionId: string }): boolean {
-  return inDivisionScope(userId, task.divisionId);
+export function teamLeadCanOpenTask(userId: string, task: { readonly divisionId: string; readonly assigneeEmployeeId: string | null }): boolean {
+  const viewer = account(userId);
+  if (!viewer || !inDivisionScope(userId, task.divisionId)) return false;
+  if (viewer.primaryRole === 'super_admin') return true;
+  // Generated tasks without an assignee remain reachable so the Team Lead can
+  // assign them; the My tasks default filter keeps them off the personal view.
+  if (task.assigneeEmployeeId === null) return true;
+  return new Set([viewer.employeeId, ...scopedEmployees(userId)]).has(task.assigneeEmployeeId);
 }
 
 function inDivisionScope(userId: string, divisionId: string) {
@@ -731,7 +737,7 @@ export const mockTeamLeadService: TeamLeadService = {
 
   async listTasks(userId) {
     await delay();
-    return success(mockStore.tasks().filter((task) => inDivisionScope(userId, task.divisionId)).map(taskView));
+    return success(mockStore.tasks().filter((task) => teamLeadCanOpenTask(userId, task)).map(taskView));
   },
 
   async getTask(userId, id) {

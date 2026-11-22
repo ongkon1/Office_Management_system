@@ -1437,23 +1437,28 @@ export class OperationsService {
     return this.getProject(userId, projectId);
   }
   /**
-   * Tasks in projects the viewer can see, plus — for a lead — tasks assigned
-   * to the people they lead, so a Team Lead's board shows their team's work
-   * wherever it sits. Government work still needs its permission.
+   * Team Leads see only tasks assigned to themselves or people they currently
+   * lead. Project visibility never widens the board into another team's work.
+   * Super Administrators retain organisation-wide oversight.
    */
   private async taskRows(a: ActorPolicyContext, id?: string) {
+    const isSuperAdministrator = a.roles.includes("super_admin");
+    const hasLeadCapability = a.roles.includes("team_lead") || (a.departmentLeadScopes?.length ?? 0) > 0;
     const projectIds = [...(await this.projectAccess(a)).keys()];
-    const team = hasPermission(a, "time.team.read")
-      ? [...a.employeeIds].filter((employeeId) => employeeId !== a.employeeId)
-      : [];
-    if (!projectIds.length && !team.length) return [];
-    const scope = [
-      projectIds.length ? `t.project_id IN (${projectIds.map(() => "?").join(",")})` : null,
-      team.length ? `t.assignee_employee_id IN (${team.map(() => "?").join(",")})` : null,
+    const assigneeIds = hasLeadCapability && !isSuperAdministrator ? [...a.employeeIds] : [];
+    if (!projectIds.length && !assigneeIds.length) return [];
+    // A project a Team Lead can see must not expose another team's tasks.
+    const leadScope = [
+      assigneeIds.length ? `t.assignee_employee_id IN (${assigneeIds.map(() => "?").join(",")})` : null,
+      projectIds.length ? `(t.assignee_employee_id IS NULL AND t.project_id IN (${projectIds.map(() => "?").join(",")}))` : null,
     ].filter(Boolean).join(" OR ");
+    const scope = hasLeadCapability && !isSuperAdministrator
+      ? leadScope
+      : `t.project_id IN (${projectIds.map(() => "?").join(",") || "''"})`;
+    const scopeValues = hasLeadCapability && !isSuperAdministrator ? [...assigneeIds, ...projectIds] : projectIds;
     const rows = await this.rows(
       `SELECT t.*,p.name project_name,p.project_code,p.division_id,d.name division_name,d.division_key division_code,d.is_government division_restricted,e.id assignee_id,e.employee_code assignee_employee_code,e.display_name assignee_display_name,e.job_title assignee_job_title,u.image_url assignee_image_url,(SELECT COALESCE(SUM(te.active_minutes),0) FROM time_entries te WHERE te.task_id=t.id AND te.is_active=TRUE AND te.status<>'draft') actual_minutes FROM tasks t JOIN projects p ON p.id=t.project_id JOIN divisions d ON d.id=p.division_id LEFT JOIN employees e ON e.id=t.assignee_employee_id LEFT JOIN users u ON u.id=e.user_id WHERE (${scope}) ${id ? "AND t.id=?" : ""} ORDER BY t.due_date,t.title`,
-      [...projectIds, ...team, ...(id ? [id] : [])],
+      [...scopeValues, ...(id ? [id] : [])],
     );
     const government = hasPermission(a, "organization.government.view");
     return rows.filter((r) => !r.division_restricted || government);

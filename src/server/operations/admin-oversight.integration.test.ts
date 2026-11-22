@@ -39,9 +39,17 @@ describe('Super Administrator oversight', () => {
   });
 
   it('a Team Lead still sees only their scope, without government work', async () => {
-    const tasks = data(await createOperationsService(env.pool, tokens[USER(2)]).listTasks(USER(2))).map((task) => task.id);
+    const otherTeamTask = '81000000-0000-4000-8000-000000000099';
+    await env.pool.execute(
+      "INSERT INTO tasks(id,project_id,division_id,title,status,assignee_employee_id,creator_employee_id,creator_role,review_state) VALUES(?,?,?,'Other team task','pending',?,?,'team_lead','not_required')",
+      [otherTeamTask, CRM, POWERINAI, EMPLOYEE(4), EMPLOYEE(4)],
+    );
+    const service = createOperationsService(env.pool, tokens[USER(2)]);
+    const tasks = data(await service.listTasks(USER(2))).map((task) => task.id);
     expect(tasks).toContain(CRM_TASK);
     expect(tasks).not.toContain(GOV_TASK);
+    expect(tasks).not.toContain(otherTeamTask);
+    expect((await service.getTask(USER(2), otherTeamTask)).status).toBe('not_found');
   });
 
   it('opens any division in detail: people, projects and open tasks that agree with its counts', async () => {
