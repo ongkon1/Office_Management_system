@@ -45,9 +45,9 @@ const roleDefaults: Record<RoleKey, ReadonlySet<string>> = {
   super_admin: new Set(['*']),
   team_lead: new Set(['organization.read','project.manage','task.manage','time.team.read','request.decide','evaluation.manage','report.read']),
   employee: new Set(['organization.self.read','project.assigned.read','task.assigned.read','time.self.manage','request.self.manage','evaluation.self.read']),
-  // HR absorbed the Finance Manager's actions (`FE-1004`). Note what is *not*
-  // here: `finance.cost.view` and `finance.salary.view` stay per-user grants,
-  // so the merge widened who reaches finance screens and nobody's cost access.
+  // HR absorbed the Finance Manager's actions (`FE-1004`). HR financial
+  // detail still stays per-user until Phase 14; Super Administrator is already
+  // covered by the wildcard role above.
   hr_manager: new Set(['organization.manage','attendance.read','request.override','evaluation.manage','time.period.verify','report.hr.read','time.verified.read','report.finance.read','report.export']),
   management: new Set(['dashboard.read','report.read']),
 };
@@ -71,6 +71,11 @@ export function hasPermission(actor: ActorPolicyContext, permission: string): bo
   return leadsAnyDepartment(actor) && (roleDefaults.team_lead.has(permission) ?? false);
 }
 
+/** Super Administrators are organization-wide principals, not scoped leads. */
+export function isSuperAdministrator(actor: ActorPolicyContext): boolean {
+  return actor.roles.includes('super_admin');
+}
+
 export function authorize(actor: ActorPolicyContext, action: string, resource: ResourcePolicyContext, entryPoint: EntryPoint): boolean {
   void entryPoint; // The explicit argument prevents callers at any boundary from bypassing this API.
   if (resource.effective === false) return false;
@@ -78,6 +83,12 @@ export function authorize(actor: ActorPolicyContext, action: string, resource: R
   if (resource.sensitivity && !hasPermission(actor, sensitivePermission[resource.sensitivity])) return false;
   if (isMutation(action) && actor.roles.includes('management')) return false;
   if (!hasPermission(actor, action)) return false;
+  // Permission and workflow checks above still apply, but a Super
+  // Administrator is never narrowed by employee, division, project, team or
+  // department assignments. Those sets describe delegated scope for other
+  // roles; treating an empty administrator set as "no access" breaks the
+  // organization-wide role promised by REQ-RBAC-001..005.
+  if (isSuperAdministrator(actor)) return true;
   if (resource.ownerUserId === actor.userId || (resource.employeeId && resource.employeeId === actor.employeeId)) return true;
   /*
    * The employee self-only rule, with the one exception the approved

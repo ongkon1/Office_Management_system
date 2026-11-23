@@ -463,6 +463,7 @@ Also open, and required from the business rather than engineering: authoritative
 | Policy edit rewrites history | Past reports stop reproducing | Versioned policies; verified periods bound to the applied version |
 | Long work inside the request lifecycle | Timeouts; lost exports and notifications | Durable job runner with retries, idempotency and monitoring |
 | Permission cached past a revocation | Data leak | Cache only what is principal-scoped or permission-independent |
+| Super Administrator is accidentally narrowed by empty assignment scopes | Administrative screens return false not-found or omit organization records | Treat the active Super Administrator role as a wildcard capability and organization-wide record scope at the central authorization boundary; continue enforcing workflow and data-integrity invariants |
 | Hard deletion of referenced records | Missing payroll and audit evidence | Deactivation and versioning; audited hard deletion limited to unreferenced data |
 | Frontend contracts drift during backend work | Rework and inconsistent errors | Versioned service contracts, contract tests, feature-by-feature integration |
 | AI output is treated as trusted | Incorrect tasks, assignments, or data exposure | Provider-neutral port, strict schema validation, application-side matching, thresholded unassigned fallback, provenance, and audit |
@@ -510,8 +511,10 @@ whether HR and `finance.cost.view` existed beforehand; only cost access supplied
 by the retired role is reproduced as a personal unscoped grant. Finance-era
 review and audit records are never rewritten. The recovery script removes only
 assignments and grants created by the migration and reactivates the historical
-role. Phase 14 remains a separate atomic authorization cutover that grants
-`finance.cost.view` to HR and Super Administrator by role.
+role. Super Administrator now receives every registered capability through the
+central wildcard policy and organization-wide record reach, including
+`finance.cost.view`. Phase 14 remains the separate authorization cutover for
+HR's role-based financial access and the Client Panel surfaces.
 
 The browser calls `/api/requisitions` through the typed `RequisitionService`. The route derives the actor exclusively from the session, rejects cross-user arguments, and applies record visibility before lists and queue counts. Notification text comes from the fixed Phase 7 catalogue and the recipient is authorized against the live requisition before a notification is stored.
 

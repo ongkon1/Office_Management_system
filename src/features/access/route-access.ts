@@ -199,6 +199,11 @@ export function checkRouteAccess(
   const rule = findRule(pathname);
   if (!rule) return { allowed: true };
 
+  // Module switches still apply above, but no role or separately-listed
+  // permission may hide an enabled application route from Super Administrator.
+  // The service remains authoritative and validates every mutation.
+  if (user.roles.includes('super_admin')) return { allowed: true };
+
   /*
    * `OH-FE-0307`. An effective department appointment is Team Lead capability
    * without a role grant, so the rule is tested against the roles the session

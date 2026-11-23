@@ -6,6 +6,7 @@ import type { ActorPolicyContext } from './policy';
 interface IdentityRow extends RowDataPacket { user_id:string; employee_id:string|null; role_key:RoleKey|null; permission_key:string|null }
 interface ScopeRow extends RowDataPacket { division_id:string|null; employee_id:string|null; project_id:string|null; team_id:string|null }
 interface LeadScopeRow extends RowDataPacket { department_id:string; division_id:string; effective_from:string|Date; effective_to:string|Date|null }
+interface GlobalScopeRow extends RowDataPacket { scope_kind:'division'|'employee'|'project'|'team'; scope_id:string }
 const isoDate=(value:string|Date)=>value instanceof Date?value.toISOString().slice(0,10):String(value).slice(0,10);
 
 /** Loads only grants and assignments effective on the requested local business date. */
@@ -51,5 +52,33 @@ export async function loadActorPolicyContext(pool: Pick<Pool, 'execute'>, userId
       WHERE department_id IN (${placeholders}) AND is_active=TRUE AND effective_from<=? AND (effective_to IS NULL OR effective_to>=?)`,[...departmentIds,localDate,localDate]);
     for(const row of members) employeeIds.add(row.employee_id);
   }
-  return {userId,employeeId,departmentLeadScopes,departmentIds,roles:[...new Set(identity.map(row=>row.role_key).filter((v):v is RoleKey=>v!==null))],permissions:new Set([...identity.map(row=>row.permission_key).filter((v):v is string=>v!==null),...personalGrants.map(row=>row.permission_key)]),divisionIds:collect('division_id'),employeeIds,projectIds:collect('project_id'),teamIds:collect('team_id')};
+  const roles=[...new Set(identity.map(row=>row.role_key).filter((v):v is RoleKey=>v!==null))];
+  const permissions=new Set([...identity.map(row=>row.permission_key).filter((v):v is string=>v!==null),...personalGrants.map(row=>row.permission_key)]);
+  const divisionIds=collect('division_id');
+  const projectIds=collect('project_id');
+  const teamIds=collect('team_id');
+  // The server policy gives Super Administrator a wildcard. Expand the
+  // current permission catalogue into the session as well so permission-aware
+  // navigation and client guards describe the same authority as the server.
+  // A permission introduced later is therefore available without a fragile
+  // second role-mapping migration.
+  if(roles.includes('super_admin')){
+    const [allPermissions]=await pool.execute<(RowDataPacket&{permission_key:string})[]>('SELECT permission_key FROM permissions');
+    for(const row of allPermissions) permissions.add(row.permission_key);
+    // Keep older services that intersect directly with the actor's scope sets
+    // aligned with the central wildcard policy. Include inactive records too:
+    // administrators must be able to reach archive/history screens, while the
+    // operation itself still decides whether a record may be changed.
+    const [globalScopes]=await pool.execute<GlobalScopeRow[]>(`SELECT 'division' scope_kind,id scope_id FROM divisions
+      UNION ALL SELECT 'employee',id FROM employees
+      UNION ALL SELECT 'project',id FROM projects
+      UNION ALL SELECT DISTINCT 'team',team_id FROM employee_division_assignments WHERE team_id IS NOT NULL`);
+    for(const row of globalScopes){
+      if(row.scope_kind==='division')divisionIds.add(row.scope_id);
+      else if(row.scope_kind==='employee')employeeIds.add(row.scope_id);
+      else if(row.scope_kind==='project')projectIds.add(row.scope_id);
+      else teamIds.add(row.scope_id);
+    }
+  }
+  return {userId,employeeId,departmentLeadScopes,departmentIds,roles,permissions,divisionIds,employeeIds,projectIds,teamIds};
 }

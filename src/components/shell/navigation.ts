@@ -249,6 +249,45 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
       ],
     },
     {
+      key: 'people-operations',
+      label: 'People and work',
+      items: [
+        { key: 'hr-dashboard', label: 'HR Dashboard', href: '/hr', iconKey: 'layout-dashboard' },
+        { key: 'timesheets', label: 'Timesheets', href: '/hr/timesheets', iconKey: 'clock' },
+        { key: 'attendance', label: 'Attendance', href: '/attendance', iconKey: 'calendar-check', flag: 'attendance' },
+        { key: 'team', label: 'Teams', href: '/team', iconKey: 'users' },
+        { key: 'workload', label: 'Workload', href: '/workload', iconKey: 'gauge', flag: 'workloadPlanning' },
+        { key: 'requests', label: 'Requests', href: '/requests', iconKey: 'inbox', flag: 'wfhRequests' },
+        { key: 'wfh', label: 'WFH', href: '/wfh', iconKey: 'house', flag: 'wfhRequests' },
+        { key: 'leave', label: 'Leave', href: '/leave', iconKey: 'calendar-off', flag: 'leaveManagement' },
+        { key: 'evaluations', label: 'Evaluations', href: '/evaluations', iconKey: 'award', flag: 'evaluations' },
+        { key: 'remarks', label: 'Remarks', href: '/remarks', iconKey: 'message-square' },
+      ],
+    },
+    {
+      key: 'finance',
+      label: 'Finance',
+      items: [
+        { key: 'finance-dashboard', label: 'Finance Dashboard', href: '/finance', iconKey: 'layout-dashboard' },
+        { key: 'finance-hours', label: 'Employee Hours', href: '/finance/hours', iconKey: 'clock' },
+        { key: 'finance-overtime', label: 'Overtime', href: '/finance/overtime', iconKey: 'trending-up' },
+        { key: 'finance-billable', label: 'Billable Analysis', href: '/finance/billable', iconKey: 'chart-pie', permission: 'finance.cost.view' },
+        { key: 'project-costs', label: 'Project Costs', href: '/finance/project-costs', iconKey: 'coins', flag: 'projectCosting', permission: 'finance.cost.view' },
+        { key: 'division-costs', label: 'Division Costs', href: '/finance/division-costs', iconKey: 'building', flag: 'projectCosting', permission: 'finance.cost.view' },
+        { key: 'payroll', label: 'Payroll Reports', href: '/finance/payroll', iconKey: 'receipt', flag: 'financeReports' },
+        { key: 'financial-reports', label: 'Financial Reports', href: '/finance/reports', iconKey: 'file-chart-column', flag: 'financeReports' },
+      ],
+    },
+    {
+      key: 'shared',
+      label: 'Shared',
+      items: [
+        { key: 'documents', label: 'Documents', href: '/documents', iconKey: 'folder', flag: 'documents' },
+        { key: 'messages', label: 'Messages', href: '/messages', iconKey: 'message-square', flag: 'messages' },
+        { key: 'profile', label: 'Profile', href: '/profile', iconKey: 'user' },
+      ],
+    },
+    {
       key: 'administration',
       label: 'Administration',
       items: [
@@ -326,7 +365,7 @@ export function buildNavigation({
       label: group.label,
       items: group.items
         .filter((item) => !item.flag || isFeatureEnabled(flags, item.flag))
-        .filter((item) => !item.permission || permissions.includes(item.permission))
+        .filter((item) => role === 'super_admin' || !item.permission || permissions.includes(item.permission))
         .map<NavItemView>((item) => ({
           key: item.key,
           label: item.label,

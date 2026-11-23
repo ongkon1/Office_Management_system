@@ -24,9 +24,14 @@ export class MysqlAuditSink implements AuditSink {
   constructor(private readonly pool: Pick<Pool | PoolConnection, 'execute'>) {}
   async append(event: Readonly<Record<string, unknown>>): Promise<void> {
     const scalar = (key: string) => typeof event[key] === 'string' ? event[key] as string : null;
+    const occurredAtValue = scalar('occurredAt');
+    const occurredAt = occurredAtValue ? new Date(occurredAtValue) : null;
+    if (!occurredAt || Number.isNaN(occurredAt.getTime())) {
+      throw new Error('Audit event occurredAt must be a valid timestamp.');
+    }
     await this.pool.execute(
       `INSERT INTO audit_events(event_id,actor_user_id,impersonator_user_id,action,resource_type,resource_id,scope_json,reason,correlation_id,before_protected,after_protected,occurred_at) VALUES(?,?,?,?,?,?,CAST(? AS JSON),?,?,CAST(? AS JSON),CAST(? AS JSON),?)`,
-      [scalar('eventId'),scalar('actorUserId'),scalar('impersonatorUserId'),scalar('action'),scalar('resourceType'),scalar('resourceId'),JSON.stringify(event.scope),scalar('reason'),scalar('correlationId'),JSON.stringify(event.beforeProtected ?? null),JSON.stringify(event.afterProtected ?? null),scalar('occurredAt')],
+      [scalar('eventId'),scalar('actorUserId'),scalar('impersonatorUserId'),scalar('action'),scalar('resourceType'),scalar('resourceId'),JSON.stringify(event.scope),scalar('reason'),scalar('correlationId'),JSON.stringify(event.beforeProtected ?? null),JSON.stringify(event.afterProtected ?? null),occurredAt],
     );
   }
 }

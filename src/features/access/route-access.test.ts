@@ -130,8 +130,11 @@ describe('checkRouteAccess', () => {
     }
   });
 
-  it('denies the audit log to an administrator lacking the audit permission', () => {
-    expect(allow('/admin/audit', userWith('super_admin'))).toBe(false);
+  it('does not require a separately listed permission from Super Administrator', () => {
+    const administrator = userWith('super_admin');
+    expect(allow('/admin/audit', administrator)).toBe(true);
+    expect(allow('/finance/project-costs', administrator)).toBe(true);
+    expect(allow('/divisions', administrator)).toBe(true);
   });
 
   it('allows an unruled route rather than failing closed on navigation', () => {

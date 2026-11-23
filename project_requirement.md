@@ -105,6 +105,7 @@ The MVP must include:
 - `REQ-RBAC-003`: The system must allow a Super Administrator to assign Team Lead, HR Manager, Finance Manager, management/view-only, and administrative roles.
 - `REQ-RBAC-004`: The system must allow a Super Administrator to manage permissions, holidays, working-hour policies, overtime rules, integrations, and system settings.
 - `REQ-RBAC-005`: The system must give authorized Super Administrators company-wide dashboards, reports, activity logs, and integration administration.
+- `REQ-RBAC-025`: The system must grant an active Super Administrator every application capability and organization-wide access to every authorized record and protected field. This authority must not bypass authentication, input validation, workflow-state rules, payroll locks, optimistic concurrency, append-only audit, retention rules, or immutable historical records.
 - `REQ-RBAC-021`: The system must allow only Super Administrators to create, view, update, and delete unreferenced departments and to assign each department's Team Lead.
 - `REQ-RBAC-023`: The system must allow active Super Administrators to open Client Panel and view authorized employee active hours and internal labour cost.
 

@@ -16,6 +16,22 @@ describe('BE-0210..0217 and BE-0224 authorization matrix', () => {
     expect(authorize(actor('employee'),'time.self.manage',{employeeId:'e2'},'server_action')).toBe(false);
     expect(authorize(actor('management'),'report.write',{},'route_handler')).toBe(false);
   });
+  it.each(boundaries)('gives Super Administrator organization-wide record scope at %s', (boundary) => {
+    const administrator = actor('super_admin');
+    expect(authorize(administrator,'organization.manage',{
+      employeeId:'outside-employee',
+      divisionId:'outside-division',
+      projectId:'outside-project',
+      teamId:'outside-team',
+      departmentId:'outside-department',
+      effective:true,
+    },boundary)).toBe(true);
+  });
+  it('still enforces workflow and effective-state invariants for Super Administrator', () => {
+    const administrator = actor('super_admin');
+    expect(authorize(administrator,'task.manage',{effective:false},'server_action')).toBe(false);
+    expect(authorize(administrator,'task.manage',{workflowState:'locked',allowedWorkflowStates:['open']},'server_action')).toBe(false);
+  });
   it.each(['government','salary','cost_rate','labour_cost','evaluation','export','document','attachment','audit'] as const)('denies %s by default', (sensitivity) => {
     expect(authorize(actor('super_admin',[]),'organization.read',{sensitivity},'server_component')).toBe(true);
     expect(authorize(actor('team_lead'),'organization.read',{sensitivity},'server_component')).toBe(false);

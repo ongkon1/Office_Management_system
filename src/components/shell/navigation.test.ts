@@ -126,6 +126,15 @@ describe('buildNavigation', () => {
 
     const adminHrefs = hrefsFor({ role: 'super_admin', flags: DEMO_FEATURE_FLAGS, permissions: [] });
     expect(adminHrefs.slice(0, 4)).toEqual(['/dashboard', '/tasks', '/employees', '/projects']);
+    expect(adminHrefs).toEqual(expect.arrayContaining([
+      '/hr',
+      '/hr/timesheets',
+      '/attendance',
+      '/team',
+      '/finance',
+      '/finance/project-costs',
+      '/finance/payroll',
+    ]));
     expect(adminHrefs.indexOf('/admin/users')).toBeLessThan(adminHrefs.indexOf('/admin/roles'));
   });
 

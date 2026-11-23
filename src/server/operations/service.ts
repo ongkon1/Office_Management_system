@@ -2079,7 +2079,7 @@ export class OperationsService {
         .filter(
           (r) =>
             !Boolean(r.is_government) ||
-            a?.permissions.has("organization.government.view"),
+            Boolean(a && hasPermission(a, "organization.government.view")),
         )
         .map((r) => ({
           id: String(r.id),
@@ -2118,9 +2118,7 @@ export class OperationsService {
     if (!context) return absent("Work options");
 
     const divisionIds = new Set(context.effectiveDivisionIds);
-    const canReadGovernment = actor.permissions.has(
-      "organization.government.view",
-    );
+    const canReadGovernment = hasPermission(actor, "organization.government.view");
     const divisions = context.divisions.filter(
       (item) =>
         divisionIds.has(item.id) &&
