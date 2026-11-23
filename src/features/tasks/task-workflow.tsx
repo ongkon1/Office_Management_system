@@ -16,7 +16,7 @@ import {
   TriangleAlert,
   UserRound,
 } from 'lucide-react';
-import type { RoleKey, TaskStatus, WorkLocation } from '@/contracts/domain';
+import type { RoleKey, TaskReviewState, TaskStatus, WorkLocation } from '@/contracts/domain';
 import type { Failure } from '@/contracts/results';
 import {
   canTransition,
@@ -40,6 +40,7 @@ import { businessToday } from '@/lib/business-date';
 import { formatDuration, formatTimestamp, NOT_RECORDED } from '@/lib/format';
 import { TASK_STATUS_LABEL, WORK_LOCATION_LABEL } from '@/lib/status';
 import { timesheetService as mockTimesheetService } from '@/services/runtime/timesheet';
+import { taskReviewService as mockTaskReviewService } from '@/services/runtime/task-review';
 import { useAsync } from '@/lib/use-async';
 
 export type TaskBoardFilter =
@@ -47,6 +48,7 @@ export type TaskBoardFilter =
   | 'pending'
   | 'in_progress'
   | 'completed'
+  | 'rejected'
   | 'overdue'
   | 'upcoming';
 
@@ -61,6 +63,7 @@ export interface WorkflowBoardTask {
   /** Null for an unassigned task (`REQ-MTG-014`), shown as "Unassigned". */
   readonly assignee: { readonly id: string; readonly fullName: string } | null;
   readonly status: TaskStatus;
+  readonly reviewState: TaskReviewState;
   readonly estimated: DurationView;
   readonly actual: DurationView;
   readonly variance: DurationVarianceView;
@@ -79,6 +82,7 @@ const FILTER_TABS = [
   { key: 'pending', label: 'Pending' },
   { key: 'in_progress', label: 'In Progress' },
   { key: 'completed', label: 'Completed' },
+  { key: 'rejected', label: 'Rejected' },
   { key: 'overdue', label: 'Overdue' },
   { key: 'upcoming', label: 'Upcoming' },
 ] as const;
@@ -94,6 +98,8 @@ const STATUS_PRESENTATION: Record<
 
 function matches(task: WorkflowBoardTask, filter: TaskBoardFilter): boolean {
   if (filter === 'all') return true;
+  if (filter === 'rejected') return task.reviewState === 'rejected';
+  if (task.reviewState === 'rejected') return false;
   if (filter === 'pending' || filter === 'in_progress' || filter === 'completed') {
     return task.status === filter;
   }
@@ -131,6 +137,7 @@ function actionIcon(from: TaskStatus, to: TaskStatus) {
 }
 
 function transitionTargets(task: WorkflowBoardTask, actorRole: RoleKey): readonly TaskStatus[] {
+  if (task.reviewState === 'rejected') return [];
   return WORKFLOW_STATUSES.filter((status) => {
     if (status === task.status || !canTransition(task.status, status, actorRole)) return false;
     if (
@@ -172,10 +179,12 @@ function TaskActionButtons({
   task,
   actorRole,
   onRequest,
+  onReopenReview,
 }: {
   task: WorkflowBoardTask;
   actorRole: RoleKey;
   onRequest: (task: WorkflowBoardTask, toStatus: TaskStatus) => void;
+  onReopenReview: (task: WorkflowBoardTask) => void;
 }) {
   const targets = transitionTargets(task, actorRole);
   return (
@@ -191,6 +200,16 @@ function TaskActionButtons({
           {actionLabel(task.status, target)}
         </Button>
       ))}
+      {task.reviewState === 'rejected' && (actorRole === 'team_lead' || actorRole === 'super_admin') && (
+        <Button
+          size="sm"
+          variant="primary"
+          iconLeading={<RotateCcw aria-hidden className="size-4" />}
+          onClick={() => onReopenReview(task)}
+        >
+          Reopen review
+        </Button>
+      )}
       {task.status === 'in_progress' && task.canLogWorkWhenInProgress && (
         <LinkButton
           size="sm"
@@ -209,12 +228,14 @@ function TaskCard({
   task,
   actorRole,
   onRequest,
+  onReopenReview,
   onDragStart,
   onDragEnd,
 }: {
   task: WorkflowBoardTask;
   actorRole: RoleKey;
   onRequest: (task: WorkflowBoardTask, toStatus: TaskStatus) => void;
+  onReopenReview: (task: WorkflowBoardTask) => void;
   onDragStart: (task: WorkflowBoardTask) => void;
   onDragEnd: () => void;
 }) {
@@ -262,6 +283,11 @@ function TaskCard({
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2">
+        {task.reviewState === 'rejected' && (
+          <Badge tone="danger" icon={<TriangleAlert aria-hidden className="size-3.5" />}>
+            Rejected
+          </Badge>
+        )}
         {task.isOverdue && (
           <Badge tone="danger" icon={<TriangleAlert aria-hidden className="size-3.5" />}>
             Overdue
@@ -311,7 +337,7 @@ function TaskCard({
         </Callout>
       )}
 
-      <TaskActionButtons task={task} actorRole={actorRole} onRequest={onRequest} />
+      <TaskActionButtons task={task} actorRole={actorRole} onRequest={onRequest} onReopenReview={onReopenReview} />
     </article>
   );
 }
@@ -649,20 +675,118 @@ function TransitionPanel({
   );
 }
 
+function ReviewReopenPanel({
+  task,
+  userId,
+  onClose,
+  onReopened,
+}: {
+  task: WorkflowBoardTask;
+  userId: string;
+  onClose: () => void;
+  onReopened: () => void;
+}) {
+  const toast = useToast();
+  const [reason, setReason] = React.useState('');
+  const [failure, setFailure] = React.useState<Failure | null>(null);
+  const [submitting, setSubmitting] = React.useState(false);
+
+  async function submit() {
+    if (!reason.trim()) {
+      setFailure({
+        status: 'validation_failure',
+        code: 'VALIDATION_FAILED',
+        message: 'A reason is required.',
+        focusField: 'reason',
+        fieldErrors: [{
+          field: 'reason',
+          code: 'REOPEN_REASON_REQUIRED',
+          message: 'Enter a reason for reopening review.',
+          guidance: 'Explain what changed and why the task should be reviewed again.',
+        }],
+      });
+      return;
+    }
+    setSubmitting(true);
+    setFailure(null);
+    const result = await mockTaskReviewService.reopen(userId, task.id, {
+      expectedVersion: task.version,
+      reason: reason.trim(),
+    });
+    setSubmitting(false);
+    if (result.status !== 'success') {
+      setFailure(result);
+      return;
+    }
+    toast.show({
+      tone: 'success',
+      title: 'Task review reopened',
+      description: `${task.title} is awaiting Team Lead review again.`,
+    });
+    onReopened();
+  }
+
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      dismissOnBackdrop={!submitting}
+      title="Reopen task review"
+      description={`${task.title} will return to the Team Lead review queue. This does not approve or start the task.`}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={submitting}>Cancel</Button>
+          <Button variant="primary" onClick={submit} loading={submitting}>Reopen review</Button>
+        </>
+      }
+    >
+      {failure && (
+        <Alert
+          tone={failure.status === 'conflict' ? 'warning' : 'danger'}
+          title={failure.status === 'conflict' ? 'The task changed' : 'Review could not be reopened'}
+          live
+          className="mb-4"
+        >
+          {failure.message}{'guidance' in failure && failure.guidance ? ` ${failure.guidance}` : ''}
+        </Alert>
+      )}
+      <Field
+        label="Reason"
+        required
+        helperText="This reason is stored in the audit log."
+        error={fieldMessage(failure, 'reason')}
+      >
+        <Textarea
+          name="reason"
+          rows={4}
+          maxLength={2000}
+          value={reason}
+          onChange={(event) => setReason(event.target.value)}
+          disabled={submitting}
+        />
+      </Field>
+    </Dialog>
+  );
+}
+
 export function TaskWorkflowBoard({
   tasks,
   actorRole,
+  viewerUserId = '',
   viewerEmployeeId = null,
   onMoved,
 }: {
   tasks: readonly WorkflowBoardTask[];
   actorRole: RoleKey;
+  /** Required for server-authorized review actions. */
+  viewerUserId?: string;
   /** The signed-in employee; completing can log their final work for today. */
   viewerEmployeeId?: string | null;
   onMoved: () => void;
 }) {
   const [filter, setFilter] = React.useState<TaskBoardFilter>('all');
   const [request, setRequest] = React.useState<TransitionRequest | null>(null);
+  const [reopenTask, setReopenTask] = React.useState<WorkflowBoardTask | null>(null);
   const [draggedTaskId, setDraggedTaskId] = React.useState<string | null>(null);
   const [announcement, setAnnouncement] = React.useState('');
   const visible = tasks.filter((task) => matches(task, filter));
@@ -751,6 +875,7 @@ export function TaskWorkflowBoard({
                           task={task}
                           actorRole={actorRole}
                           onRequest={requestMove}
+                          onReopenReview={setReopenTask}
                           onDragStart={(dragged) => {
                             setDraggedTaskId(dragged.id);
                             setAnnouncement(`${dragged.title} picked up. Drop it in an available status column or use its action buttons.`);
@@ -792,6 +917,7 @@ export function TaskWorkflowBoard({
                         task={task}
                         actorRole={actorRole}
                         onRequest={requestMove}
+                        onReopenReview={setReopenTask}
                         onDragStart={() => undefined}
                         onDragEnd={() => undefined}
                       />
@@ -812,6 +938,17 @@ export function TaskWorkflowBoard({
           viewerEmployeeId={viewerEmployeeId}
           onClose={() => setRequest(null)}
           onMoved={onMoved}
+        />
+      )}
+      {reopenTask && (
+        <ReviewReopenPanel
+          task={reopenTask}
+          userId={viewerUserId}
+          onClose={() => setReopenTask(null)}
+          onReopened={() => {
+            setReopenTask(null);
+            onMoved();
+          }}
         />
       )}
     </div>
@@ -907,19 +1044,22 @@ export function TaskHistoryTimeline({ taskId }: { taskId: string }) {
 export function TaskDetailTransitions({
   task,
   actorRole,
+  viewerUserId = '',
   viewerEmployeeId = null,
   onMoved,
 }: {
   task: WorkflowBoardTask;
   actorRole: RoleKey;
+  viewerUserId?: string;
   /** The signed-in employee; completing can log their final work for today. */
   viewerEmployeeId?: string | null;
   onMoved: () => void;
 }) {
   const [request, setRequest] = React.useState<TransitionRequest | null>(null);
+  const [reopening, setReopening] = React.useState(false);
   return (
     <>
-      <TaskActionButtons task={task} actorRole={actorRole} onRequest={(selected, toStatus) => setRequest({ task: selected, toStatus })} />
+      <TaskActionButtons task={task} actorRole={actorRole} onRequest={(selected, toStatus) => setRequest({ task: selected, toStatus })} onReopenReview={() => setReopening(true)} />
       {request && (
         <TransitionPanel
           key={`${request.task.id}:${request.task.status}:${request.toStatus}`}
@@ -928,6 +1068,17 @@ export function TaskDetailTransitions({
           viewerEmployeeId={viewerEmployeeId}
           onClose={() => setRequest(null)}
           onMoved={onMoved}
+        />
+      )}
+      {reopening && (
+        <ReviewReopenPanel
+          task={task}
+          userId={viewerUserId}
+          onClose={() => setReopening(false)}
+          onReopened={() => {
+            setReopening(false);
+            onMoved();
+          }}
         />
       )}
     </>

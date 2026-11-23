@@ -16,6 +16,10 @@ export interface TaskReviewRepository {
     divisionIds: readonly string[];
     isTeamLead: boolean;
   } | null>;
+  reviewActorForUser(userId: string): Promise<{
+    employeeId: string | null;
+    isSuperAdministrator: boolean;
+  } | null>;
   currentLeadForEmployee(employeeId: string): Promise<string | null>;
   projectAvailable(projectId: string, employeeId: string, divisionIds: readonly string[]): Promise<boolean>;
   insertSelfTask(input: {
@@ -37,6 +41,10 @@ export interface TaskReviewRepository {
     note: string | null;
     idempotencyKey: string;
   }): Promise<'applied' | 'replayed' | 'conflict'>;
+  reopenRejected(input: {
+    taskId: string;
+    expectedVersion: number;
+  }): Promise<boolean>;
 }
 
 export interface TaskReviewEffects {
@@ -48,7 +56,7 @@ export interface TaskReviewEffects {
     after: unknown;
     reason: string | null;
   }): Promise<void>;
-  notify(input: { recipientEmployeeId: string; type: string; taskId: string }): Promise<void>;
+  notify(input: { recipientEmployeeId: string; type: string; taskId: string; occurrenceKey?: string }): Promise<void>;
 }
 
 const validation = (field: string, code: string, message: string, guidance: string) => ({
@@ -219,5 +227,73 @@ export class TaskReviewApplicationService {
       });
     }
     return { status: 'success' as const, data: { state: input.decision } };
+  }
+
+  async reopen(
+    userId: string,
+    taskId: string,
+    input: { expectedVersion: number; reason: string },
+  ): Promise<Result<{ state: 'pending_review' }>> {
+    const actor = await this.repo.reviewActorForUser(userId);
+    const task = await this.repo.find(taskId);
+    if (!actor || !task) return notFound();
+
+    const currentLead = await this.repo.currentLeadForEmployee(task.creatorEmployeeId);
+    const isCurrentLead = Boolean(actor.employeeId && actor.employeeId === currentLead);
+    if (!actor.isSuperAdministrator && !isCurrentLead) return notFound();
+    if (task.reviewState !== 'rejected') {
+      return {
+        status: 'conflict',
+        code: 'CONFLICT',
+        message: 'This task is no longer rejected.',
+        guidance: 'Reload the task to see its current review state.',
+      };
+    }
+
+    const reason = input.reason.trim();
+    if (!reason || reason.length > 2_000) {
+      return validation(
+        'reason',
+        'REOPEN_REASON_REQUIRED',
+        'Enter a reason of up to 2,000 characters.',
+        'Explain what changed and why this task should return to review.',
+      );
+    }
+    if (!Number.isInteger(input.expectedVersion) || input.expectedVersion < 1) {
+      return {
+        status: 'conflict',
+        code: 'CONFLICT',
+        message: 'This task view is out of date.',
+        guidance: 'Reload the task before reopening it.',
+      };
+    }
+
+    const applied = await this.repo.reopenRejected({ taskId, expectedVersion: input.expectedVersion });
+    if (!applied) {
+      return {
+        status: 'conflict',
+        code: 'CONFLICT',
+        message: 'This task changed before it could be reopened.',
+        guidance: 'Reload the task and try again.',
+      };
+    }
+
+    await this.effects.audit({
+      action: 'task.review_reopened',
+      actorUserId: userId,
+      taskId,
+      before: { reviewState: 'rejected', version: input.expectedVersion },
+      after: { reviewState: 'pending_review', version: input.expectedVersion + 1 },
+      reason,
+    });
+    if (currentLead && actor.employeeId !== currentLead) {
+      await this.effects.notify({
+        recipientEmployeeId: currentLead,
+        type: 'task_review_requested',
+        taskId,
+        occurrenceKey: `task-review-reopened:${taskId}:${input.expectedVersion + 1}`,
+      });
+    }
+    return { status: 'success', data: { state: 'pending_review' } };
   }
 }

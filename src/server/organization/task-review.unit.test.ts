@@ -5,6 +5,9 @@ const repo = (): TaskReviewRepository => ({
   employeeForUser: vi.fn().mockResolvedValue({
     id: 'e1', leadEmployeeId: 'lead', divisionIds: ['d1'], isTeamLead: false,
   }),
+  reviewActorForUser: vi.fn().mockResolvedValue({
+    employeeId: 'lead', isSuperAdministrator: false,
+  }),
   currentLeadForEmployee: vi.fn().mockResolvedValue('lead'),
   projectAvailable: vi.fn().mockResolvedValue(true),
   insertSelfTask: vi.fn().mockResolvedValue('t1'),
@@ -12,6 +15,7 @@ const repo = (): TaskReviewRepository => ({
     id: 't1', creatorEmployeeId: 'e1', reviewState: 'pending_review', version: 1,
   }),
   decideAtomic: vi.fn().mockResolvedValue('applied'),
+  reopenRejected: vi.fn().mockResolvedValue(true),
 });
 
 const effects = () => ({ audit: vi.fn(), notify: vi.fn() });
@@ -79,6 +83,36 @@ describe('self-created task application boundary', () => {
     expect((await application.decide(
       'u', 't1', { decision: 'approved', note: '', idempotencyKey: 'k' },
     )).status).toBe('conflict');
+  });
+
+  it('reopens a rejected task only for its current Team Lead and records the reason', async () => {
+    const repository = repo();
+    vi.mocked(repository.find).mockResolvedValue({
+      id: 't1', creatorEmployeeId: 'e1', reviewState: 'rejected', version: 3,
+    });
+    const sideEffects = effects();
+    const result = await service(repository, sideEffects).reopen(
+      'lead-user', 't1', { expectedVersion: 3, reason: 'The requested changes are ready.' },
+    );
+    expect(result).toEqual({ status: 'success', data: { state: 'pending_review' } });
+    expect(repository.reopenRejected).toHaveBeenCalledWith({ taskId: 't1', expectedVersion: 3 });
+    expect(sideEffects.audit).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'task.review_reopened', reason: 'The requested changes are ready.',
+    }));
+  });
+
+  it('hides rejected tasks from employees trying to reopen them', async () => {
+    const repository = repo();
+    vi.mocked(repository.find).mockResolvedValue({
+      id: 't1', creatorEmployeeId: 'e1', reviewState: 'rejected', version: 3,
+    });
+    vi.mocked(repository.reviewActorForUser).mockResolvedValue({
+      employeeId: 'e1', isSuperAdministrator: false,
+    });
+    expect((await service(repository).reopen(
+      'employee-user', 't1', { expectedVersion: 3, reason: 'Try again' },
+    )).status).toBe('not_found');
+    expect(repository.reopenRejected).not.toHaveBeenCalled();
   });
 
   it.each([

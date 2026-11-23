@@ -206,10 +206,11 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 - `REQ-WORK-012`: Every task transition must be append-only and must store task, previous status, new status, actor, business-timezone-aware timestamp, note when supplied, and an idempotency key.
 - `REQ-WORK-013`: Moving a task between statuses must not create, change, infer, or prove active-work minutes.
 - `REQ-WORK-014`: Employees must be able to supply an optional note when starting or completing a task; reopening and a Team Lead's direct Pending-to-Completed transition must require a note.
-- `REQ-WORK-015`: Employees must have All, Pending, In Progress, Completed, Overdue, and Upcoming task views; All is a combined filter, while Overdue and Upcoming must be derived from due dates rather than stored as workflow statuses.
+- `REQ-WORK-015`: Employees must have All, Pending, In Progress, Completed, Rejected, Overdue, and Upcoming task views; All is a combined filter, Rejected must be derived from employee-raised-task review state, and Overdue and Upcoming must be derived from due dates rather than stored as workflow statuses.
 - `REQ-WORK-016`: A task must accept new work logs only while In Progress, assigned or explicitly available to the employee, approved where employee-raised-task review applies, and attached to an active project and effective division assignment.
 - `REQ-WORK-017`: Task actual time and estimate variance must be derived from work logs, must not overwrite the estimate, and must not cap actual time at the estimate.
 - `REQ-WORK-018`: The Team Lead task form must include an explicit `Self (me)` assignee option. Selecting it must force the creator and assignee to the authenticated Team Lead, remove supporting members so only that Team Lead can complete or log work against the task, store `review_state = not_required`, send no self-assignment or approval notification, enter no review queue, and follow the normal Pending → In Progress → Completed workflow before accepting work logs.
+- `REQ-WORK-019`: A rejected employee-raised task must remain Pending as its stored task status, appear in the derived Rejected view rather than Pending, accept no work or status transition, and return to `pending_review` only when its current Team Lead or a Super Administrator reopens review with a required reason, optimistic-concurrency check, append-only audit evidence, and a fresh Team Lead notification where the actor is not that lead.
 
 ### 5.3 Timesheet Management
 
@@ -764,6 +765,7 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 - `AC-WF-012`: Given one employee with PowerInAI and WesternCF assignments, the assignment forms must allow Technical for PowerInAI and Operations for WesternCF; submitting either department against the other division must be rejected with field-level corrective guidance.
 - `AC-WF-013`: Given one employee appointed to lead two departments, both scopes must coexist while effective; ending one appointment must remove only that future scope while historical decisions continue to identify the responsible lead.
 - `AC-WF-014`: Given a Team Lead creates a personal task, the task must be self-assigned and Pending with no review required, must appear in no approval queue, and after moving to In Progress must accept duration work logs in that Team Lead's own timesheet.
+- `AC-WF-015`: Given an employee-raised task is rejected, it must appear in Rejected and not Pending, expose no ordinary status move, refuse an Employee reopen attempt as not found, require a reason from the current Team Lead or Super Administrator, and after a successful reopen return to the Team Lead review queue without becoming approved, In Progress, or adding active time.
 
 ### 14.4 Reporting and Quality Scenarios
 

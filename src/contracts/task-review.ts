@@ -102,6 +102,13 @@ export interface TaskReviewDecisionInput {
   readonly note: string;
 }
 
+export interface TaskReviewReopenInput {
+  /** Version read with the rejected task; stale screens must not reopen it. */
+  readonly expectedVersion: number;
+  /** Required audit reason explaining why review is being reopened. */
+  readonly reason: string;
+}
+
 export interface TaskReviewService {
   /** Projects and review policy for the signed-in person's self-task form. */
   options(userId: string): Promise<Result<EmployeeTaskOptionsView>>;
@@ -118,6 +125,12 @@ export interface TaskReviewService {
     taskId: string,
     input: TaskReviewDecisionInput,
   ): Promise<Result<TaskReviewStateView>>;
+  /** Returns a rejected employee-raised task to review. Team Lead/Super Admin only. */
+  reopen(
+    userId: string,
+    taskId: string,
+    input: TaskReviewReopenInput,
+  ): Promise<Result<{ readonly state: 'pending_review' }>>;
 }
 
 /* ------------------------------------------------------------------------- */

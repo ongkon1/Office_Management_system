@@ -63,6 +63,18 @@ export class BackendTaskReviewViews implements TaskReviewService {
     if(rows[0].request_hash!==requestHash)return{status:'conflict',code:'CONFLICT',message:'This request was already used for a different task.',guidance:'Reload the page and raise the task again.'};
     return (typeof rows[0].response_body==='string'?JSON.parse(rows[0].response_body):rows[0].response_body) as Result<{ readonly id: string }>;
   }
+  async reopen(userId:string,taskId:string,input:Parameters<TaskReviewService['reopen']>[2]){
+    if(!await this.identity(userId))return absent();
+    const connection=await this.pool.getConnection();
+    try{
+      await connection.beginTransaction();
+      const app=new TaskReviewApplicationService(new MysqlTaskReviewRepository(connection),new MysqlTaskReviewEffects(connection,new AuditWriter(new MysqlAuditSink(connection))));
+      const result=await app.reopen(userId,taskId,input);
+      if(result.status!=='success'){await connection.rollback();return result;}
+      await connection.commit();
+      return result;
+    }catch(error){await connection.rollback();throw error;}finally{connection.release();}
+  }
   async queue(userId:string):Promise<Result<TaskReviewQueueView>>{if(!await this.identity(userId))return absent();const employee=await this.repo.employeeForUser(userId);if(!employee||!employee.isTeamLead)return success({rows:[],awaitingCount:0,href:'/tasks'});const [rows]=await this.pool.execute<Row[]>(`SELECT t.id,t.title,t.priority,t.due_date,t.estimated_minutes,t.description,t.created_at,p.project_code,p.name project_name,d.division_key,e.display_name creator_name FROM tasks t JOIN projects p ON p.id=t.project_id JOIN divisions d ON d.id=t.division_id JOIN employees e ON e.id=t.creator_employee_id JOIN employee_division_assignments a ON a.employee_id=t.creator_employee_id AND a.is_active=TRUE AND a.effective_from<=CURRENT_DATE AND (a.effective_to IS NULL OR a.effective_to>=CURRENT_DATE) LEFT JOIN departments dept ON dept.id=a.department_id AND dept.is_active=TRUE LEFT JOIN department_lead_assignments dla ON dla.department_id=dept.id AND dla.effective_from<=CURRENT_DATE AND (dla.effective_to IS NULL OR dla.effective_to>=CURRENT_DATE) WHERE t.review_state='pending_review' AND COALESCE(dla.lead_employee_id,a.lead_employee_id)=? GROUP BY t.id ORDER BY t.created_at`,[employee.id]);const result=rows.map(row=>({id:String(row.id),title:String(row.title),projectLabel:`${String(row.project_code)} · ${String(row.project_name)}`,divisionCode:String(row.division_key),requestedByName:String(row.creator_name),priority:String(row.priority??'medium') as TaskReviewQueueView['rows'][number]['priority'],dueDateLabel:row.due_date?formatDate(row.due_date instanceof Date?row.due_date.toISOString().slice(0,10):String(row.due_date)):null,estimated:toDurationView(Number(row.estimated_minutes??0)),description:row.description?String(row.description):null,requestedAtLabel:formatTimestamp(row.created_at instanceof Date?row.created_at.toISOString():String(row.created_at)),href:`/tasks/${String(row.id)}`}));return success({rows:result,awaitingCount:result.length,href:'/tasks'});}
   async decide(userId:string,taskId:string,input:Parameters<TaskReviewService['decide']>[2]){if(!await this.identity(userId))return absent();const result=await this.app.decide(userId,taskId,{...input,idempotencyKey:randomUUID()});if(result.status!=='success')return result;const [rows]=await this.pool.execute<Row[]>(`SELECT t.review_state,t.review_note,t.reviewed_at,e.display_name reviewer_name FROM tasks t LEFT JOIN employees e ON e.id=t.reviewer_employee_id WHERE t.id=?`,[taskId]);return rows[0]?success(stateView(rows[0] as Row&{review_state:unknown})):absent();}
 }

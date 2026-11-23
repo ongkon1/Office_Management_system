@@ -17,6 +17,7 @@ import {
 } from '@/features/tasks/task-workflow';
 import { useAsync } from '@/lib/use-async';
 import { useSession } from '@/features/access/session-provider';
+import { navigationRole } from '@/features/access/capabilities';
 import { useToast } from '@/components/feedback/toast';
 import { PageContainer, PageHeader, StickyActionBar } from '@/components/layout/page';
 import { Card, CardHeader } from '@/components/feedback/card';
@@ -639,7 +640,8 @@ export function TeamTaskBoard() {
       )}
       <TaskWorkflowBoard
         tasks={boardTasks}
-        actorRole="team_lead"
+        actorRole={user ? navigationRole(user) : 'team_lead'}
+        viewerUserId={user?.userId ?? ''}
         viewerEmployeeId={user?.employeeId ?? null}
         onMoved={reload}
       />
@@ -731,7 +733,7 @@ export function TeamTaskDetail({ taskId }: { taskId: string }) {
         <aside className="space-y-5">
           <Card>
             <CardHeader title="Change status" description="Every move is confirmed and creates no active time." />
-            <TaskDetailTransitions task={workflowTask} actorRole="team_lead" viewerEmployeeId={user?.employeeId ?? null} onMoved={reload} />
+            <TaskDetailTransitions task={workflowTask} actorRole={user ? navigationRole(user) : 'team_lead'} viewerUserId={user?.userId ?? ''} viewerEmployeeId={user?.employeeId ?? null} onMoved={reload} />
           </Card>
           <Card>
             <CardHeader title="Supporting members" />
@@ -773,6 +775,7 @@ function teamBoardTask(task: TeamTaskView, viewerEmployeeId: string): WorkflowBo
     division: { id: task.division.id, name: task.division.name, code: task.division.code },
     assignee: task.assignee ? { id: task.assignee.id, fullName: task.assignee.fullName } : null,
     status: task.status,
+    reviewState: task.review.state,
     estimated: task.estimated,
     actual: task.actual,
     variance: task.variance,

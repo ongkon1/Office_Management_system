@@ -290,7 +290,7 @@ An employee raises a task for themselves and their Team Lead endorses it. A Team
 - [x] `BE-0333` Make the decision idempotent and conflict-safe, and keep it append-only so who endorsed what stays reproducible.
 - [x] `BE-0334` Handle the Team Lead mapping changing while a task is pending, so a raised task can never become unreviewable.
 - [x] `BE-0335` Restrict the personal-task create payload to the creator's own assigned divisions and active projects, ignoring any assignee or supporting members it carries. Force self-assignment; require review for Employees and bypass it only for Team Leads.
-- [x] `BE-0336` Audit raise, approve and refuse with actor, role, before/after and reason, and notify the Team Lead on raise and the employee on decision.
+- [x] `BE-0336` Audit raise, approve, refuse, and rejected-review reopen with actor, role, before/after and reason; notify the Team Lead on raise or a Super-Administrator reopen and the employee on decision. Reopen is limited to the current Team Lead or Super Administrator and uses optimistic concurrency.
 - [x] `BE-0337` Test the time-entry refusal at every review state, review by the wrong Team Lead, self-endorsement, concurrent decisions, Team Lead reassignment mid-review, and Team Lead self-creation without a review notification.
 
 ### Phase 3 Exit Criteria

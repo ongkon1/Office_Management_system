@@ -63,6 +63,27 @@ export class MysqlTaskReviewRepository implements TaskReviewRepository {
     };
   }
 
+  async reviewActorForUser(userId: string) {
+    const date = this.today();
+    const [rows] = await this.pool.execute<
+      (RowDataPacket & { employee_id: string | null; is_super_administrator: number })[]
+    >(
+      `SELECT e.id AS employee_id,EXISTS(
+         SELECT 1 FROM user_roles ur JOIN roles r ON r.id=ur.role_id
+         WHERE ur.user_id=u.id AND r.role_key='super_admin'
+           AND ur.effective_from<=? AND (ur.effective_to IS NULL OR ur.effective_to>=?)
+       ) AS is_super_administrator
+       FROM users u LEFT JOIN employees e ON e.user_id=u.id AND e.status='active'
+       WHERE u.id=? AND u.status='active' LIMIT 1`,
+      [date, date, userId],
+    );
+    const row = rows[0];
+    return row ? {
+      employeeId: row.employee_id,
+      isSuperAdministrator: Boolean(row.is_super_administrator),
+    } : null;
+  }
+
   /** `OH-BE-0302`: the lead effective today, department appointment first. */
   async currentLeadForEmployee(id: string) {
     return primaryLeadOfEmployee(this.pool, id, this.today());
@@ -152,5 +173,15 @@ export class MysqlTaskReviewRepository implements TaskReviewRepository {
     } finally {
       connection.release();
     }
+  }
+
+  async reopenRejected(input: Parameters<TaskReviewRepository['reopenRejected']>[0]) {
+    const [result] = await this.pool.execute<ResultSetHeader>(
+      `UPDATE tasks SET review_state='pending_review',reviewer_employee_id=NULL,
+       reviewed_at=NULL,review_note=NULL,version=version+1
+       WHERE id=? AND version=? AND review_state='rejected'`,
+      [input.taskId, input.expectedVersion],
+    );
+    return result.affectedRows === 1;
   }
 }

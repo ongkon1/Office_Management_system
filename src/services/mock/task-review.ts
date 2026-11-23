@@ -408,6 +408,48 @@ export const mockTaskReviewService: TaskReviewService = {
     mockStore.updateTask(task.id, next as ReturnType<typeof mockStore.tasks>[number]);
     return success(toReviewStateView(next));
   },
+
+  async reopen(userId, taskId, input) {
+    await delay();
+    const viewer = viewerOf(userId);
+    const task = mockStore.findTask(taskId);
+    if (!viewer || !task) return notFound();
+
+    const isCurrentLead = teamLeadOf(task.creatorEmployeeId) === viewer.employeeId;
+    if (viewer.primaryRole !== 'super_admin' && !isCurrentLead) return notFound();
+    if (task.reviewState !== 'rejected') {
+      return conflict(
+        'This task is no longer rejected.',
+        'Reload the task to see its current review state.',
+      );
+    }
+    if ((task.version ?? 1) !== input.expectedVersion) {
+      return conflict(
+        'This task changed before it could be reopened.',
+        'Reload the task and try again.',
+      );
+    }
+    if (!input.reason.trim() || input.reason.trim().length > 2_000) {
+      return invalid([{
+        field: 'reason',
+        code: 'REOPEN_REASON_REQUIRED',
+        message: 'Enter a reason of up to 2,000 characters.',
+        guidance: 'Explain what changed and why this task should return to review.',
+      }]);
+    }
+
+    mockStore.updateTask(task.id, {
+      ...task,
+      version: (task.version ?? 1) + 1,
+      reviewState: 'pending_review',
+      reviewerEmployeeId: null,
+      reviewedAt: null,
+      reviewNote: null,
+      updatedAt: `${DEMO_TODAY}T12:00:00+06:00`,
+      updatedBy: { userId, displayName: viewer.fullName },
+    } as ReturnType<typeof mockStore.tasks>[number]);
+    return success({ state: 'pending_review' as const });
+  },
 };
 
 /** Test seam mirroring the other mock services. */

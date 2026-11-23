@@ -594,7 +594,7 @@ Added after conveyance. Until now every task was created by a Team Lead; an empl
 
 - [x] `FE-0780` Add `TaskReviewState` to the domain, with `taskAcceptsTime` as the single predicate, and enforce it in `selectableTasks` and in `src/lib/calculation/validation.ts` with a field, a message and corrective guidance.
 - [x] `FE-0781` Build the personal task form, restricted to active projects in the creator's assigned divisions and validated at the service boundary. For Employees it names the reviewer and creates Pending Review. The Team Lead `New task` form includes an explicit `Self (me)` assignee option; choosing it removes supporting members and creates a Team-Lead-only task with no review or self-notification. **Amended 20 September 2026: the consolidated Team Lead assignee flow is implemented and tested.**
-- [x] `FE-0782` Build the Team Lead review queue on the team task board, with approve and do-not-approve, a required note on refusal, and a named list region.
+- [x] `FE-0782` Build the Team Lead review queue on the team task board, with approve and do-not-approve, a required note on refusal, a named list region, and a derived Rejected tab. Rejected tasks expose no ordinary status move; only the current Team Lead or Super Administrator receives the reason-required Reopen review action.
 - [x] `FE-0783` Surface the queue on the Team Lead dashboard inside the existing waiting-for-you prompt, and add the notification.
 - [x] `FE-0784` Add unit tests for the scope, review and time-entry rules, and a `npm run audit:task-review` browser gate.
 
@@ -603,9 +603,9 @@ Evidence is in `docs/frontend/phase-7/task-review-verification.md`: 26/26 task-r
 **Open questions — unchanged by the build.**
 
 1. **No `REQ-*` covers this**, as with requisition and conveyance. `REQ-WORK-003` describes a task's fields but says nothing about who may create one.
-2. **A refusal is terminal.** The employee reads the note and raises a new task; there is no edit-and-resubmit. Assumed, not confirmed.
+2. **A refusal is no longer terminal.** The rejected task remains Pending internally but appears only in the derived Rejected view. The current Team Lead or Super Administrator may reopen it to `pending_review` with a required audited reason; the Employee cannot reopen it.
 3. **The employee's form is narrower than the Team Lead's** — no assignee, no supporting members, no checklist — because an employee proposes work for themselves. Widening it later is easy; taking a granted power back is not.
-4. **An approved task is an ordinary task.** It can then be edited by the Team Lead like any other, and nothing re-opens the review.
+4. **An approved task is an ordinary task.** Reopening review applies only while the review state is Rejected; it does not reopen an Approved task.
 
 Conveyance evidence is recorded in `docs/frontend/phase-7/conveyance-verification.md`: the shared approval chain extracted first and proven behaviour-preserving by re-running the requisition gates unchanged, then 45/45 conveyance flow checks, 50 unit tests, accessibility 279/279 and content stress 73/73.
 

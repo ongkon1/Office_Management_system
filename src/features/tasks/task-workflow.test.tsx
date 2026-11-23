@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 vi.mock('@/lib/business-date', () => ({ businessToday: () => '2026-09-02' }));
 
 import { ToastProvider } from '@/components/feedback/toast';
+import type { RoleKey } from '@/contracts/domain';
 import { toDurationView } from '@/lib/status';
 import { mockStore } from '@/services/mock/store';
 import {
@@ -28,6 +29,7 @@ function boardTask(
     division: { name: 'PowerInAI', code: 'PIA' },
     assignee: { id: 'emp-1001', fullName: 'Nadia Rahman' },
     status: 'in_progress',
+    reviewState: 'approved',
     estimated: toDurationView(2400),
     actual: toDurationView(120),
     variance: { minutes: -2280, label: '−38:00' },
@@ -40,14 +42,20 @@ function boardTask(
   };
 }
 
-function renderBoard(task: WorkflowBoardTask, onMoved = vi.fn(), viewerEmployeeId: string | null = null) {
+function renderBoard(
+  task: WorkflowBoardTask,
+  onMoved = vi.fn(),
+  viewerEmployeeId: string | null = null,
+  actorRole: RoleKey = 'employee',
+) {
   return {
     onMoved,
     ...render(
       <ToastProvider>
         <TaskWorkflowBoard
           tasks={[task]}
-          actorRole="employee"
+          actorRole={actorRole}
+          viewerUserId="usr-test"
           viewerEmployeeId={viewerEmployeeId}
           onMoved={onMoved}
         />
@@ -205,6 +213,28 @@ describe('task workflow board', () => {
       expect(screen.getByRole('tab', { name: /In Progress/ })).toHaveTextContent('1');
       expect(screen.getByRole('tab', { name: 'Pending' })).not.toHaveTextContent(/\d/);
     });
+  });
+
+  it('keeps rejected work out of Pending and exposes reopen only to Team Leads', async () => {
+    const rejected = boardTask({
+      status: 'pending',
+      reviewState: 'rejected',
+      reviewBlockedReason: 'Your Team Lead did not approve this task.',
+    });
+    const employeeView = renderBoard(rejected);
+    await screen.findAllByText('Latest note:');
+    expect(screen.getByRole('tab', { name: /Rejected/ })).toHaveTextContent('1');
+    expect(screen.getByRole('tab', { name: 'Pending' })).not.toHaveTextContent(/\d/);
+    expect(screen.queryByRole('button', { name: 'Reopen review' })).not.toBeInTheDocument();
+    employeeView.unmount();
+
+    const user = userEvent.setup();
+    renderBoard(rejected, vi.fn(), null, 'team_lead');
+    const desktopBoard = screen.getByLabelText('Task status board');
+    await user.click(within(desktopBoard).getByRole('button', { name: 'Reopen review' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Reopen task review' });
+    await user.click(within(dialog).getByRole('button', { name: 'Reopen review' }));
+    expect(await within(dialog).findByText('Enter a reason for reopening review.')).toBeInTheDocument();
   });
 
   it('shows the verified-period effect without preventing the status transition', async () => {
