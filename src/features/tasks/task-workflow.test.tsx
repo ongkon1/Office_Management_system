@@ -237,7 +237,7 @@ describe('task workflow board', () => {
     expect(await within(dialog).findByText('Enter a reason for reopening review.')).toBeInTheDocument();
   });
 
-  it('shows the verified-period effect without preventing the status transition', async () => {
+  it('prevents an owned task completion when today is in a verified period', async () => {
     const period = mockStore.findPeriod('per-2026-09');
     if (!period) throw new Error('September demo period is missing.');
     mockStore.updatePeriod(period.id, {
@@ -248,16 +248,20 @@ describe('task workflow board', () => {
     });
 
     const user = userEvent.setup();
-    renderBoard(boardTask());
+    renderBoard(boardTask({
+      project: { id: 'prj-vp2', name: 'Vision Platform v2', code: 'PIA-VP2' },
+      division: { id: 'pia', name: 'PowerInAI', code: 'PIA' },
+    }), vi.fn(), 'emp-1001');
     await screen.findAllByText('Latest note:');
     const desktopBoard = screen.getByLabelText('Task status board');
     await user.click(within(desktopBoard).getByRole('button', { name: 'Complete' }));
     const dialog = await screen.findByRole('dialog', { name: 'Complete task' });
 
-    expect(await within(dialog).findByText(/requires the verified-period amendment process/i)).toBeInTheDocument();
+    expect(await within(dialog).findByText(/request a verified-period amendment/i)).toBeInTheDocument();
     expect(within(dialog).queryByRole('link', { name: 'Log final work first' })).not.toBeInTheDocument();
     await submitTransition(within(dialog).getByRole('button', { name: 'Complete' }));
-    expect(await within(dialog).findByText(/created no active time/i)).toBeInTheDocument();
+    expect(await within(dialog).findByText(/today is in a verified period/i)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/task status updated/i)).not.toBeInTheDocument();
     await settleStoreRefresh();
   });
 
@@ -307,7 +311,7 @@ describe('completing a task can log its final work', () => {
     await screen.findAllByText('Latest note:');
     await user.click(within(screen.getByLabelText('Task status board')).getByRole('button', { name: 'Complete' }));
     const dialog = await screen.findByRole('dialog', { name: 'Complete task' });
-    return { user, dialog, field: await within(dialog).findByLabelText('Time spent today') };
+    return { user, dialog, field: await within(dialog).findByLabelText(/Time spent today/) };
   }
 
   it('saves the time as a work log for today, then completes the task', async () => {
@@ -325,11 +329,12 @@ describe('completing a task can log its final work', () => {
     await settleStoreRefresh();
   });
 
-  it('completes without adding time when the field is left empty', async () => {
+  it('requires actual time before completing an owned task', async () => {
     const before = await activeToday();
     const { dialog } = await openComplete();
     await submitTransition(within(dialog).getByRole('button', { name: 'Complete' }));
-    await screen.findByText('This transition created no active time. It is recorded separately in task history.');
+    expect(await within(dialog).findByText('Actual time is required to complete your task.')).toBeInTheDocument();
+    expect(within(dialog).queryByText(/task status updated/i)).not.toBeInTheDocument();
     expect(await activeToday()).toBe(before);
     await settleStoreRefresh();
   });

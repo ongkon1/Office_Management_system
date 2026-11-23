@@ -386,7 +386,8 @@ function TransitionPanel({
    */
   const viewerEmployeeId = viewerEmployeeIdProp ?? '';
   const canLogOnCompletion = toStatus === 'completed' && task.status === 'in_progress'
-    && task.canLogWorkWhenInProgress && Boolean(viewerEmployeeId && task.project.id && task.division.id);
+    && task.canLogWorkWhenInProgress && task.assignee?.id === viewerEmployeeId
+    && Boolean(viewerEmployeeId && task.project.id && task.division.id);
   const [logMinutes, setLogMinutes] = React.useState<number | null>(null);
   const [completedWork, setCompletedWork] = React.useState('');
   const [workLocation, setWorkLocation] = React.useState<WorkLocation>('office');
@@ -426,7 +427,41 @@ function TransitionPanel({
       return;
     }
 
-    const willLog = canLogOnCompletion && !todayLocked && logMinutes !== null && logMinutes > 0 && loggedMinutes === null;
+    if (canLogOnCompletion && loggedMinutes === null && day.status !== 'success') {
+      setFailure({
+        status: 'error',
+        code: 'DEPENDENCY_FAILED',
+        retryable: true,
+        message: 'Today\'s timesheet could not be checked. Try again before completing the task.',
+      });
+      return;
+    }
+    if (canLogOnCompletion && loggedMinutes === null && todayLocked) {
+      setFailure({
+        status: 'conflict',
+        code: 'PERIOD_LOCKED',
+        message: 'Today is in a verified period. Request an amendment before recording this work and completing the task.',
+        guidance: 'Ask HR to open the verified-period amendment workflow, then try again.',
+      });
+      return;
+    }
+    if (canLogOnCompletion && loggedMinutes === null && (logMinutes === null || logMinutes <= 0)) {
+      setFailure({
+        status: 'validation_failure',
+        code: 'VALIDATION_FAILED',
+        message: 'Enter the actual time spent today.',
+        focusField: 'durationMinutes',
+        fieldErrors: [{
+          field: 'durationMinutes',
+          code: 'REQUIRED',
+          message: 'Actual time is required to complete your task.',
+          guidance: 'Enter the hours and minutes worked today, for example 1:30.',
+        }],
+      });
+      return;
+    }
+
+    const willLog = canLogOnCompletion && loggedMinutes === null;
     if (willLog && !completedWork.trim()) {
       setFailure({
         status: 'validation_failure', code: 'VALIDATION_FAILED', message: 'Say what you finished.', focusField: 'completedWork',
@@ -588,11 +623,11 @@ function TransitionPanel({
             <p role="status" className="mt-1 text-caption text-ink-muted">Checking today&apos;s period…</p>
           ) : todayLocked ? (
             <Alert tone="warning" title="Today is locked" className="mt-3">
-              You may complete the task, but a work log for today requires the verified-period amendment process.
+              Request a verified-period amendment before recording this work and completing the task.
             </Alert>
           ) : day.status === 'failure' ? (
             <Alert tone="warning" title="Work-log availability unavailable" className="mt-3">
-              You may still complete the task. Check the timesheet separately before recording final work.
+              Try again after today&apos;s timesheet is available. Your task has not been completed.
             </Alert>
           ) : canLogOnCompletion ? (
             loggedMinutes !== null ? (
@@ -602,10 +637,10 @@ function TransitionPanel({
             ) : (
               <div className="mt-3 space-y-3">
                 <p className="text-caption text-ink-muted">
-                  Optional. Time entered here is saved as a work log for today, then the task is completed.
+                  Enter the actual time spent today. It is saved to your timesheet before the task is completed.
                 </p>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Field label="Time spent today" helperText="Hours and minutes, for example 1:30." error={fieldMessage(failure, 'durationMinutes')}>
+                  <Field label="Time spent today" required helperText="Hours and minutes, for example 1:30." error={fieldMessage(failure, 'durationMinutes')}>
                     <DurationInput value={logMinutes} onValueChange={setLogMinutes} disabled={submitting} />
                   </Field>
                   <Field label="Work location">
@@ -617,11 +652,9 @@ function TransitionPanel({
                     />
                   </Field>
                 </div>
-                {logMinutes !== null && logMinutes > 0 && (
-                  <Field label="What you finished" required error={fieldMessage(failure, 'completedWork')}>
-                    <Input value={completedWork} onChange={(event) => setCompletedWork(event.target.value)} disabled={submitting} />
-                  </Field>
-                )}
+                <Field label="What you finished" required error={fieldMessage(failure, 'completedWork')}>
+                  <Input value={completedWork} onChange={(event) => setCompletedWork(event.target.value)} disabled={submitting} />
+                </Field>
                 {needsOvertimeReason && (
                   <Field label="Overtime reason" required helperText="Today goes above eight hours." error={fieldMessage(failure, 'overtimeReason')}>
                     <Input value={overtimeReason} onChange={(event) => setOvertimeReason(event.target.value)} disabled={submitting} />

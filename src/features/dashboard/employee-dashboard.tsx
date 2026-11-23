@@ -22,7 +22,7 @@ import {
   SplitPanel,
 } from '@/components/layout/page';
 import { employeeDashboardService as mockDashboardService } from '@/services/runtime/dashboard';
-import { DEMO_TODAY } from '@/lib/demo-context';
+import { businessToday } from '@/lib/business-date';
 import { ATTENDANCE_LABEL } from '@/lib/status';
 
 const QUICK_ACTION_ICONS: Record<string, React.ReactNode> = {
@@ -39,9 +39,10 @@ const QUICK_ACTION_ICONS: Record<string, React.ReactNode> = {
  */
 export function EmployeeDashboard({ userId }: { userId: string }) {
   const router = useRouter();
+  const currentDate = businessToday();
   const { state, reload } = useAsync(
-    () => mockDashboardService.getEmployeeDashboard(userId, DEMO_TODAY),
-    [userId],
+    () => mockDashboardService.getEmployeeDashboard(userId, currentDate),
+    [userId, currentDate],
   );
 
   if (state.status === 'loading') {
