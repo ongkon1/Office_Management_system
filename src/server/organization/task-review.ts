@@ -88,7 +88,7 @@ export class TaskReviewApplicationService {
       title: string;
       priority: string;
       dueDate: string;
-      estimatedHours: string;
+      estimatedMinutes: string;
       description: string;
     },
   ): Promise<Result<{ id: string }>> {
@@ -135,17 +135,17 @@ export class TaskReviewApplicationService {
       );
     }
 
-    const hours = Number(input.estimatedHours);
-    if (!Number.isFinite(hours) || hours <= 0 || (hours * 60) % 1 !== 0) {
+    const minutes = Number(input.estimatedMinutes);
+    if (!/^\d+$/.test(input.estimatedMinutes.trim()) || !Number.isSafeInteger(minutes) || minutes <= 0) {
       return validation(
-        'estimatedHours',
+        'estimatedMinutes',
         'INVALID_DURATION',
-        'Estimated hours must resolve to whole minutes.',
-        'Enter a positive value that resolves to whole minutes.',
+        'Estimate must be a positive whole number of minutes.',
+        'Enter digits only, for example 90.',
       );
     }
-    if (hours * 60 > 10_000_000) {
-      return validation('estimatedHours', 'DURATION_TOO_LARGE', 'The estimate is too large.', 'Enter an estimate below 10,000,000 minutes.');
+    if (minutes > 10_000_000) {
+      return validation('estimatedMinutes', 'DURATION_TOO_LARGE', 'The estimate is too large.', 'Enter an estimate below 10,000,000 minutes.');
     }
 
     const id = await this.repo.insertSelfTask({
@@ -154,7 +154,7 @@ export class TaskReviewApplicationService {
       title,
       priority: input.priority,
       dueDate: input.dueDate,
-      estimatedMinutes: hours * 60,
+      estimatedMinutes: minutes,
       description,
       requiresReview,
     });

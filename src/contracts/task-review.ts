@@ -38,7 +38,8 @@ export interface EmployeeTaskFormInput {
   readonly projectId: string;
   readonly priority: Priority;
   readonly dueDate: string;
-  readonly estimatedHours: string;
+  /** Whole minutes entered by the person raising the task. */
+  readonly estimatedMinutes: string;
   readonly description: string;
 }
 

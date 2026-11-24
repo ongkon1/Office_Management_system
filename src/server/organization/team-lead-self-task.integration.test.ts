@@ -31,7 +31,7 @@ describe('Team Lead self-created task persistence', () => {
       title: 'Prepare technical review',
       priority: 'high',
       dueDate: '2026-09-30',
-      estimatedHours: '2.5',
+      estimatedMinutes: '150',
       description: 'Review the technical delivery.',
     });
     expect(result.status).toBe('success');

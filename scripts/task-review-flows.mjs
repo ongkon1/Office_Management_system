@@ -109,16 +109,16 @@ console.log(`Employee task review flow verification against ${baseUrl}\n`);
 
   await page.fill('input[name="title"]', 'Audit the seed script');
   await page.selectOption('select[name="projectId"]', { index: 1 });
-  await page.fill('input[name="estimatedHours"]', '0');
+  await page.fill('input[name="estimatedMinutes"]', '0');
   await page.getByRole('button', { name: 'Send for review' }).click();
   await page.waitForTimeout(700);
   record(
-    /positive number of hours/i.test(await page.locator('body').innerText()),
+    /positive whole number of minutes/i.test(await page.locator('body').innerText()),
     'FE-0781',
     'a non-positive estimate is refused with guidance',
   );
 
-  await page.fill('input[name="estimatedHours"]', '5');
+  await page.fill('input[name="estimatedMinutes"]', '300');
   await page.getByRole('button', { name: 'Send for review' }).click();
   await page.waitForTimeout(1400);
   text = await page.locator('main').innerText();

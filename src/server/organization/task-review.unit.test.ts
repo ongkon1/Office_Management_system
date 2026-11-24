@@ -26,7 +26,7 @@ const input = {
   title: 'Work',
   priority: 'high',
   dueDate: '2026-09-20',
-  estimatedHours: '1.5',
+  estimatedMinutes: '90',
   description: 'Deliver',
 };
 
@@ -120,7 +120,7 @@ describe('self-created task application boundary', () => {
     [{ priority: 'immediate' }, 'priority'],
     [{ dueDate: '2026-09-01' }, 'dueDate'],
     [{ dueDate: 'not-a-date' }, 'dueDate'],
-    [{ estimatedHours: '0' }, 'estimatedHours'],
+    [{ estimatedMinutes: '0' }, 'estimatedMinutes'],
     [{ description: 'x'.repeat(5001) }, 'description'],
   ])('rejects invalid create input %o', async (override, field) => {
     const result = await service(repo()).raise('u', { ...input, ...override });

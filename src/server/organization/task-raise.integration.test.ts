@@ -15,7 +15,7 @@ let views: BackendTaskReviewViews;
 let leadViews: BackendTaskReviewViews;
 let adminViews: BackendTaskReviewViews;
 const input = (title: string, overrides: Record<string, string> = {}) => ({
-  title, projectId: CRM, priority: 'medium' as const, dueDate: '2027-01-15', estimatedHours: '2', description: 'Draft the report', ...overrides,
+  title, projectId: CRM, priority: 'medium' as const, dueDate: '2027-01-15', estimatedMinutes: '120', description: 'Draft the report', ...overrides,
 });
 const count = async (title: string) => Number((await env.rows('SELECT COUNT(*) n FROM tasks WHERE title=?', [title]))[0].n);
 

@@ -27,7 +27,7 @@ const FORM: EmployeeTaskFormInput = {
   projectId: 'prj-vp2',
   priority: 'medium',
   dueDate: '2026-09-30',
-  estimatedHours: '6',
+  estimatedMinutes: '360',
   description: 'The current tests do not cover the malformed-row path.',
 };
 
@@ -114,10 +114,10 @@ describe('a raised task starts unapproved', () => {
     expect(task?.reviewerEmployeeId).toBeNull();
   });
 
-  it('records the estimate in minutes, not hours', async () => {
+  it('records the entered minute estimate without converting it twice', async () => {
     const result = await mockTaskReviewService.create(EMPLOYEE, {
       ...FORM,
-      estimatedHours: '6.5',
+      estimatedMinutes: '390',
     });
     if (result.status !== 'success') throw new Error('expected success');
     expect(mockStore.findTask(result.data.id)?.estimatedMinutes).toBe(390);
@@ -383,13 +383,13 @@ describe('validation carries field, message and guidance', () => {
       projectId: '',
       priority: 'medium',
       dueDate: '',
-      estimatedHours: '',
+      estimatedMinutes: '',
       description: '',
     });
     if (result.status !== 'validation_failure') throw new Error('expected validation failure');
 
     expect(result.fieldErrors.map((error) => error.field).sort()).toEqual([
-      'estimatedHours',
+      'estimatedMinutes',
       'projectId',
       'title',
     ]);
@@ -413,8 +413,8 @@ describe('validation carries field, message and guidance', () => {
     expect(result.status).toBe('success');
   });
 
-  it.each([['abc'], ['0'], ['-3'], ['600']])('rejects the estimate %s', async (estimatedHours) => {
-    const result = await mockTaskReviewService.create(EMPLOYEE, { ...FORM, estimatedHours });
+  it.each([['abc'], ['0'], ['-3'], ['1.5'], ['30001']])('rejects the estimate %s', async (estimatedMinutes) => {
+    const result = await mockTaskReviewService.create(EMPLOYEE, { ...FORM, estimatedMinutes });
     expect(result.status).toBe('validation_failure');
   });
 });

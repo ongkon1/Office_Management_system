@@ -11,6 +11,7 @@ vi.mock('@/features/access/session-provider', () => ({
   useSession: () => ({
     user: {
       userId: 'usr-lead', employeeId: 'emp-lead', displayName: 'Team Lead', primaryRole: 'team_lead',
+      departmentLeadScopes: [],
     },
   }),
 }));
@@ -18,8 +19,8 @@ vi.mock('@/components/feedback/toast', () => ({ useToast: () => ({ show: vi.fn()
 vi.mock('@/services/runtime/team-lead', () => ({ teamLeadService: { listTasks, listMembers } }));
 vi.mock('./task-review-queue', () => ({ TaskReviewQueue: () => null }));
 vi.mock('@/features/tasks/task-workflow', () => ({
-  TaskWorkflowBoard: ({ tasks }: { tasks: readonly { id: string; title: string }[] }) => (
-    <ul aria-label="Visible tasks">{tasks.map((task) => <li key={task.id}>{task.title}</li>)}</ul>
+  TaskWorkflowBoard: ({ tasks, scopeFilter }: { tasks: readonly { id: string; title: string }[]; scopeFilter?: React.ReactNode }) => (
+    <>{scopeFilter}<ul aria-label="Visible tasks">{tasks.map((task) => <li key={task.id}>{task.title}</li>)}</ul></>
   ),
   TaskDetailTransitions: () => null,
   TaskHistoryTimeline: () => null,

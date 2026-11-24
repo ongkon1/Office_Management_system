@@ -12,6 +12,7 @@ vi.mock('@/features/access/session-provider', () => ({
       userId: 'usr-admin',
       employeeId: 'emp-admin',
       primaryRole: 'super_admin',
+      departmentLeadScopes: [],
     },
   }),
 }));
@@ -29,10 +30,19 @@ vi.mock('./task-review-queue', () => ({
 }));
 
 vi.mock('@/features/tasks/task-workflow', () => ({
-  TaskWorkflowBoard: ({ tasks }: { tasks: readonly { id: string; title: string }[] }) => (
-    <ul aria-label="Filtered tasks">
-      {tasks.map((task) => <li key={task.id}>{task.title}</li>)}
-    </ul>
+  TaskWorkflowBoard: ({ tasks, scopeFilter, scopeFilterActive, onClearScopeFilter }: {
+    tasks: readonly { id: string; title: string }[];
+    scopeFilter?: React.ReactNode;
+    scopeFilterActive?: boolean;
+    onClearScopeFilter?: () => void;
+  }) => (
+    <>
+      {scopeFilter}
+      {scopeFilterActive && <button type="button" onClick={onClearScopeFilter}>Clear filters</button>}
+      <ul aria-label="Filtered tasks">
+        {tasks.map((task) => <li key={task.id}>{task.title}</li>)}
+      </ul>
+    </>
   ),
   TaskDetailTransitions: () => null,
   TaskHistoryTimeline: () => null,
@@ -102,9 +112,9 @@ describe('Super Administrator task employee filter', () => {
     expect(screen.queryByText('Prepare proposal')).not.toBeInTheDocument();
     expect(screen.getByText('Review requirements')).toBeInTheDocument();
     expect(filter).toHaveValue('emp-1');
-    expect(screen.getAllByText('Nadia Rahman')).toHaveLength(2);
+    expect(screen.getAllByText('Nadia Rahman')).toHaveLength(1);
 
-    await user.click(screen.getByRole('button', { name: 'Remove Employee filter' }));
+    await user.click(screen.getByRole('button', { name: 'Clear filters' }));
     await waitFor(() => {
       expect(screen.getByText('Prepare proposal')).toBeInTheDocument();
       expect(screen.getByText('Review requirements')).toBeInTheDocument();

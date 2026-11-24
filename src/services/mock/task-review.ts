@@ -182,27 +182,27 @@ function validate(input: EmployeeTaskFormInput, allowedProjectIds: readonly stri
     });
   }
 
-  const hours = input.estimatedHours.trim();
-  if (!hours) {
+  const minutes = input.estimatedMinutes.trim();
+  if (!minutes) {
     errors.push({
-      field: 'estimatedHours',
+      field: 'estimatedMinutes',
       code: 'REQUIRED',
       message: 'Estimate is required.',
-      guidance: 'Enter roughly how many hours you expect this to take, for example 6.',
+      guidance: 'Enter roughly how many whole minutes you expect this to take, for example 90.',
     });
-  } else if (!/^\d+(\.\d+)?$/.test(hours) || Number(hours) <= 0) {
+  } else if (!/^\d+$/.test(minutes) || Number(minutes) <= 0) {
     errors.push({
-      field: 'estimatedHours',
+      field: 'estimatedMinutes',
       code: 'INVALID_ESTIMATE',
-      message: 'Estimate must be a positive number of hours.',
-      guidance: 'Enter digits only, for example 6 or 6.5.',
+      message: 'Estimate must be a positive whole number of minutes.',
+      guidance: 'Enter digits only, for example 90.',
     });
-  } else if (Number(hours) > 500) {
+  } else if (Number(minutes) > 30_000) {
     errors.push({
-      field: 'estimatedHours',
+      field: 'estimatedMinutes',
       code: 'ESTIMATE_TOO_LARGE',
       message: 'That estimate is larger than any single task should be.',
-      guidance: 'Split the work into smaller tasks, each under 500 hours.',
+      guidance: 'Split the work into smaller tasks, each no longer than 30,000 minutes.',
     });
   }
 
@@ -318,7 +318,7 @@ export const mockTaskReviewService: TaskReviewService = {
       startDate: null,
       dueDate: input.dueDate.trim() || null,
       completedDate: null,
-      estimatedMinutes: Math.round(Number(input.estimatedHours.trim()) * 60),
+      estimatedMinutes: Number(input.estimatedMinutes.trim()),
       description: input.description.trim() || null,
       status: 'pending',
       reviewState: requiresReview ? 'pending_review' : 'not_required',

@@ -86,6 +86,35 @@ describe('Phase 5 real database workflows', () => {
         expect((await outsider.get('wfh', own.id)).status).toBe('not_found');
         expect(data(await outsider.list('wfh'))).toHaveLength(0);
     });
+    it('hydrates legacy empty request payloads from canonical database columns', async () => {
+        const wfhId = 'b0000000-0000-4000-8000-000000000001';
+        const leaveId = 'b3000000-0000-4000-8000-000000000001';
+        await pool.execute('UPDATE wfh_requests SET payload=JSON_OBJECT() WHERE id=?', [wfhId]);
+        await pool.execute('UPDATE leave_requests SET payload=JSON_OBJECT() WHERE id=?', [leaveId]);
+        try {
+            const wfhRequest = (await repo.requests('wfh')).find(request => request.id === wfhId);
+            const leaveRequest = (await repo.requests('leave')).find(request => request.id === leaveId);
+            expect(wfhRequest).toMatchObject({
+                id: wfhId,
+                employeeId: eid,
+                state: 'approved',
+                wfhDate: '2026-09-03',
+                divisionId: division,
+            });
+            expect(leaveRequest).toMatchObject({
+                id: leaveId,
+                employeeId: eid,
+                state: 'approved',
+                startDate: '2026-09-10',
+                endDate: '2026-09-10',
+                requestedMinutes: 420,
+            });
+        }
+        finally {
+            await pool.execute('UPDATE wfh_requests SET payload=NULL WHERE id=?', [wfhId]);
+            await pool.execute('UPDATE leave_requests SET payload=NULL WHERE id=?', [leaveId]);
+        }
+    });
     it('reserves, consumes and releases exactly one half day of leave', async () => {
         const before = (await repo.balances(eid, 2026))[0];
         const r = data(await self.save('leave', leave('2026-10-06', 'half_day')));

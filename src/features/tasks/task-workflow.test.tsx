@@ -209,9 +209,11 @@ describe('task workflow board', () => {
     renderBoard(boardTask());
     await screen.findAllByText('Latest note:');
     await waitFor(() => {
-      expect(screen.getByRole('tab', { name: /All/ })).toHaveTextContent('1');
-      expect(screen.getByRole('tab', { name: /In Progress/ })).toHaveTextContent('1');
-      expect(screen.getByRole('tab', { name: 'Pending' })).not.toHaveTextContent(/\d/);
+      expect(screen.getByRole('tab', { name: /Workflow board/ })).toHaveTextContent('1');
+      expect(screen.getByRole('tab', { name: 'Rejected' })).not.toHaveTextContent(/\d/);
+      const board = screen.getByLabelText('Task status board');
+      expect(within(board).getAllByLabelText('0 tasks')).toHaveLength(2);
+      expect(within(board).getByLabelText('1 tasks')).toBeInTheDocument();
     });
   });
 
@@ -221,17 +223,22 @@ describe('task workflow board', () => {
       reviewState: 'rejected',
       reviewBlockedReason: 'Your Team Lead did not approve this task.',
     });
+    const employeeUser = userEvent.setup();
     const employeeView = renderBoard(rejected);
-    await screen.findAllByText('Latest note:');
     expect(screen.getByRole('tab', { name: /Rejected/ })).toHaveTextContent('1');
-    expect(screen.getByRole('tab', { name: 'Pending' })).not.toHaveTextContent(/\d/);
+    expect(screen.queryByLabelText('Task status board')).toBeInTheDocument();
+    await employeeUser.click(screen.getByRole('tab', { name: /Rejected/ }));
+    await screen.findAllByText('Latest note:');
+    const rejectedCard = screen.getByRole('article');
+    expect(within(rejectedCard).getByText('Rejected')).toBeInTheDocument();
+    expect(within(rejectedCard).queryByText('Pending')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Reopen review' })).not.toBeInTheDocument();
     employeeView.unmount();
 
     const user = userEvent.setup();
     renderBoard(rejected, vi.fn(), null, 'team_lead');
-    const desktopBoard = screen.getByLabelText('Task status board');
-    await user.click(within(desktopBoard).getByRole('button', { name: 'Reopen review' }));
+    await user.click(screen.getByRole('tab', { name: /Rejected/ }));
+    await user.click(await screen.findByRole('button', { name: 'Reopen review' }));
     const dialog = await screen.findByRole('dialog', { name: 'Reopen task review' });
     await user.click(within(dialog).getByRole('button', { name: 'Reopen review' }));
     expect(await within(dialog).findByText('Enter a reason for reopening review.')).toBeInTheDocument();

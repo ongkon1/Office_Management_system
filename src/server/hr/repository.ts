@@ -95,7 +95,50 @@ export class HrRepository {
         } : {
             ...common, leaveType: r.type_key as 'annual' | 'sick' | 'casual' | 'unpaid', startDate: date(r.start_date), endDate: date(r.end_date), totalDays: Number(r.requested_minutes) / 420, requestedMinutes: Number(r.requested_minutes)
         };
-        return { ...decode<HrRequest>(r.payload, fallback), version: Number(r.version) };
+        // Early production rows and imported records may carry a null, empty,
+        // or partial JSON payload. The relational columns are the canonical
+        // request identity and workflow state; the payload only supplements
+        // them with metadata such as the recorded decision and attachments.
+        // Treating a partial payload as the complete record made employeeId
+        // undefined and caused every HR request list to fail at the first
+        // assignment query.
+        const decoded = decode<unknown>(r.payload, {});
+        const payload = decoded && typeof decoded === 'object' && !Array.isArray(decoded)
+            ? decoded as Partial<HrRequest>
+            : {};
+        const shared = {
+            ...fallback,
+            ...payload,
+            id: common.id,
+            employeeId: common.employeeId,
+            reason: common.reason,
+            portion: common.portion,
+            state: common.state,
+            createdAt: common.createdAt,
+            updatedAt: common.updatedAt,
+            createdBy: common.createdBy,
+            updatedBy: common.updatedBy,
+            version: common.version,
+            attachmentIds: Array.isArray(payload.attachmentIds) ? payload.attachmentIds : [],
+            decision: payload.decision ?? null,
+        };
+        return kind === 'wfh'
+            ? {
+                ...shared,
+                requestDate: date(r.created_at),
+                wfhDate: date(r.wfh_date),
+                divisionId: String(r.division_id),
+                plannedTasks: String(r.planned_tasks),
+                contactAvailability: String(r.contact_availability),
+            } as HrRequest
+            : {
+                ...shared,
+                leaveType: r.type_key as 'annual' | 'sick' | 'casual' | 'unpaid',
+                startDate: date(r.start_date),
+                endDate: date(r.end_date),
+                totalDays: Number(r.requested_minutes) / 420,
+                requestedMinutes: Number(r.requested_minutes),
+            } as HrRequest;
     }
     async leaveTypes() {
         return this.rows('SELECT * FROM leave_types WHERE is_active=TRUE');

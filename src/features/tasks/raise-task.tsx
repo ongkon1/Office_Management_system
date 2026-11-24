@@ -21,7 +21,7 @@ const EMPTY: EmployeeTaskFormInput = {
   projectId: '',
   priority: 'medium',
   dueDate: '',
-  estimatedHours: '',
+  estimatedMinutes: '',
   description: '',
 };
 
@@ -220,16 +220,19 @@ export function RaiseTaskButton({ onCreated }: { onCreated: () => void }) {
             </Field>
 
             <Field
-              label="Estimate in hours"
+              label="Estimate in minutes"
               required
-              helperText="Roughly how long you expect it to take."
-              error={errorFor('estimatedHours')}
+              helperText="Enter whole minutes. After submission, the estimate is shown as hours and minutes."
+              error={errorFor('estimatedMinutes')}
             >
               <Input
-                name="estimatedHours"
-                inputMode="decimal"
-                value={form.estimatedHours}
-                onChange={(event) => set('estimatedHours', event.target.value)}
+                type="number"
+                name="estimatedMinutes"
+                inputMode="numeric"
+                min={1}
+                step={1}
+                value={form.estimatedMinutes}
+                onChange={(event) => set('estimatedMinutes', event.target.value)}
               />
             </Field>
           </div>

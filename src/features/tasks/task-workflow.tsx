@@ -28,9 +28,10 @@ import type { DurationView } from '@/contracts/view-models';
 import { Alert, Callout, EmptyState } from '@/components/feedback/alert';
 import { Dialog } from '@/components/feedback/overlay';
 import { Tabs } from '@/components/feedback/disclosure';
+import { FilterBar } from '@/components/data/filters';
 import { useToast } from '@/components/feedback/toast';
 import { Field } from '@/components/forms/field';
-import { DurationInput, Input, Select, Textarea } from '@/components/forms/inputs';
+import { DurationInput, Input, SearchInput, Select, Textarea } from '@/components/forms/inputs';
 import { Badge, type BadgeTone } from '@/components/ui/badge';
 import { Button, LinkButton } from '@/components/ui/button';
 import { Duration } from '@/components/ui/misc';
@@ -43,14 +44,8 @@ import { timesheetService as mockTimesheetService } from '@/services/runtime/tim
 import { taskReviewService as mockTaskReviewService } from '@/services/runtime/task-review';
 import { useAsync } from '@/lib/use-async';
 
-export type TaskBoardFilter =
-  | 'all'
-  | 'pending'
-  | 'in_progress'
-  | 'completed'
-  | 'rejected'
-  | 'overdue'
-  | 'upcoming';
+export type TaskBoardView = 'workflow' | 'rejected';
+export type TaskDueFilter = 'all' | 'overdue' | 'upcoming';
 
 export interface WorkflowBoardTask {
   readonly id: string;
@@ -77,14 +72,15 @@ export interface WorkflowBoardTask {
 
 const WORKFLOW_STATUSES = ['pending', 'in_progress', 'completed'] as const;
 
-const FILTER_TABS = [
-  { key: 'all', label: 'All' },
-  { key: 'pending', label: 'Pending' },
-  { key: 'in_progress', label: 'In Progress' },
-  { key: 'completed', label: 'Completed' },
+const BOARD_VIEWS = [
+  { key: 'workflow', label: 'Workflow board' },
   { key: 'rejected', label: 'Rejected' },
-  { key: 'overdue', label: 'Overdue' },
-  { key: 'upcoming', label: 'Upcoming' },
+] as const;
+
+const DUE_FILTER_OPTIONS = [
+  { value: 'all', label: 'All due dates' },
+  { value: 'overdue', label: 'Overdue' },
+  { value: 'upcoming', label: 'Upcoming' },
 ] as const;
 
 const STATUS_PRESENTATION: Record<
@@ -96,19 +92,23 @@ const STATUS_PRESENTATION: Record<
   completed: { tone: 'success', icon: CheckCircle2 },
 };
 
-function matches(task: WorkflowBoardTask, filter: TaskBoardFilter): boolean {
+function matchesDueDate(task: WorkflowBoardTask, filter: TaskDueFilter): boolean {
   if (filter === 'all') return true;
-  if (filter === 'rejected') return task.reviewState === 'rejected';
-  if (task.reviewState === 'rejected') return false;
-  if (filter === 'pending' || filter === 'in_progress' || filter === 'completed') {
-    return task.status === filter;
-  }
   if (filter === 'overdue') return task.isOverdue;
-  return (
-    task.status !== 'completed' &&
-    task.dueDate !== null &&
-    task.dueDate >= businessToday()
-  );
+  return task.status !== 'completed' && task.dueDate !== null && task.dueDate >= businessToday();
+}
+
+function matchesSearch(task: WorkflowBoardTask, term: string): boolean {
+  const query = term.trim().toLowerCase();
+  if (!query) return true;
+  return [
+    task.title,
+    task.project.name,
+    task.project.code,
+    task.division.name,
+    task.division.code,
+    task.assignee?.fullName ?? 'Unassigned',
+  ].some((value) => value.toLowerCase().includes(query));
 }
 
 function StatusBadge({ status }: { status: TaskStatus }) {
@@ -273,7 +273,13 @@ function TaskCard({
           </p>
         </div>
         <div className="flex shrink-0 items-start gap-2">
-          <StatusBadge status={task.status} />
+          {task.reviewState === 'rejected' ? (
+            <Badge tone="danger" icon={<TriangleAlert aria-hidden className="size-3.5" />}>
+              Rejected
+            </Badge>
+          ) : (
+            <StatusBadge status={task.status} />
+          )}
           {targets.length > 0 && (
             <span title="Drag to another status" aria-hidden className="mt-1 text-ink-subtle">
               <GripVertical className="size-4" />
@@ -283,11 +289,6 @@ function TaskCard({
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2">
-        {task.reviewState === 'rejected' && (
-          <Badge tone="danger" icon={<TriangleAlert aria-hidden className="size-3.5" />}>
-            Rejected
-          </Badge>
-        )}
         {task.isOverdue && (
           <Badge tone="danger" icon={<TriangleAlert aria-hidden className="size-3.5" />}>
             Overdue
@@ -807,6 +808,9 @@ export function TaskWorkflowBoard({
   actorRole,
   viewerUserId = '',
   viewerEmployeeId = null,
+  scopeFilter,
+  scopeFilterActive = false,
+  onClearScopeFilter,
   onMoved,
 }: {
   tasks: readonly WorkflowBoardTask[];
@@ -815,18 +819,38 @@ export function TaskWorkflowBoard({
   viewerUserId?: string;
   /** The signed-in employee; completing can log their final work for today. */
   viewerEmployeeId?: string | null;
+  /** Optional Team Lead or administrator assignee control, placed in the shared toolbar. */
+  scopeFilter?: React.ReactNode;
+  scopeFilterActive?: boolean;
+  onClearScopeFilter?: () => void;
   onMoved: () => void;
 }) {
-  const [filter, setFilter] = React.useState<TaskBoardFilter>('all');
+  const [view, setView] = React.useState<TaskBoardView>('workflow');
+  const [search, setSearch] = React.useState('');
+  const [dueFilter, setDueFilter] = React.useState<TaskDueFilter>('all');
   const [request, setRequest] = React.useState<TransitionRequest | null>(null);
   const [reopenTask, setReopenTask] = React.useState<WorkflowBoardTask | null>(null);
   const [draggedTaskId, setDraggedTaskId] = React.useState<string | null>(null);
   const [announcement, setAnnouncement] = React.useState('');
-  const visible = tasks.filter((task) => matches(task, filter));
-  const counts = FILTER_TABS.map((tab) => ({
+  const visible = tasks.filter((task) => (
+    (view === 'rejected' ? task.reviewState === 'rejected' : task.reviewState !== 'rejected')
+    && matchesDueDate(task, dueFilter)
+    && matchesSearch(task, search)
+  ));
+  const viewItems = BOARD_VIEWS.map((tab) => ({
     ...tab,
-    badgeCount: tasks.filter((task) => matches(task, tab.key)).length,
+    badgeCount: tasks.filter((task) => (
+      tab.key === 'rejected' ? task.reviewState === 'rejected' : task.reviewState !== 'rejected'
+    )).length,
   }));
+  const hasLocalFilters = search.trim().length > 0 || dueFilter !== 'all';
+  const hasAnyFilters = hasLocalFilters || scopeFilterActive;
+
+  function clearFilters() {
+    setSearch('');
+    setDueFilter('all');
+    onClearScopeFilter?.();
+  }
 
   function requestMove(task: WorkflowBoardTask, toStatus: TaskStatus) {
     setRequest({ task, toStatus });
@@ -847,27 +871,90 @@ export function TaskWorkflowBoard({
   return (
     <div className="mt-5 min-w-0">
       <Tabs
-        label="Task filters"
-        activeKey={filter}
-        onChange={(key) => setFilter(key as TaskBoardFilter)}
-        items={counts}
+        label="Task views"
+        activeKey={view}
+        onChange={(key) => setView(key as TaskBoardView)}
+        items={viewItems}
       />
 
-      <div className="mt-4 flex items-start gap-2 text-caption text-ink-muted">
-        <GripVertical aria-hidden className="mt-px size-4 shrink-0" />
-        <p>On larger screens, drag a task to another status or use its visible action buttons. Moving a task never records active time.</p>
-      </div>
+      <FilterBar
+        className="mt-4"
+        resultSummary={`${visible.length} ${visible.length === 1 ? 'task' : 'tasks'} in this view`}
+      >
+        <SearchInput
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          onClear={() => setSearch('')}
+          placeholder="Search tasks"
+          aria-label="Search tasks"
+          className="min-w-56"
+        />
+        {scopeFilter}
+        <Select
+          aria-label="Filter tasks by due date"
+          value={dueFilter}
+          onChange={(event) => setDueFilter(event.target.value as TaskDueFilter)}
+          options={DUE_FILTER_OPTIONS}
+          className="min-w-44"
+        />
+        {hasAnyFilters && (
+          <Button variant="link" size="sm" onClick={clearFilters}>Clear filters</Button>
+        )}
+      </FilterBar>
+
+      {view === 'workflow' && (
+        <div className="mt-4 flex items-start gap-2 text-caption text-ink-muted">
+          <GripVertical aria-hidden className="mt-px size-4 shrink-0" />
+          <p>On larger screens, drag a task to another status or use its visible action buttons. Moving a task never records active time.</p>
+        </div>
+      )}
       <p className="sr-only" aria-live="polite">{announcement}</p>
 
-      {visible.length === 0 ? (
-        <EmptyState
-          variant={filter === 'all' ? 'empty' : 'no-results'}
-          title={filter === 'all' ? 'No tasks in your scope' : 'No tasks in this view'}
-          description={filter === 'all' ? 'There is no assigned or available work to show.' : 'Choose another task filter.'}
-          className="mt-4"
-        />
+      <div
+        role="tabpanel"
+        id={`panel-${view}`}
+        aria-labelledby={`tab-${view}`}
+        tabIndex={0}
+      >
+      {view === 'rejected' ? (
+        visible.length === 0 ? (
+          <EmptyState
+            variant={hasAnyFilters ? 'no-results' : 'empty'}
+            title={hasAnyFilters ? 'No rejected tasks match these filters' : 'No rejected tasks'}
+            description={hasAnyFilters ? 'Clear or change the filters to see more work.' : 'Tasks rejected during review will appear here, separate from the workflow board.'}
+            className="mt-4"
+          />
+        ) : (
+          <section aria-labelledby="rejected-task-heading" className="mt-4 max-w-4xl">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 id="rejected-task-heading" className="text-h3 text-ink">Rejected tasks</h2>
+              <Badge tone="danger" aria-label={`${visible.length} rejected tasks`}>{visible.length}</Badge>
+            </div>
+            <div className="space-y-3">
+              {visible.map((task) => (
+                <TaskCard
+                  key={task.id}
+                  task={task}
+                  actorRole={actorRole}
+                  onRequest={requestMove}
+                  onReopenReview={setReopenTask}
+                  onDragStart={() => undefined}
+                  onDragEnd={() => undefined}
+                />
+              ))}
+            </div>
+          </section>
+        )
       ) : (
         <>
+          {visible.length === 0 && hasAnyFilters && (
+        <EmptyState
+          variant="no-results"
+          title="No workflow tasks match these filters"
+          description="Clear or change the filters to see more work."
+          className="mt-4"
+        />
+          )}
           <div
             aria-label="Task status board"
             className="mt-4 hidden min-w-0 grid-cols-3 gap-4 md:grid"
@@ -932,6 +1019,13 @@ export function TaskWorkflowBoard({
             className="mt-4 space-y-5 md:hidden"
             data-board-layout="mobile"
           >
+            {visible.length === 0 && !hasAnyFilters && (
+              <EmptyState
+                variant="empty"
+                title="No workflow tasks"
+                description="Assigned work will appear here under Pending, In Progress, or Completed."
+              />
+            )}
             {WORKFLOW_STATUSES.map((status) => {
               const groupTasks = visible.filter((task) => task.status === status);
               if (groupTasks.length === 0) return null;
@@ -962,6 +1056,7 @@ export function TaskWorkflowBoard({
           </div>
         </>
       )}
+      </div>
 
       {request && (
         <TransitionPanel

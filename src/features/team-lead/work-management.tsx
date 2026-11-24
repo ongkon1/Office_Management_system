@@ -576,13 +576,9 @@ export function TeamTaskBoard() {
       ]
     : [];
   const employeeOptions = isAdministrator ? administratorOptions : teamOptions;
-  const selectedEmployee = administratorOptions.find((option) => option.value === employeeId);
   const validTeamIds = new Set(teamOptions.map((option) => option.value));
   const selectedTeamIds = (selectedTeamEmployeeIds ?? (user?.employeeId ? [user.employeeId] : []))
     .filter((id) => validTeamIds.has(id));
-  const selectedTeamLabels = selectedTeamIds
-    .map((id) => teamOptions.find((option) => option.value === id)?.label)
-    .filter((label): label is string => Boolean(label));
   const filteredTasks = isAdministrator
     ? employeeId === 'all' ? state.data : state.data.filter((task) => task.assignee?.id === employeeId)
     : selectedTeamIds.length === 0 ? state.data : state.data.filter((task) => task.assignee && selectedTeamIds.includes(task.assignee.id));
@@ -608,18 +604,13 @@ export function TeamTaskBoard() {
         }
       />
       <TaskReviewQueue onDecided={() => setVersion((value) => value + 1)} />
-      {(isAdministrator || teamOptions.length > 0) && (
-        <FilterBar
-          className="mt-5"
-          applied={isAdministrator
-            ? selectedEmployee ? [{ key: 'employee', label: 'Employee', value: selectedEmployee.label, onRemove: () => setEmployeeId('all') }] : []
-            : selectedTeamEmployeeIds !== null && selectedTeamLabels.length > 0
-              ? [{ key: 'employee', label: 'Team member', value: selectedTeamLabels.join(', '), onRemove: () => setSelectedTeamEmployeeIds([]) }]
-              : []}
-          onClearAll={() => isAdministrator ? setEmployeeId('all') : setSelectedTeamEmployeeIds([])}
-          resultSummary={`${filteredTasks.length} ${filteredTasks.length === 1 ? 'task' : 'tasks'}`}
-        >
-          {isAdministrator ? (
+      <TaskWorkflowBoard
+        tasks={boardTasks}
+        actorRole={user ? navigationRole(user) : 'team_lead'}
+        viewerUserId={user?.userId ?? ''}
+        viewerEmployeeId={user?.employeeId ?? null}
+        scopeFilter={(isAdministrator || teamOptions.length > 0) ? (
+          isAdministrator ? (
             <Select
               aria-label="Filter tasks by employee name"
               value={employeeId}
@@ -635,14 +626,10 @@ export function TeamTaskBoard() {
               onChange={setSelectedTeamEmployeeIds}
               className="min-w-52"
             />
-          )}
-        </FilterBar>
-      )}
-      <TaskWorkflowBoard
-        tasks={boardTasks}
-        actorRole={user ? navigationRole(user) : 'team_lead'}
-        viewerUserId={user?.userId ?? ''}
-        viewerEmployeeId={user?.employeeId ?? null}
+          )
+        ) : undefined}
+        scopeFilterActive={isAdministrator ? employeeId !== 'all' : selectedTeamIds.length > 0}
+        onClearScopeFilter={() => isAdministrator ? setEmployeeId('all') : setSelectedTeamEmployeeIds([])}
         onMoved={reload}
       />
       <Dialog
