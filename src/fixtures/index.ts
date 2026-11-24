@@ -27,6 +27,7 @@ import type {
   WorkLocation,
   WorkPolicy,
 } from '@/contracts/domain';
+import { daysBetween } from '@/lib/format';
 
 export const DEMO_TODAY = '2026-09-02';
 
@@ -889,6 +890,7 @@ export const LEAVE_TYPES: readonly LeaveType[] = [
   { key: 'sick', label: 'Sick leave', isPaid: true, allowsHalfDay: true, annualEntitlementDays: 14 },
   { key: 'casual', label: 'Casual leave', isPaid: true, allowsHalfDay: true, annualEntitlementDays: 10 },
   { key: 'unpaid', label: 'Unpaid leave', isPaid: false, allowsHalfDay: true, annualEntitlementDays: null },
+  { key: 'earned', label: 'Earned leave', isPaid: true, allowsHalfDay: true, annualEntitlementDays: null },
 ];
 
 function balance(
@@ -943,6 +945,12 @@ function leaveRequest(
     endDate,
     portion,
     totalDays: portion === 'half_day' ? 0.5 : 1,
+    approved: state === 'approved' ? {
+      startDate,
+      endDate,
+      totalDays: portion === 'half_day' ? 0.5 : daysBetween(startDate, endDate) + 1,
+      minutes: (portion === 'half_day' ? 0.5 : daysBetween(startDate, endDate) + 1) * 420,
+    } : null,
     reason,
     attachmentIds: [],
     state,

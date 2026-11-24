@@ -211,6 +211,7 @@ export interface SelfRequestView {
   readonly id: string;
   readonly kind: 'wfh' | 'leave';
   readonly dateLabel: string;
+  readonly approvedDateLabel: string | null;
   readonly startDate: IsoDate;
   readonly endDate: IsoDate;
   readonly portion: DayPortion;

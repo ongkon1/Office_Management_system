@@ -270,13 +270,15 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 
 ### 5.6 Leave and Attendance
 
-- `REQ-ATT-001`: The system must support annual, sick, casual, unpaid, and half-day leave.
+- `REQ-ATT-001`: The system must support annual, sick, casual, unpaid, earned, and half-day leave.
 - `REQ-ATT-002`: The attendance model must distinguish Office, WFH, Official Travel, Field Duty, Training Duty, approved leave, absence, holiday, and missing timesheet.
 - `REQ-ATT-003`: The holiday calendar must support company-wide holidays, division-specific holidays, and weekly holidays.
 - `REQ-ATT-004`: Approved full-day leave and applicable holidays must not appear as missing-timesheet dates.
 - `REQ-ATT-005`: Half-day leave must proportionally adjust the employee's required active and scheduled time for that day.
 - `REQ-ATT-006`: Team Leads must be the primary leave reviewers for assigned employees, and HR must have an audited oversight and override capability.
 - `REQ-ATT-007`: Attendance results must be derived from approved leave/WFH, holidays, employee schedule, work location, and valid timesheets without conflating WFH with leave.
+- `REQ-ATT-008`: A Super Administrator must be able to add a positive full-day or half-day entitlement to an active employee's leave balance for a selected active leave type and year. The operation must add to any existing entitlement without changing consumed or reserved leave, require a reason, execute transactionally, and create immutable before/after audit evidence; HR Managers and all other roles must be denied.
+- `REQ-ATT-009`: An authorized HR Manager or Super Administrator must be able to approve either the complete leave request or a smaller contiguous date range inside it. A reduced approval must require a reason, preserve the employee's original requested dates and duration, deduct and report only the approved duration, affect attendance only on approved dates, and create immutable before/after audit evidence. The reviewer must never extend the range or approve more leave than the employee requested; a zero-day decision must be recorded as a rejection instead.
 
 ### 5.7 Dashboards
 
@@ -767,6 +769,7 @@ Meeting Minutes must be present for every active authenticated role. Record visi
 - `AC-WF-013`: Given one employee appointed to lead two departments, both scopes must coexist while effective; ending one appointment must remove only that future scope while historical decisions continue to identify the responsible lead.
 - `AC-WF-014`: Given a Team Lead creates a personal task, the task must be self-assigned and Pending with no review required, must appear in no approval queue, and after moving to In Progress must accept duration work logs in that Team Lead's own timesheet.
 - `AC-WF-015`: Given an employee-raised task is rejected, it must appear in Rejected and not Pending, expose no ordinary status move, refuse an Employee reopen attempt as not found, require a reason from the current Team Lead or Super Administrator, and after a successful reopen return to the Team Lead review queue without becoming approved, In Progress, or adding active time.
+- `AC-WF-016`: Given a Super Administrator adds 2.5 annual-leave days to an employee's existing yearly balance, the entitlement and remaining balance must each increase by 2.5 days while consumed and reserved values remain unchanged, and the audit log must record the actor, reason, scope, and before/after values. The same request from an HR Manager or any other role must be denied.
 
 ### 14.4 Reporting and Quality Scenarios
 

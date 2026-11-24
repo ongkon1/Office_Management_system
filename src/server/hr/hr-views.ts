@@ -1,19 +1,30 @@
+import { randomUUID } from 'node:crypto';
+import { z } from 'zod';
 import type { HrService, HrAttendanceView, HrRequestRowView, HrDivisionRequestSummaryView, HrLeaveBalanceView, HolidayView, HrEvaluationPeriodView, HrEvaluationRowView, HrEvaluationDetailView, EvaluationPeriodFormInput, HolidayFormInput } from '@/contracts/hr';
-import type { EvaluationRead, AttendanceState } from '@/contracts/domain';
+import type { EvaluationRead, AttendanceState, LeaveTypeKey } from '@/contracts/domain';
 import type { Result } from '@/contracts/results';
+import type { EmployeeRef } from '@/contracts/view-models';
 import { success } from '@/contracts/results';
 import { addDays, formatDate, formatDateRange, formatTimestamp, formatDuration } from '@/lib/format';
 import { ATTENDANCE_LABEL, REQUEST_STATE_LABEL, toDurationView } from '@/lib/status';
-import { indistinguishableNotFound, hasPermission } from '@/server/authorization/policy';
+import { indistinguishableNotFound, hasPermission, isSuperAdministrator } from '@/server/authorization/policy';
+import { AuditWriter, MysqlAuditSink } from '@/server/audit/writer';
+import { invalid } from '@/server/time/validation';
 import { RequestApplication } from './requests';
 import { AttendanceApplication } from './attendance';
 import { HolidayApplication } from './holidays';
 import { EvaluationApplication, AREAS } from './evaluations';
 import { BackendLeaveService } from './adapters';
-type Phase5Views = Pick<HrService, 'getAttendance' | 'listRequests' | 'listDivisionRequestSummary' | 'listLeaveBalances' | 'decideRequest' | 'listHolidays' | 'saveHoliday' | 'setHolidayActive' | 'listEvaluationPeriods' | 'createEvaluationPeriod' | 'listEvaluations' | 'getEvaluation' | 'sendReminder' | 'publishEvaluation' | 'returnEvaluation'>;
+type Phase5Views = Pick<HrService, 'getAttendance' | 'listRequests' | 'listDivisionRequestSummary' | 'listLeaveBalances' | 'getLeaveBalanceFormOptions' | 'addLeaveBalance' | 'decideRequest' | 'listHolidays' | 'saveHoliday' | 'setHolidayActive' | 'listEvaluationPeriods' | 'createEvaluationPeriod' | 'listEvaluations' | 'getEvaluation' | 'sendReminder' | 'publishEvaluation' | 'returnEvaluation'>;
 const evaluationLabels = {
     not_started: 'Not started', self_evaluation: 'Self-evaluation', reviewer_scoring: 'Reviewer scoring', hr_review: 'HR review', published: 'Published'
 };
+const addLeaveBalanceSchema = z.object({
+    userId: z.uuid(), employeeId: z.uuid(), leaveType: z.enum(['annual', 'sick', 'casual', 'unpaid', 'earned']),
+    year: z.number().int().min(2000).max(2100),
+    days: z.number().positive().max(366).refine(value => Number.isInteger(value * 2), 'Use full-day or half-day increments.'),
+    reason: z.string().trim().min(3).max(1000),
+}).strict();
 /** Compatibility view models for the approved HR screens; userId is checked, never trusted as identity. */
 export class BackendHrViews implements Phase5Views {
     constructor(readonly requests: RequestApplication, readonly attendance: AttendanceApplication, readonly holidays: HolidayApplication, readonly evaluations: EvaluationApplication) {
@@ -21,6 +32,10 @@ export class BackendHrViews implements Phase5Views {
     private async allowed(userId: string) {
         const actor = await this.requests.resolveActor(this.requests.today());
         return actor?.userId === userId && this.requests.isHr(actor);
+    }
+    private async superAdministrator(userId: string) {
+        const actor = await this.requests.resolveActor(this.requests.today());
+        return actor?.userId === userId && isSuperAdministrator(actor) ? actor : null;
     }
     async getAttendance(userId: string, from: string, to: string): Promise<Result<HrAttendanceView>> {
         return this.requests.run(async () => {
@@ -72,10 +87,19 @@ export class BackendHrViews implements Phase5Views {
                 const division = c.divisions.find(d => d.id === ('divisionId' in r ? r.divisionId : assignment?.division_id));
                 if (!division)
                     continue;
+                const requestedDateLabel = 'wfhDate' in r ? formatDate(r.wfhDate) : formatDateRange(r.startDate, r.endDate);
+                const approvedDateLabel = 'leaveType' in r && r.approved
+                    ? formatDateRange(r.approved.startDate, r.approved.endDate)
+                    : null;
                 rows.push({
                     id: r.id, kind, employee, division: {
                         id: division.id, name: division.name, code: division.code, isRestricted: division.isRestricted
-                    }, dateLabel: 'wfhDate' in r ? formatDate(r.wfhDate) : formatDateRange(r.startDate, r.endDate), portion: r.portion, portionLabel: r.portion === 'half_day' ? 'Half day' : 'Full day', leaveType: 'leaveType' in r ? r.leaveType : null, leaveTypeLabel: 'leaveType' in r ? r.leaveType : null, reason: r.reason, plannedWork: 'plannedTasks' in r ? r.plannedTasks : null, completedWorkPreview: kind === 'wfh' ? c.entries.filter(e => e.isActive && e.state !== 'draft' && e.workLocation === 'wfh').map(e => ({ label: e.workDescription, duration: toDurationView(e.activeMinutes), completedWork: e.completedWork })) : [], state: r.state, stateLabel: REQUEST_STATE_LABEL[r.state], decisionLabel: r.decision ? `${REQUEST_STATE_LABEL[r.decision.outcome]} · ${formatTimestamp(r.decision.decidedAt)}` : null, overrideReason: r.decision?.override?.reason ?? null, previousOutcomeLabel: r.decision?.override ? REQUEST_STATE_LABEL[r.decision.override.previousOutcome] : null, conflictNote: null, canOverride: ['approved', 'rejected'].includes(r.state)
+                    }, dateLabel: requestedDateLabel, requestedDateLabel,
+                    requestedStartDate: 'wfhDate' in r ? r.wfhDate : r.startDate,
+                    requestedEndDate: 'wfhDate' in r ? r.wfhDate : r.endDate,
+                    requestedDays: 'leaveType' in r ? r.totalDays : null,
+                    approvedDateLabel, approvedDays: 'leaveType' in r ? r.approved?.totalDays ?? null : null,
+                    portion: r.portion, portionLabel: r.portion === 'half_day' ? 'Half day' : 'Full day', leaveType: 'leaveType' in r ? r.leaveType : null, leaveTypeLabel: 'leaveType' in r ? r.leaveType : null, reason: r.reason, plannedWork: 'plannedTasks' in r ? r.plannedTasks : null, completedWorkPreview: kind === 'wfh' ? c.entries.filter(e => e.isActive && e.state !== 'draft' && e.workLocation === 'wfh').map(e => ({ label: e.workDescription, duration: toDurationView(e.activeMinutes), completedWork: e.completedWork })) : [], state: r.state, stateLabel: REQUEST_STATE_LABEL[r.state], decisionLabel: r.decision ? `${REQUEST_STATE_LABEL[r.decision.outcome]} · ${formatTimestamp(r.decision.decidedAt)}` : null, overrideReason: r.decision?.override?.reason ?? null, previousOutcomeLabel: r.decision?.override ? REQUEST_STATE_LABEL[r.decision.override.previousOutcome] : null, conflictNote: null, canOverride: ['approved', 'rejected'].includes(r.state)
                 });
             }
             return success(rows);
@@ -102,17 +126,19 @@ export class BackendHrViews implements Phase5Views {
         }
         return success([...groups.values()]);
     }
-    async listLeaveBalances(userId: string): Promise<Result<readonly HrLeaveBalanceView[]>> {
+    async listLeaveBalances(userId: string, year = Number(this.requests.today().slice(0, 4))): Promise<Result<readonly HrLeaveBalanceView[]>> {
         return this.requests.run(async () => {
             if (!await this.allowed(userId))
                 return indistinguishableNotFound();
+            if (!Number.isInteger(year) || year < 2000 || year > 2100)
+                return invalid('year', 'Choose a valid leave-balance year.');
             const rows: HrLeaveBalanceView[] = [];
             const service = new BackendLeaveService(this.requests);
             for (const employee of await this.requests.repository.employees()) {
                 const id = String(employee.id), actor = await this.requests.resolveActor(this.requests.today());
                 if (!actor || !await this.requests.canRead(this.requests.repository, actor, id, this.requests.today()))
                     continue;
-                const r = await service.listBalances(id, Number(this.requests.today().slice(0, 4)));
+                const r = await service.listBalances(id, year);
                 if (r.status !== 'success')
                     return r;
                 const ref = await this.requests.repository.time.employeeRef(id);
@@ -122,10 +148,83 @@ export class BackendHrViews implements Phase5Views {
             return success(rows);
         });
     }
+    async getLeaveBalanceFormOptions(userId: string): ReturnType<HrService['getLeaveBalanceFormOptions']> {
+        return this.requests.run(async () => {
+            if (!await this.superAdministrator(userId))
+                return indistinguishableNotFound();
+            const employees: EmployeeRef[] = [];
+            for (const row of await this.requests.repository.employees()) {
+                const ref = await this.requests.repository.time.employeeRef(String(row.id));
+                if (ref)
+                    employees.push(ref);
+            }
+            const leaveTypes = await this.requests.repository.leaveTypes();
+            return success({
+                employees: employees.sort((a, b) => a.fullName.localeCompare(b.fullName)),
+                leaveTypes: leaveTypes.map(row => ({ value: row.type_key as LeaveTypeKey, label: String(row.name) })),
+                defaultYear: Number(this.requests.today().slice(0, 4)),
+            });
+        });
+    }
+    async addLeaveBalance(input: Parameters<HrService['addLeaveBalance']>[0]): ReturnType<HrService['addLeaveBalance']> {
+        const parsed = addLeaveBalanceSchema.safeParse(input);
+        if (!parsed.success)
+            return invalid(parsed.error.issues[0].path.join('.'), parsed.error.issues[0].message);
+        return this.requests.run(() => this.requests.repository.transaction(async tx => {
+            const actor = await this.superAdministrator(parsed.data.userId);
+            if (!actor)
+                return indistinguishableNotFound();
+            const employee = await tx.employee(parsed.data.employeeId);
+            if (!employee || employee.status !== 'active')
+                return indistinguishableNotFound();
+            const leaveType = (await tx.leaveTypes()).find(row => row.type_key === parsed.data.leaveType);
+            if (!leaveType)
+                return invalid('leaveType', 'Choose an active leave type.');
+            const existing = (await tx.rows('SELECT * FROM leave_balances WHERE employee_id=? AND leave_type_id=? AND year=? FOR UPDATE', [parsed.data.employeeId, String(leaveType.id), parsed.data.year]))[0];
+            const unitMinutes = existing ? Number(existing.unit_minutes) : 420;
+            const addedMinutes = parsed.data.days * unitMinutes;
+            if (!Number.isSafeInteger(addedMinutes))
+                return invalid('days', 'Use a balance that converts to whole minutes.');
+            const balanceId = existing ? String(existing.id) : randomUUID();
+            const before = existing ? {
+                entitledMinutes: Number(existing.entitled_minutes), usedMinutes: Number(existing.used_minutes),
+                reservedMinutes: Number(existing.reserved_minutes), version: Number(existing.version),
+            } : null;
+            if (existing)
+                await tx.execute('UPDATE leave_balances SET entitled_minutes=entitled_minutes+?,version=version+1 WHERE id=?', [addedMinutes, balanceId]);
+            else
+                await tx.execute('INSERT INTO leave_balances(id,employee_id,leave_type_id,year,entitled_minutes,used_minutes,reserved_minutes,unit_minutes) VALUES(?,?,?,?,?,0,0,?)', [balanceId, parsed.data.employeeId, String(leaveType.id), parsed.data.year, addedMinutes, unitMinutes]);
+            const current = (await tx.rows('SELECT * FROM leave_balances WHERE id=?', [balanceId]))[0];
+            const after = {
+                entitledMinutes: Number(current.entitled_minutes), usedMinutes: Number(current.used_minutes),
+                reservedMinutes: Number(current.reserved_minutes), version: Number(current.version),
+            };
+            await new AuditWriter(new MysqlAuditSink(tx.connection ?? tx.pool)).append({
+                actorUserId: actor.userId, action: 'leave.balance.added', resourceType: 'leave_balance', resourceId: balanceId,
+                scope: { employeeId: parsed.data.employeeId, leaveType: parsed.data.leaveType, year: parsed.data.year },
+                reason: parsed.data.reason, correlationId: randomUUID(), before, after,
+            });
+            const ref = await tx.time.employeeRef(parsed.data.employeeId);
+            if (!ref)
+                return indistinguishableNotFound();
+            return success({
+                employee: ref, leaveType: parsed.data.leaveType, typeLabel: String(leaveType.name), year: parsed.data.year,
+                entitledDays: after.entitledMinutes / unitMinutes, consumedDays: after.usedMinutes / unitMinutes,
+                reservedDays: after.reservedMinutes / unitMinutes,
+                remainingDays: (after.entitledMinutes - after.usedMinutes - after.reservedMinutes) / unitMinutes,
+            });
+        }));
+    }
     async decideRequest(input: Parameters<HrService['decideRequest']>[0]): Promise<Result<HrRequestRowView>> {
         if (!await this.allowed(input.userId))
             return indistinguishableNotFound();
-        const r = await this.requests.transition(input.kind, input.id, input.outcome, input.overrideReason ?? input.comment, Boolean(input.overrideReason));
+        const r = await this.requests.transition(
+            input.kind, input.id, input.outcome, input.overrideReason ?? input.comment,
+            Boolean(input.overrideReason), undefined,
+            input.approvedStartDate && input.approvedEndDate
+                ? { startDate: input.approvedStartDate, endDate: input.approvedEndDate }
+                : undefined
+        );
         if (r.status !== 'success')
             return r;
         const list = await this.listRequests(input.userId, input.kind);

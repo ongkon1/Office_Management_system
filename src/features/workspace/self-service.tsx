@@ -62,6 +62,12 @@ function RequestCard({
         <p className="mt-2 text-caption text-ink-subtle">{request.detail}</p>
       )}
 
+      {request.kind === 'leave' && request.approvedDateLabel && (
+        <p className="mt-2 text-caption font-medium text-success">
+          Approved leave: {request.approvedDateLabel}
+        </p>
+      )}
+
       {request.conflictNote && (
         <p className="mt-2 rounded-md border border-undertime-border bg-undertime-surface p-2 text-caption text-undertime">
           {request.conflictNote}

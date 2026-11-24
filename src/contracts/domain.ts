@@ -676,7 +676,7 @@ export interface RequestDecision {
   } | null;
 }
 
-export type LeaveTypeKey = 'annual' | 'sick' | 'casual' | 'unpaid';
+export type LeaveTypeKey = 'annual' | 'sick' | 'casual' | 'unpaid' | 'earned';
 
 export interface LeaveType {
   readonly key: LeaveTypeKey;
@@ -705,6 +705,16 @@ export interface LeaveRequest extends AuditableRecord {
   readonly endDate: IsoDate;
   readonly portion: DayPortion;
   readonly totalDays: number;
+  /**
+   * The exact contiguous portion HR approved. The employee's requested range
+   * above never changes, so a reduced approval remains auditable.
+   */
+  readonly approved: {
+    readonly startDate: IsoDate;
+    readonly endDate: IsoDate;
+    readonly totalDays: number;
+    readonly minutes: number;
+  } | null;
   readonly reason: string;
   readonly attachmentIds: readonly string[] | 'restricted';
   readonly state: RequestWorkflowState;

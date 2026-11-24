@@ -22,7 +22,7 @@ const wfhSchema = z.object({
     ...common, wfhDate: dateSchema, divisionId: z.uuid(), plannedTasks: z.string().trim().min(1).max(10000), contactAvailability: z.string().trim().min(1).max(255)
 });
 const leaveSchema = z.object({
-    ...common, leaveType: z.enum(['annual', 'sick', 'casual', 'unpaid']), startDate: dateSchema, endDate: dateSchema
+    ...common, leaveType: z.enum(['annual', 'sick', 'casual', 'unpaid', 'earned']), startDate: dateSchema, endDate: dateSchema
 });
 export class RequestApplication {
     constructor(readonly repository: HrRepository, readonly resolveActor: ActorResolver, readonly now = () => new Date().toISOString()) {
@@ -141,7 +141,7 @@ export class RequestApplication {
             id: before?.id ?? randomUUID(), employeeId: actor.employeeId, createdAt: before?.createdAt ?? this.now(), updatedAt: this.now(), createdBy: before?.createdBy ?? actorRef, updatedBy: actorRef, state: 'draft' as const, decision: null, version: (before?.version ?? 0) + 1
         };
         return success(('wfhDate' in data ? { ...base, ...data, requestDate: before && 'requestDate' in before ? before.requestDate : this.today() } : {
-            ...base, ...data, totalDays, requestedMinutes: minutes
+            ...base, ...data, totalDays, requestedMinutes: minutes, approved: null
         }) as HrRequest);
     }
     async save(kind: RequestKind, input: unknown, id?: string, expectedVersion?: number): Promise<Result<RequestRead>> {
@@ -168,7 +168,7 @@ export class RequestApplication {
             return success(discloseRequest(actor, r.data));
         }));
     }
-    async transition(kind: RequestKind, id: string, action: 'submit' | 'cancel' | 'approved' | 'rejected' | 'information_requested', comment: string | null = null, override = false, expectedVersion?: number): Promise<Result<RequestRead>> {
+    async transition(kind: RequestKind, id: string, action: 'submit' | 'cancel' | 'approved' | 'rejected' | 'information_requested', comment: string | null = null, override = false, expectedVersion?: number, approval?: { startDate: string; endDate: string }): Promise<Result<RequestRead>> {
         return this.run(() => this.repository.transaction(async (tx) => {
             const actor = await this.resolveActor(this.today());
             if (!actor)
@@ -205,7 +205,9 @@ export class RequestApplication {
                 // `OH-BE-0301`: resolved on the request date, so a transfer or a
                 // lead change after the request still routes to whoever led the
                 // employee's primary placement on the day being requested.
-                if (self || !hasPermission(actor, 'request.decide') || !assignments.some(a => a.is_primary && a.effective_lead_employee_id === actor.employeeId))
+                const isHrReviewer = this.isHr(actor);
+                const isEffectiveLead = hasPermission(actor, 'request.decide') && assignments.some(a => a.is_primary && a.effective_lead_employee_id === actor.employeeId);
+                if (self || (!isHrReviewer && !isEffectiveLead))
                     return denied;
                 if (before.state !== 'pending')
                     return conflict('Only a pending request can be decided.');
@@ -213,15 +215,50 @@ export class RequestApplication {
                     return invalid('comment', 'Explain the decision or information needed.');
             }
             const nextState: RequestWorkflowState = action === 'submit' ? 'pending' : action === 'cancel' ? 'cancelled' : action;
+            let approved: LeaveRequest['approved'] = null;
+            if (nextState === 'approved' && kind === 'leave' && 'leaveType' in before) {
+                const startDate = approval?.startDate ?? before.startDate;
+                const endDate = approval?.endDate ?? before.endDate;
+                if (approval && !this.isHr(actor))
+                    return denied;
+                if (startDate < before.startDate || endDate > before.endDate || endDate < startDate)
+                    return invalid('approvedEndDate', 'Approve dates inside the employee requested range.');
+                if (before.portion === 'half_day' && (startDate !== before.startDate || endDate !== before.endDate))
+                    return invalid('approvedStartDate', 'A half-day request can only be approved as requested.');
+                let minutes = 0, totalDays = 0;
+                for (let on = startDate; on <= endDate; on = addDays(on, 1)) {
+                    const context = await tx.time.context(before.employeeId, on);
+                    if (!context)
+                        return invalid('approvedStartDate', 'An effective work policy is required for every approved date.');
+                    const day = calculateDay({
+                        employeeId: before.employeeId, workDate: on, entries: [], policy: context.policy,
+                        holidayName: context.holidayName,
+                        leave: before.portion === 'half_day' ? { portion: 'half_day', leaveType: before.leaveType } : null
+                    });
+                    if (day.requiredActiveMinutes) {
+                        minutes += day.requiredActiveMinutes;
+                        totalDays += before.portion === 'half_day' ? 0.5 : 1;
+                    }
+                }
+                if (!minutes || !totalDays)
+                    return invalid('approvedStartDate', 'Approve at least one scheduled working day.');
+                const reduced = startDate !== before.startDate || endDate !== before.endDate || minutes < (before.requestedMinutes ?? 0);
+                if (reduced && !comment?.trim())
+                    return invalid('comment', 'Explain why the approved leave is shorter than requested.');
+                approved = { startDate, endDate, totalDays, minutes };
+            }
+            const decisionRange = approved ? { from: approved.startDate, to: approved.endDate } : range;
             if (nextState === 'pending' || nextState === 'approved') {
                 for (const k of ['wfh', 'leave'] as const)
                     for (const r of await tx.requests(k)) {
-                        const other = this.range(r);
-                        if (r.id !== id && r.employeeId === before.employeeId && ['pending', 'approved', 'information_requested'].includes(r.state) && range.from <= other.to && range.to >= other.from)
+                        const other = 'leaveType' in r && r.state === 'approved' && r.approved
+                            ? { from: r.approved.startDate, to: r.approved.endDate }
+                            : this.range(r);
+                        if (r.id !== id && r.employeeId === before.employeeId && ['pending', 'approved', 'information_requested'].includes(r.state) && decisionRange.from <= other.to && decisionRange.to >= other.from)
                             return invalid('startDate', 'Resolve the overlapping WFH or leave request first.');
                     }
             }
-            for (let on = range.from; on <= range.to; on = addDays(on, 1)) {
+            for (let on = decisionRange.from; on <= decisionRange.to; on = addDays(on, 1)) {
                 const c = await tx.time.context(before.employeeId, on);
                 if (c?.period && ['verified', 'amended'].includes(c.period.status))
                     return conflict('This period is verified and locked.', true);
@@ -232,10 +269,11 @@ export class RequestApplication {
             }
             if (kind === 'leave' && 'leaveType' in before) {
                 const balance = (await tx.balances(before.employeeId, Number(range.from.slice(0, 4)))).find(b => b.type_key === before.leaveType);
-                const minutes = before.requestedMinutes ?? 0;
-                const reserved = (state: RequestWorkflowState) => ['pending', 'information_requested'].includes(state) ? minutes : 0;
-                const used = (state: RequestWorkflowState) => state === 'approved' ? minutes : 0;
-                const rd = reserved(nextState) - reserved(before.state), ud = used(nextState) - used(before.state);
+                const requestedMinutes = before.requestedMinutes ?? 0;
+                const reserved = (state: RequestWorkflowState) => ['pending', 'information_requested'].includes(state) ? requestedMinutes : 0;
+                const beforeUsed = before.state === 'approved' ? before.approved?.minutes ?? requestedMinutes : 0;
+                const nextUsed = nextState === 'approved' ? approved?.minutes ?? requestedMinutes : 0;
+                const rd = reserved(nextState) - reserved(before.state), ud = nextUsed - beforeUsed;
                 if (before.leaveType !== 'unpaid') {
                     if (!balance || Number(balance.used_minutes) + Number(balance.reserved_minutes) + rd + ud > Number(balance.entitled_minutes))
                         return invalid('leaveType', 'This request exceeds the available leave balance.');
@@ -246,7 +284,9 @@ export class RequestApplication {
                 decidedAt: this.now(), decidedBy: { userId: actor.userId, displayName: 'Reviewer' }, outcome: action, comment, override: override ? { reason: comment!, previousOutcome: before.state as 'approved' | 'rejected' } : null
             };
             const next: HrRequest = {
-                ...before, state: nextState, decision, version: before.version + 1, updatedAt: this.now(), updatedBy: { userId: actor.userId, displayName: 'Reviewer' }
+                ...before, state: nextState, decision,
+                ...('leaveType' in before ? { approved: nextState === 'approved' ? approved : null } : {}),
+                version: before.version + 1, updatedAt: this.now(), updatedBy: { userId: actor.userId, displayName: 'Reviewer' }
             };
             await tx.saveRequest(kind, next);
             await tx.record(actor, kind, id, before, next, comment);

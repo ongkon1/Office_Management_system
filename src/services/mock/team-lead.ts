@@ -824,6 +824,12 @@ export const mockTeamLeadService: TeamLeadService = {
     if (!inEmployeeScope(userId, request.employeeId)) return denied();
     const next = {
       ...request, state: outcome, decision: { decidedAt: new Date().toISOString(), decidedBy: actorFor(userId), outcome, comment: remark || null, override: null },
+      ...(kind === 'leave' && 'leaveType' in request ? {
+        approved: outcome === 'approved' ? {
+          startDate: request.startDate, endDate: request.endDate,
+          totalDays: request.totalDays, minutes: request.totalDays * 420,
+        } : null,
+      } : {}),
       updatedAt: new Date().toISOString(), updatedBy: actorFor(userId),
     };
     if (kind === 'wfh') mockStore.updateWfhRequest(id, next as ReturnType<typeof mockStore.allWfhRequests>[number]);

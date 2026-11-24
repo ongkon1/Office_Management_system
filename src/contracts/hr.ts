@@ -266,6 +266,13 @@ export interface HrRequestRowView {
   readonly employee: EmployeeRef;
   readonly division: DivisionRef;
   readonly dateLabel: string;
+  /** Requested range; retained even when HR approves a shorter range. */
+  readonly requestedDateLabel: string;
+  readonly requestedStartDate: IsoDate;
+  readonly requestedEndDate: IsoDate;
+  readonly requestedDays: number | null;
+  readonly approvedDateLabel: string | null;
+  readonly approvedDays: number | null;
   readonly portion: DayPortion;
   readonly portionLabel: string;
   readonly leaveType: LeaveTypeKey | null;
@@ -297,6 +304,26 @@ export interface HrLeaveBalanceView {
   readonly consumedDays: number;
   readonly reservedDays: number;
   readonly remainingDays: number;
+}
+
+export interface LeaveBalanceFormOptions {
+  readonly employees: readonly EmployeeRef[];
+  readonly leaveTypes: readonly {
+    readonly value: LeaveTypeKey;
+    readonly label: string;
+  }[];
+  readonly defaultYear: number;
+}
+
+export interface AddLeaveBalanceInput {
+  readonly userId: string;
+  readonly employeeId: string;
+  readonly leaveType: LeaveTypeKey;
+  readonly year: number;
+  /** Positive half-day increments added to the existing entitlement. */
+  readonly days: number;
+  /** Permanently recorded with the balance adjustment audit event. */
+  readonly reason: string;
 }
 
 export interface HrDivisionRequestSummaryView {
@@ -507,13 +534,18 @@ export interface HrService {
     userId: string,
     kind: 'wfh' | 'leave',
   ): Promise<Result<readonly HrDivisionRequestSummaryView[]>>;
-  listLeaveBalances(userId: string): Promise<Result<readonly HrLeaveBalanceView[]>>;
+  listLeaveBalances(userId: string, year?: number): Promise<Result<readonly HrLeaveBalanceView[]>>;
+  getLeaveBalanceFormOptions(userId: string): Promise<Result<LeaveBalanceFormOptions>>;
+  addLeaveBalance(input: AddLeaveBalanceInput): Promise<Result<HrLeaveBalanceView>>;
   decideRequest(input: {
     userId: string;
     kind: 'wfh' | 'leave';
     id: string;
     outcome: 'approved' | 'rejected' | 'information_requested';
     comment: string;
+    /** HR may approve a contiguous sub-range, never dates outside the request. */
+    approvedStartDate?: IsoDate;
+    approvedEndDate?: IsoDate;
     /** Required when replacing an existing decision (`REQ-WFH-004`). */
     overrideReason: string | null;
   }): Promise<Result<HrRequestRowView>>;

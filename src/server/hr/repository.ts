@@ -93,7 +93,11 @@ export class HrRepository {
         const fallback: HrRequest = kind === 'wfh' ? {
             ...common, requestDate: date(r.created_at), wfhDate: date(r.wfh_date), divisionId: String(r.division_id), plannedTasks: String(r.planned_tasks), contactAvailability: String(r.contact_availability)
         } : {
-            ...common, leaveType: r.type_key as 'annual' | 'sick' | 'casual' | 'unpaid', startDate: date(r.start_date), endDate: date(r.end_date), totalDays: Number(r.requested_minutes) / 420, requestedMinutes: Number(r.requested_minutes)
+            ...common, leaveType: r.type_key as LeaveRequest['leaveType'], startDate: date(r.start_date), endDate: date(r.end_date), totalDays: Number(r.requested_minutes) / 420, requestedMinutes: Number(r.requested_minutes),
+            approved: r.approved_start_date == null ? null : {
+                startDate: date(r.approved_start_date), endDate: date(r.approved_end_date),
+                totalDays: Number(r.approved_minutes) / 420, minutes: Number(r.approved_minutes)
+            }
         };
         // Early production rows and imported records may carry a null, empty,
         // or partial JSON payload. The relational columns are the canonical
@@ -133,11 +137,15 @@ export class HrRepository {
             } as HrRequest
             : {
                 ...shared,
-                leaveType: r.type_key as 'annual' | 'sick' | 'casual' | 'unpaid',
+                leaveType: r.type_key as LeaveRequest['leaveType'],
                 startDate: date(r.start_date),
                 endDate: date(r.end_date),
                 totalDays: Number(r.requested_minutes) / 420,
                 requestedMinutes: Number(r.requested_minutes),
+                approved: r.approved_start_date == null ? null : {
+                    startDate: date(r.approved_start_date), endDate: date(r.approved_end_date),
+                    totalDays: Number(r.approved_minutes) / 420, minutes: Number(r.approved_minutes)
+                },
             } as HrRequest;
     }
     async leaveTypes() {
@@ -159,9 +167,9 @@ export class HrRepository {
             if (!type)
                 throw new Error('Missing leave type');
             if (create)
-                await this.execute('INSERT INTO leave_requests(id,employee_id,leave_type_id,start_date,end_date,portion,requested_minutes,reason,status,payload,version) VALUES(?,?,?,?,?,?,?,?,?,?,?)', [r.id, r.employeeId, String(type.id), r.startDate, r.endDate, r.portion, r.requestedMinutes ?? 0, r.reason, status, JSON.stringify(r), r.version]);
+                await this.execute('INSERT INTO leave_requests(id,employee_id,leave_type_id,start_date,end_date,portion,requested_minutes,approved_start_date,approved_end_date,approved_minutes,reason,status,decided_by_user_id,decision_comment,payload,version) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', [r.id, r.employeeId, String(type.id), r.startDate, r.endDate, r.portion, r.requestedMinutes ?? 0, r.approved?.startDate ?? null, r.approved?.endDate ?? null, r.approved?.minutes ?? null, r.reason, status, r.decision?.decidedBy.userId ?? null, r.decision?.comment ?? null, JSON.stringify(r), r.version]);
             else
-                await this.execute('UPDATE leave_requests SET leave_type_id=?,start_date=?,end_date=?,portion=?,requested_minutes=?,reason=?,status=?,payload=?,version=? WHERE id=?', [String(type.id), r.startDate, r.endDate, r.portion, r.requestedMinutes ?? 0, r.reason, status, JSON.stringify(r), r.version, r.id]);
+                await this.execute('UPDATE leave_requests SET leave_type_id=?,start_date=?,end_date=?,portion=?,requested_minutes=?,approved_start_date=?,approved_end_date=?,approved_minutes=?,reason=?,status=?,decided_by_user_id=?,decision_comment=?,payload=?,version=? WHERE id=?', [String(type.id), r.startDate, r.endDate, r.portion, r.requestedMinutes ?? 0, r.approved?.startDate ?? null, r.approved?.endDate ?? null, r.approved?.minutes ?? null, r.reason, status, r.decision?.decidedBy.userId ?? null, r.decision?.comment ?? null, JSON.stringify(r), r.version, r.id]);
         }
     }
     async adjustBalance(id: string, reserved: number, used: number) {

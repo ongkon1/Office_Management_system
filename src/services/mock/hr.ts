@@ -96,6 +96,7 @@ import { effectiveLeadForAssignment, validateAssignmentDepartment } from './orga
 
 const LATENCY_MS = 160;
 const delay = () => new Promise((resolve) => setTimeout(resolve, LATENCY_MS));
+const addedLeaveBalances = new Map<string, HrLeaveBalanceView>();
 
 function notFound(message: string) {
   return { status: 'not_found' as const, code: 'NOT_FOUND' as const, message };
@@ -438,6 +439,14 @@ function requestRow(
     employee: employeeRef(request.employeeId),
     division: divisionRef(divisionId)!,
     dateLabel,
+    requestedDateLabel: dateLabel,
+    requestedStartDate: wfh?.wfhDate ?? leave!.startDate,
+    requestedEndDate: wfh?.wfhDate ?? leave!.endDate,
+    requestedDays: leave?.totalDays ?? null,
+    approvedDateLabel: leave?.approved
+      ? formatDateRange(leave.approved.startDate, leave.approved.endDate)
+      : null,
+    approvedDays: leave?.approved?.totalDays ?? null,
     portion: request.portion,
     portionLabel: request.portion === 'half_day' ? 'Half day' : 'Full day',
     leaveType: leave?.leaveType ?? null,
@@ -1441,13 +1450,12 @@ export const mockHrService: HrService = {
     );
   },
 
-  async listLeaveBalances(userId) {
+  async listLeaveBalances(userId, year = Number(DEMO_TODAY.slice(0, 4))) {
     await delay();
     if (!canAdminister(userId)) {
       return denied('Leave administration is limited to HR.', 'Return to your dashboard.');
     }
-    return success(
-      LEAVE_BALANCES.map<HrLeaveBalanceView>((balance) => ({
+    const seeded = LEAVE_BALANCES.filter(balance => balance.year === year).map<HrLeaveBalanceView>((balance) => ({
         employee: employeeRef(balance.employeeId),
         leaveType: balance.leaveType,
         typeLabel: leaveTypeLabel(balance.leaveType),
@@ -1456,11 +1464,54 @@ export const mockHrService: HrService = {
         consumedDays: balance.consumedDays,
         reservedDays: balance.reservedDays,
         remainingDays: balance.remainingDays,
-      })),
-    );
+      }));
+    return success([
+      ...seeded.map(balance => addedLeaveBalances.get(`${balance.employee.id}:${balance.leaveType}:${balance.year}`) ?? balance),
+      ...[...addedLeaveBalances.entries()].filter(([, balance]) => balance.year === year).filter(([key]) => !seeded.some(balance => key === `${balance.employee.id}:${balance.leaveType}:${balance.year}`)).map(([, balance]) => balance),
+    ]);
   },
 
-  async decideRequest({ userId, kind, id, outcome, comment, overrideReason }) {
+  async getLeaveBalanceFormOptions(userId) {
+    await delay();
+    if (viewerOf(userId)?.primaryRole !== 'super_admin') {
+      return denied('Leave balances can only be added by a Super Administrator.', 'Ask a Super Administrator to add the entitlement.');
+    }
+    return success({
+      employees: EMPLOYEES.filter(employee => employee.status === 'active').map(employee => employeeRef(employee.id)).sort((a, b) => a.fullName.localeCompare(b.fullName)),
+      leaveTypes: LEAVE_TYPES.map(type => ({ value: type.key, label: type.label })),
+      defaultYear: Number(DEMO_TODAY.slice(0, 4)),
+    });
+  },
+
+  async addLeaveBalance(input) {
+    await delay();
+    if (viewerOf(input.userId)?.primaryRole !== 'super_admin') {
+      return denied('Leave balances can only be added by a Super Administrator.', 'Ask a Super Administrator to add the entitlement.');
+    }
+    if (!Number.isFinite(input.days) || input.days <= 0 || input.days > 366 || !Number.isInteger(input.days * 2)) {
+      return invalid('days', 'Enter a positive full-day or half-day amount.', 'Examples: 1, 2.5, or 10 days.');
+    }
+    if (!input.reason.trim()) {
+      return invalid('reason', 'A reason is required.', 'Explain why this leave balance is being added.');
+    }
+    const type = LEAVE_TYPES.find(item => item.key === input.leaveType);
+    const employee = EMPLOYEES.find(item => item.id === input.employeeId && item.status === 'active');
+    if (!type || !employee) return notFound('Employee or leave type not found.');
+    const key = `${input.employeeId}:${input.leaveType}:${input.year}`;
+    const seeded = LEAVE_BALANCES.find(balance => key === `${balance.employeeId}:${balance.leaveType}:${balance.year}`);
+    const current = addedLeaveBalances.get(key) ?? (seeded ? {
+      employee: employeeRef(seeded.employeeId), leaveType: seeded.leaveType, typeLabel: leaveTypeLabel(seeded.leaveType), year: seeded.year,
+      entitledDays: seeded.entitledDays, consumedDays: seeded.consumedDays, reservedDays: seeded.reservedDays, remainingDays: seeded.remainingDays,
+    } : {
+      employee: employeeRef(input.employeeId), leaveType: input.leaveType, typeLabel: type.label, year: input.year,
+      entitledDays: 0, consumedDays: 0, reservedDays: 0, remainingDays: 0,
+    });
+    const next = { ...current, entitledDays: current.entitledDays + input.days, remainingDays: current.remainingDays + input.days };
+    addedLeaveBalances.set(key, next);
+    return success(next);
+  },
+
+  async decideRequest({ userId, kind, id, outcome, comment, overrideReason, approvedStartDate, approvedEndDate }) {
     await delay();
     if (!canAdminister(userId)) {
       return denied('Only HR can decide this request here.', 'Return to your dashboard.');
@@ -1495,10 +1546,29 @@ export const mockHrService: HrService = {
       request.decision?.outcome === 'approved' || request.decision?.outcome === 'rejected'
         ? request.decision.outcome
         : null;
+    let approved: LeaveRequest['approved'] = null;
+    if (kind === 'leave' && outcome === 'approved') {
+      const leave = request as LeaveRequest;
+      const startDate = approvedStartDate ?? leave.startDate;
+      const endDate = approvedEndDate ?? leave.endDate;
+      if (startDate < leave.startDate || endDate > leave.endDate || endDate < startDate) {
+        return invalid('approvedEndDate', 'Approve dates inside the requested range.', 'Choose a shorter period within the employee request.');
+      }
+      if (leave.portion === 'half_day' && (startDate !== leave.startDate || endDate !== leave.endDate)) {
+        return invalid('approvedStartDate', 'A half-day request cannot be shortened.', 'Approve it as requested or reject it.');
+      }
+      const totalDays = leave.portion === 'half_day' ? 0.5 : daysBetween(startDate, endDate) + 1;
+      const reduced = startDate !== leave.startDate || endDate !== leave.endDate;
+      if (reduced && !comment.trim()) {
+        return invalid('comment', 'Explain the reduced approval.', 'Tell the employee why fewer days were approved.');
+      }
+      approved = { startDate, endDate, totalDays, minutes: totalDays * 420 };
+    }
 
     const next = {
       ...request,
       state: outcome,
+      ...(kind === 'leave' ? { approved } : {}),
       decision: {
         decidedAt: now,
         decidedBy: actor,

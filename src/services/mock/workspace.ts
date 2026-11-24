@@ -458,6 +458,7 @@ function wfhSelfView(request: WfhRequest): SelfRequestView {
     id: request.id,
     kind: 'wfh',
     dateLabel: formatDateWithWeekday(request.wfhDate),
+    approvedDateLabel: null,
     startDate: request.wfhDate,
     endDate: request.wfhDate,
     portion: request.portion,
@@ -500,6 +501,11 @@ function leaveSelfView(request: LeaveRequest): SelfRequestView {
       request.startDate === request.endDate
         ? formatDateWithWeekday(request.startDate)
         : formatDateRange(request.startDate, request.endDate),
+    approvedDateLabel: request.approved
+      ? request.approved.startDate === request.approved.endDate
+        ? formatDateWithWeekday(request.approved.startDate)
+        : formatDateRange(request.approved.startDate, request.approved.endDate)
+      : null,
     startDate: request.startDate,
     endDate: request.endDate,
     portion: request.portion,
@@ -943,6 +949,7 @@ export const mockWorkspaceService: WorkspaceService = {
       endDate: input.endDate,
       portion: input.portion,
       totalDays: days,
+      approved: null,
       reason: input.reason.trim(),
       attachmentIds: [],
       state: 'pending',

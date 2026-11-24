@@ -314,8 +314,8 @@ export const mockStore = {
       (request) =>
         request.employeeId === employeeId &&
         request.state === 'approved' &&
-        date >= request.startDate &&
-        date <= request.endDate,
+        date >= (request.approved?.startDate ?? request.startDate) &&
+        date <= (request.approved?.endDate ?? request.endDate),
     );
   },
 

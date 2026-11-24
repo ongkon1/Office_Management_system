@@ -12,11 +12,17 @@ import { ExportApplication } from './exports';
 import { S3ExportStorage, type ExportStorage } from './storage';
 import { createFinanceViewService } from './finance-adapter';
 import { BackendReportingService } from './adapters';
+
+export const configuredExportBucket = (environment: Readonly<Record<string, string | undefined>> = process.env) =>
+    environment.EXPORT_S3_BUCKET?.trim()
+    || environment.S3_BUCKET?.trim()
+    || 'unconfigured-private-exports';
+
 export function createReportingServices(pool: Pool, sessionToken: string, storage?: ExportStorage) {
     const authentication = new AuthenticationService(new MysqlAuthenticationStore(pool));
     const requests = new RequestApplication(new HrRepository(pool), async (on) => { const s = await authentication.validateSession(sessionToken); return s.status === 'success' ? loadActorPolicyContext(pool, s.data.userId, on) : null; });
     const reports = new ReportApplication(requests);
-    const objectStorage = storage ?? new S3ExportStorage(new S3Client({ region: process.env.S3_REGION ?? process.env.AWS_REGION ?? 'ap-southeast-1', endpoint: process.env.S3_ENDPOINT || undefined, forcePathStyle: process.env.S3_FORCE_PATH_STYLE === 'true', ...(process.env.S3_ACCESS_KEY_ID && process.env.S3_SECRET_ACCESS_KEY ? { credentials: { accessKeyId: process.env.S3_ACCESS_KEY_ID, secretAccessKey: process.env.S3_SECRET_ACCESS_KEY } } : {}) }), process.env.EXPORT_S3_BUCKET ?? process.env.S3_BUCKET ?? 'unconfigured-private-exports');
+    const objectStorage = storage ?? new S3ExportStorage(new S3Client({ region: process.env.S3_REGION ?? process.env.AWS_REGION ?? 'ap-southeast-1', endpoint: process.env.S3_ENDPOINT || undefined, forcePathStyle: process.env.S3_FORCE_PATH_STYLE === 'true', ...(process.env.S3_ACCESS_KEY_ID && process.env.S3_SECRET_ACCESS_KEY ? { credentials: { accessKeyId: process.env.S3_ACCESS_KEY_ID, secretAccessKey: process.env.S3_SECRET_ACCESS_KEY } } : {}) }), configuredExportBucket());
     const exports = new ExportApplication(reports, objectStorage, { fontPath: process.env.EXPORT_PDF_FONT_PATH });
     return { reports, financeViews: guardService(createFinanceViewService(reports, exports)), finance: new FinanceApplication(reports), exports, reporting: guardService(new BackendReportingService(reports, exports)) };
 }

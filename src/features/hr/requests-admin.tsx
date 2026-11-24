@@ -1,8 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import { AlertTriangle, ShieldAlert } from 'lucide-react';
-import type { HrRequestRowView } from '@/contracts/hr';
+import { AlertTriangle, CalendarPlus, ShieldAlert } from 'lucide-react';
+import type { AddLeaveBalanceInput, HrRequestRowView, LeaveBalanceFormOptions } from '@/contracts/hr';
 import { hrService as mockHrService } from '@/services/runtime/hr';
 import { useAsync } from '@/lib/use-async';
 import { useSession } from '@/features/access/session-provider';
@@ -14,7 +14,7 @@ import { Dialog } from '@/components/feedback/overlay';
 import { Tabs } from '@/components/feedback/disclosure';
 import { MultiSelectFilter, FilterBar } from '@/components/data/filters';
 import { Field, FormErrorSummary } from '@/components/forms/field';
-import { Select, Textarea } from '@/components/forms/inputs';
+import { DateInput, NumberInput, Select, Textarea } from '@/components/forms/inputs';
 import { Button } from '@/components/ui/button';
 import { Badge, type BadgeTone } from '@/components/ui/badge';
 import { Duration } from '@/components/ui/misc';
@@ -34,6 +34,104 @@ const STATE_TABS = [
   { key: 'rejected', label: 'Rejected' },
   { key: 'all', label: 'All' },
 ];
+
+function AddLeaveBalanceDialog({
+  open,
+  options,
+  onClose,
+  onSaved,
+}: {
+  open: boolean;
+  options: LeaveBalanceFormOptions;
+  onClose: () => void;
+  onSaved: (year: number) => void;
+}) {
+  const { user } = useSession();
+  const toast = useToast();
+  const [employeeId, setEmployeeId] = React.useState('');
+  const [leaveType, setLeaveType] = React.useState<AddLeaveBalanceInput['leaveType']>('annual');
+  const [year, setYear] = React.useState(options.defaultYear);
+  const [days, setDays] = React.useState(1);
+  const [reason, setReason] = React.useState('');
+  const [saving, setSaving] = React.useState(false);
+  const [errors, setErrors] = React.useState<readonly { field: string; message: string }[]>([]);
+  const [seededFor, setSeededFor] = React.useState<string | null>(null);
+
+  const seedKey = open ? `${options.defaultYear}:${options.employees[0]?.id ?? ''}:${options.leaveTypes[0]?.value ?? ''}` : null;
+  if (seedKey !== seededFor) {
+    setSeededFor(seedKey);
+    setEmployeeId(options.employees[0]?.id ?? '');
+    setLeaveType(options.leaveTypes[0]?.value ?? 'annual');
+    setYear(options.defaultYear);
+    setDays(1);
+    setReason('');
+    setErrors([]);
+    setSaving(false);
+  }
+
+  const fieldError = (field: string) => errors.find((error) => error.field === field)?.message;
+
+  async function submit() {
+    setSaving(true);
+    setErrors([]);
+    const result = await mockHrService.addLeaveBalance({
+      userId: user?.userId ?? '', employeeId, leaveType, year, days, reason,
+    });
+    setSaving(false);
+    if (result.status === 'success') {
+      onSaved(year);
+      onClose();
+      toast.show({
+        tone: 'success', title: 'Leave balance added',
+        description: `${days} day${days === 1 ? '' : 's'} added to ${result.data.employee.fullName}'s ${result.data.typeLabel} balance.`,
+      });
+      return;
+    }
+    if (result.status === 'validation_failure') {
+      setErrors(result.fieldErrors.map(error => ({ field: error.field, message: `${error.message} ${error.guidance}` })));
+      return;
+    }
+    setErrors([{ field: 'form', message: result.message }]);
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title="Add leave balance"
+      description="Add entitlement without changing leave already consumed or reserved."
+      dismissOnBackdrop={false}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={submit} loading={saving}>Add balance</Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <FormErrorSummary errors={errors} autoFocus={false} />
+        <Field label="Employee" required error={fieldError('employeeId')}>
+          <Select value={employeeId} onChange={(event) => setEmployeeId(event.target.value)} options={options.employees.map(employee => ({ value: employee.id, label: `${employee.fullName} · ${employee.employeeCode}` }))} />
+        </Field>
+        <Field label="Leave type" required error={fieldError('leaveType')}>
+          <Select value={leaveType} onChange={(event) => setLeaveType(event.target.value as AddLeaveBalanceInput['leaveType'])} options={options.leaveTypes} />
+        </Field>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Year" required error={fieldError('year')}>
+            <NumberInput min={2000} max={2100} step={1} value={year} onChange={(event) => setYear(Number(event.target.value))} />
+          </Field>
+          <Field label="Days to add" required error={fieldError('days')} helperText="Full-day or half-day amounts, for example 10 or 2.5.">
+            <NumberInput min={0.5} max={366} step={0.5} value={days} onChange={(event) => setDays(Number(event.target.value))} />
+          </Field>
+        </div>
+        <Field label="Reason" required error={fieldError('reason')} helperText="Stored permanently in the audit log.">
+          <Textarea name="reason" rows={3} value={reason} onChange={(event) => setReason(event.target.value)} />
+        </Field>
+        <Callout tone="info">If a balance already exists for this employee, leave type and year, these days are added to its current entitlement.</Callout>
+      </div>
+    </Dialog>
+  );
+}
 
 /**
  * The decision dialog.
@@ -61,6 +159,9 @@ function DecisionDialog({
     React.useState<'approved' | 'rejected' | 'information_requested'>('approved');
   const [comment, setComment] = React.useState('');
   const [overrideReason, setOverrideReason] = React.useState('');
+  const [approvalMode, setApprovalMode] = React.useState<'full' | 'reduced'>('full');
+  const [approvedStartDate, setApprovedStartDate] = React.useState('');
+  const [approvedEndDate, setApprovedEndDate] = React.useState('');
   const [errors, setErrors] = React.useState<readonly { field: string; message: string }[]>([]);
   const [denialMessage, setDenialMessage] = React.useState<string | null>(null);
   const [seededFor, setSeededFor] = React.useState<string | null>(null);
@@ -71,6 +172,9 @@ function DecisionDialog({
     setOutcome('approved');
     setComment('');
     setOverrideReason('');
+    setApprovalMode('full');
+    setApprovedStartDate(request?.requestedStartDate ?? '');
+    setApprovedEndDate(request?.requestedEndDate ?? '');
     setErrors([]);
     setDenialMessage(null);
   }
@@ -85,6 +189,14 @@ function DecisionDialog({
       id: request!.id,
       outcome,
       comment,
+      approvedStartDate:
+        request!.kind === 'leave' && outcome === 'approved' && approvalMode === 'reduced'
+          ? approvedStartDate
+          : undefined,
+      approvedEndDate:
+        request!.kind === 'leave' && outcome === 'approved' && approvalMode === 'reduced'
+          ? approvedEndDate
+          : undefined,
       overrideReason: overrideReason || null,
     });
     if (result.status === 'success') {
@@ -123,7 +235,14 @@ function DecisionDialog({
           <Button variant="secondary" onClick={onClose}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={submit}>
+          <Button
+            variant="primary"
+            onClick={submit}
+            disabled={
+              request.kind === 'leave' && outcome === 'approved' && approvalMode === 'reduced' &&
+              (!approvedStartDate || !approvedEndDate || approvedEndDate < approvedStartDate || !comment.trim())
+            }
+          >
             {isOverride ? 'Override and notify' : 'Confirm and notify'}
           </Button>
         </>
@@ -157,9 +276,68 @@ function DecisionDialog({
           />
         </Field>
 
+        {request.kind === 'leave' && outcome === 'approved' && (
+          <div className="space-y-4 rounded-md border border-border bg-surface-sunken p-4">
+            <Field
+              label="Leave to approve"
+              helperText="The employee's original request remains unchanged in the history."
+            >
+              <Select
+                value={approvalMode}
+                onChange={(event) => {
+                  const mode = event.target.value as 'full' | 'reduced';
+                  setApprovalMode(mode);
+                  if (mode === 'full') {
+                    setApprovedStartDate(request.requestedStartDate);
+                    setApprovedEndDate(request.requestedEndDate);
+                  }
+                }}
+                options={[
+                  { value: 'full', label: `Approve full request (${request.requestedDateLabel})` },
+                  { value: 'reduced', label: 'Approve a shorter period' },
+                ]}
+              />
+            </Field>
+            {approvalMode === 'reduced' && (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field
+                  label="Approved from"
+                  required
+                  error={errors.find((error) => error.field === 'approvedStartDate')?.message}
+                >
+                  <DateInput
+                    value={approvedStartDate}
+                    min={request.requestedStartDate}
+                    max={request.requestedEndDate}
+                    onChange={(event) => setApprovedStartDate(event.target.value)}
+                  />
+                </Field>
+                <Field
+                  label="Approved through"
+                  required
+                  error={errors.find((error) => error.field === 'approvedEndDate')?.message}
+                >
+                  <DateInput
+                    value={approvedEndDate}
+                    min={approvedStartDate || request.requestedStartDate}
+                    max={request.requestedEndDate}
+                    onChange={(event) => setApprovedEndDate(event.target.value)}
+                  />
+                </Field>
+              </div>
+            )}
+          </div>
+        )}
+
         <Field
           label="Comment to the employee"
-          helperText="Included in the notification and the decision history."
+          required={request.kind === 'leave' && outcome === 'approved' && approvalMode === 'reduced'}
+          error={errors.find((error) => error.field === 'comment')?.message}
+          helperText={
+            request.kind === 'leave' && outcome === 'approved' && approvalMode === 'reduced'
+              ? 'Required: explain why the approved period is shorter.'
+              : 'Included in the notification and the decision history.'
+          }
         >
           <Textarea rows={3} value={comment} onChange={(event) => setComment(event.target.value)} />
         </Field>
@@ -218,6 +396,12 @@ function RequestCard({
         {request.leaveTypeLabel ? ` · ${request.leaveTypeLabel}` : ''}
       </p>
       <p className="mt-1 text-body-sm text-ink-muted">{request.reason}</p>
+      {request.kind === 'leave' && request.approvedDateLabel && (
+        <p className="mt-1 text-caption font-medium text-success">
+          Approved: {request.approvedDateLabel}
+          {request.approvedDays !== null ? ` · ${request.approvedDays} day${request.approvedDays === 1 ? '' : 's'}` : ''}
+        </p>
+      )}
       {request.plannedWork && (
         <p className="mt-2 text-caption text-ink-muted">Planned: {request.plannedWork}</p>
       )}
@@ -271,10 +455,13 @@ function RequestCard({
 /** FE-0511 and FE-0512 — WFH and leave administration. */
 export function RequestAdministration({ kind }: { kind: 'wfh' | 'leave' }) {
   const { user } = useSession();
+  const canAddLeaveBalance = user?.roles.includes('super_admin') ?? false;
   const [tab, setTab] = React.useState('pending');
   const [divisionIds, setDivisionIds] = React.useState<readonly string[]>([]);
   const [selected, setSelected] = React.useState<HrRequestRowView | null>(null);
   const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [balanceDialogOpen, setBalanceDialogOpen] = React.useState(false);
+  const [balanceYear, setBalanceYear] = React.useState(() => new Date().getFullYear());
 
   const { state, reload } = useAsync(
     () => mockHrService.listRequests(user?.userId ?? '', kind),
@@ -285,9 +472,15 @@ export function RequestAdministration({ kind }: { kind: 'wfh' | 'leave' }) {
     () => mockHrService.listDivisionRequestSummary(user?.userId ?? '', kind),
     [user?.userId, kind],
   );
-  const { state: balanceState } = useAsync(
-    () => (kind === 'leave' ? mockHrService.listLeaveBalances(user?.userId ?? '') : Promise.resolve({ status: 'success' as const, data: [] })),
-    [user?.userId, kind],
+  const { state: balanceState, reload: reloadBalances } = useAsync(
+    () => (kind === 'leave' ? mockHrService.listLeaveBalances(user?.userId ?? '', balanceYear) : Promise.resolve({ status: 'success' as const, data: [] })),
+    [user?.userId, kind, balanceYear],
+  );
+  const { state: balanceOptionsState } = useAsync(
+    () => canAddLeaveBalance
+      ? mockHrService.getLeaveBalanceFormOptions(user?.userId ?? '')
+      : Promise.resolve({ status: 'success' as const, data: { employees: [], leaveTypes: [], defaultYear: new Date().getFullYear() } }),
+    [user?.userId, canAddLeaveBalance],
   );
 
   if (state.status === 'loading') return <HrLoading label={kind === 'wfh' ? 'WFH requests' : 'leave requests'} />;
@@ -316,15 +509,33 @@ export function RequestAdministration({ kind }: { kind: 'wfh' | 'leave' }) {
             : 'Balances, request review, half-day handling, conflicts and audited overrides.'
         }
         meta={<CompanyScope />}
+        actions={kind === 'leave' && canAddLeaveBalance ? (
+          <Button
+            variant="primary"
+            onClick={() => setBalanceDialogOpen(true)}
+            disabled={balanceOptionsState.status !== 'success' || balanceOptionsState.data.employees.length === 0}
+            iconLeading={<CalendarPlus aria-hidden className="size-4" />}
+          >
+            Add leave balance
+          </Button>
+        ) : undefined}
       />
 
-      {kind === 'leave' && balanceState.status === 'success' && balanceState.data.length > 0 && (
+      {kind === 'leave' && balanceState.status === 'success' && (
         <Card className="mt-5">
           <CardHeader
             title="Leave balances"
-            description="Entitled, consumed, reserved and remaining days for the current year."
+            description={`Entitled, consumed, reserved and remaining days for ${balanceYear}.`}
+            actions={
+              <Select
+                aria-label="Leave balance year"
+                value={String(balanceYear)}
+                onChange={(event) => setBalanceYear(Number(event.target.value))}
+                options={[balanceYear - 1, balanceYear, balanceYear + 1].map(year => ({ value: String(year), label: String(year) }))}
+              />
+            }
           />
-          <div className="mt-4 overflow-x-auto">
+          {balanceState.data.length > 0 ? <div className="mt-4 overflow-x-auto">
             <table className="w-full min-w-[36rem] text-body-sm">
               <caption className="sr-only">Leave balances by employee and leave type</caption>
               <thead>
@@ -355,8 +566,26 @@ export function RequestAdministration({ kind }: { kind: 'wfh' | 'leave' }) {
                 ))}
               </tbody>
             </table>
-          </div>
+          </div> : (
+            <EmptyState
+              className="mt-4"
+              title={`No leave balances for ${balanceYear}`}
+              description={canAddLeaveBalance ? 'Use Add leave balance to create the first entitlement for this year.' : 'No entitlement has been assigned for this year.'}
+            />
+          )}
         </Card>
+      )}
+
+      {kind === 'leave' && canAddLeaveBalance && balanceOptionsState.status === 'success' && (
+        <AddLeaveBalanceDialog
+          open={balanceDialogOpen}
+          options={balanceOptionsState.data}
+          onClose={() => setBalanceDialogOpen(false)}
+          onSaved={(year) => {
+            if (year === balanceYear) reloadBalances();
+            else setBalanceYear(year);
+          }}
+        />
       )}
 
       {summaryState.status === 'success' && summaryState.data.length > 0 && (

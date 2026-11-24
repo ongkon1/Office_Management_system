@@ -25,6 +25,9 @@ const lead: ActorPolicyContext = {
 const hr: ActorPolicyContext = {
     ...employee, userId: '30000000-0000-4000-8000-000000000004', employeeId: '40000000-0000-4000-8000-000000000004', roles: ['hr_manager'], permissions: new Set(['organization.government.view', 'evaluation.private.view', 'evaluation.weight.manage', 'hr.jobs.run'])
 };
+const superAdmin: ActorPolicyContext = {
+    ...hr, userId: '30000000-0000-4000-8000-000000000001', employeeId: '40000000-0000-4000-8000-000000000001', roles: ['super_admin'],
+};
 /**
  * `OH-BE-0301`, `OH-BE-0304`. The administrator account, used below as a
  * department lead appointed over the seeded Technical department. Its stored
@@ -129,6 +132,53 @@ describe('Phase 5 real database workflows', () => {
         const day = data(await new AttendanceApplication(self).day(eid, '2026-10-06'));
         expect(day.requiredActiveMinutes).toBe(210);
         expect(day.state).toBe('half_day_leave');
+    });
+    it('lets HR approve a shorter leave range while preserving the request', async () => {
+        const balanceBefore = (await repo.balances(eid, 2026))[0];
+        const requested = data(await self.save('leave', {
+            ...leave('2026-10-19'), endDate: '2026-10-22'
+        }));
+        expect(requested.requestedMinutes).toBe(1680);
+        data(await self.transition('leave', requested.id, 'submit'));
+        expect((await admin.transition(
+            'leave', requested.id, 'approved', null, false, undefined,
+            { startDate: '2026-10-19', endDate: '2026-10-21' }
+        )).status).toBe('validation_failure');
+        const approved = data(await admin.transition(
+            'leave', requested.id, 'approved', 'Operational coverage is required on Thursday.', false, undefined,
+            { startDate: '2026-10-19', endDate: '2026-10-21' }
+        ));
+        expect(approved).toMatchObject({
+            startDate: '2026-10-19', endDate: '2026-10-22', requestedMinutes: 1680,
+            approved: { startDate: '2026-10-19', endDate: '2026-10-21', totalDays: 3, minutes: 1260 }
+        });
+        const balanceAfter = (await repo.balances(eid, 2026))[0];
+        expect(Number(balanceAfter.used_minutes) - Number(balanceBefore.used_minutes)).toBe(1260);
+        expect(balanceAfter.reserved_minutes).toBe(balanceBefore.reserved_minutes);
+        const attendance = new AttendanceApplication(admin);
+        expect(data(await attendance.day(eid, '2026-10-21')).state).toBe('approved_leave');
+        expect(data(await attendance.day(eid, '2026-10-22')).state).toBe('missing_timesheet');
+        const views = new BackendHrViews(admin, attendance, new HolidayApplication(admin), new EvaluationApplication(admin));
+        expect(data(await views.listRequests(hr.userId, 'leave')).find(row => row.id === requested.id)).toMatchObject({
+            requestedDays: 4, approvedDays: 3
+        });
+    });
+    it('lets only a Super Administrator add an audited leave entitlement', async () => {
+        const before = Number((await repo.balances(eid, 2026)).find(row => row.type_key === 'annual')!.entitled_minutes);
+        const superRequests = new RequestApplication(repo, async () => superAdmin, () => now);
+        const views = new BackendHrViews(superRequests, new AttendanceApplication(superRequests), new HolidayApplication(superRequests), new EvaluationApplication(superRequests));
+        const options = data(await views.getLeaveBalanceFormOptions(superAdmin.userId));
+        expect(options.employees.some(item => item.id === eid)).toBe(true);
+        expect(options.leaveTypes.some(item => item.value === 'annual')).toBe(true);
+        expect(options.leaveTypes).toContainEqual({ value: 'earned', label: 'Earned Leave' });
+        const added = data(await views.addLeaveBalance({
+            userId: superAdmin.userId, employeeId: eid, leaveType: 'annual', year: 2026, days: 2.5, reason: 'Approved annual entitlement top-up',
+        }));
+        expect(added.entitledDays).toBe((before + 1050) / 420);
+        expect(Number((await repo.balances(eid, 2026)).find(row => row.type_key === 'annual')!.entitled_minutes)).toBe(before + 1050);
+        expect(await repo.rows("SELECT reason FROM audit_events WHERE action='leave.balance.added' AND JSON_UNQUOTE(JSON_EXTRACT(scope_json,'$.employeeId'))=? AND JSON_UNQUOTE(JSON_EXTRACT(scope_json,'$.leaveType'))='annual'", [eid])).toContainEqual({ reason: 'Approved annual entitlement top-up' });
+        const hrViews = new BackendHrViews(admin, new AttendanceApplication(admin), new HolidayApplication(admin), new EvaluationApplication(admin));
+        expect((await hrViews.addLeaveBalance({ userId: hr.userId, employeeId: eid, leaveType: 'annual', year: 2026, days: 1, reason: 'Not authorized' })).status).toBe('not_found');
     });
     it('rejects overlaps, invalid dates and division assignments', async () => {
         const r = data(await self.save('leave', leave('2026-10-05')));

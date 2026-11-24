@@ -1,13 +1,13 @@
 import { z } from 'zod';
 import { resultResponse } from '@/server/time/http';
-import { invalid } from '@/server/time/validation';
+import { dateSchema, invalid } from '@/server/time/validation';
 import type { createHrServices } from './composition';
 const command = z.discriminatedUnion('operation', [
     z.object({
         operation: z.literal('request.save'), kind: z.enum(['wfh', 'leave']), id: z.uuid().optional(), expectedVersion: z.number().int().positive().optional(), input: z.record(z.string(), z.unknown())
     }),
     z.object({
-        operation: z.literal('request.transition'), kind: z.enum(['wfh', 'leave']), id: z.uuid(), action: z.enum(['submit', 'cancel', 'approved', 'rejected', 'information_requested']), comment: z.string().max(10000).nullable().default(null), override: z.boolean().default(false), expectedVersion: z.number().int().positive().optional()
+        operation: z.literal('request.transition'), kind: z.enum(['wfh', 'leave']), id: z.uuid(), action: z.enum(['submit', 'cancel', 'approved', 'rejected', 'information_requested']), comment: z.string().max(10000).nullable().default(null), override: z.boolean().default(false), expectedVersion: z.number().int().positive().optional(), approval: z.object({ startDate: dateSchema, endDate: dateSchema }).optional()
     }),
     z.object({ operation: z.literal('holiday.save'), id: z.uuid().optional(), input: z.record(z.string(), z.unknown()) }),
     z.object({ operation: z.literal('evaluation.period'), input: z.record(z.string(), z.unknown()) }),
@@ -17,7 +17,7 @@ const command = z.discriminatedUnion('operation', [
     z.object({
         operation: z.literal('evaluation.change'), id: z.uuid(), action: z.enum(['save_self', 'submit_self', 'save_scores', 'submit_review', 'publish', 'return']), input: z.unknown().optional(), expectedVersion: z.number().int().positive().optional()
     }),
-    z.object({ operation: z.literal('client.hr'), method: z.enum(['getAttendance','listRequests','listDivisionRequestSummary','listLeaveBalances','decideRequest','listHolidays','saveHoliday','setHolidayActive','listEvaluationPeriods','createEvaluationPeriod','listEvaluations','getEvaluation','sendReminder','publishEvaluation','returnEvaluation']), args: z.array(z.unknown()).max(3) }),
+    z.object({ operation: z.literal('client.hr'), method: z.enum(['getAttendance','listRequests','listDivisionRequestSummary','listLeaveBalances','getLeaveBalanceFormOptions','addLeaveBalance','decideRequest','listHolidays','saveHoliday','setHolidayActive','listEvaluationPeriods','createEvaluationPeriod','listEvaluations','getEvaluation','sendReminder','publishEvaluation','returnEvaluation']), args: z.array(z.unknown()).max(3) }),
 ]);
 export async function handleHrMutation(request: Request, factory: () => ReturnType<typeof createHrServices>, origin: string) {
     if (request.headers.get('origin') !== new URL(origin).origin)
@@ -39,7 +39,7 @@ export async function handleHrMutation(request: Request, factory: () => ReturnTy
         const c = parsed.data, s = factory();
         switch (c.operation) {
             case 'request.save': return resultResponse(await s.requests.save(c.kind, c.input, c.id, c.expectedVersion));
-            case 'request.transition': return resultResponse(await s.requests.transition(c.kind, c.id, c.action, c.comment, c.override, c.expectedVersion));
+            case 'request.transition': return resultResponse(await s.requests.transition(c.kind, c.id, c.action, c.comment, c.override, c.expectedVersion, c.approval));
             case 'holiday.save': return resultResponse(await (c.id ? s.holidays.update(c.id, c.input) : s.holidays.create(c.input as Parameters<typeof s.holidays.create>[0])));
             case 'evaluation.period': return resultResponse(await s.evaluationApplication.createPeriod(c.input));
             case 'evaluation.assign': return resultResponse(await s.evaluationApplication.assign(c.periodId, c.employeeId, c.reviewerEmployeeId));

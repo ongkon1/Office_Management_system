@@ -20,6 +20,9 @@ export const serverHrService: Supported = {
   listDivisionRequestSummary: (...args) =>
     call("listDivisionRequestSummary", args),
   listLeaveBalances: (...args) => call("listLeaveBalances", args),
+  getLeaveBalanceFormOptions: (...args) =>
+    call("getLeaveBalanceFormOptions", args),
+  addLeaveBalance: (input) => call("addLeaveBalance", [input]),
   decideRequest: (input) => call("decideRequest", [input]),
   listHolidays: (...args) => call("listHolidays", args),
   saveHoliday: (...args) => call("saveHoliday", args),
