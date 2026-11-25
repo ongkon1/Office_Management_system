@@ -75,6 +75,9 @@ export function MoneyValue({
   className?: string;
 }) {
   if (!value.visible) {
+    if (value.reason === 'not_recorded') {
+      return <span className="text-body-sm font-normal text-ink-muted">Not recorded</span>;
+    }
     return <RestrictedValue reason="Cost values need the financial-detail permission." className={className} />;
   }
   const classes = `tabular whitespace-nowrap ${emphasis ? 'font-semibold' : ''} ${className ?? ''}`;

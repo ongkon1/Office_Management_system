@@ -13,6 +13,7 @@ import { Dialog } from '@/components/feedback/overlay';
 import { Field, FormErrorSummary } from '@/components/forms/field';
 import { Input, Select, Textarea } from '@/components/forms/inputs';
 import { Button } from '@/components/ui/button';
+import { TaskCategoryField } from './task-category-field';
 
 const PRIORITIES: readonly Priority[] = ['low', 'medium', 'high', 'urgent'];
 
@@ -183,6 +184,7 @@ export function RaiseTaskButton({ onCreated }: { onCreated: () => void }) {
           </Field>
 
           <div className="grid gap-4 sm:grid-cols-2">
+            <TaskCategoryField value={form.categoryId} onChange={id => set('categoryId', id)} error={errorFor('categoryId')} />
             <Field label="Project" required error={errorFor('projectId')}>
               <Select
                 name="projectId"

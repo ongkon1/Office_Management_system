@@ -107,6 +107,7 @@ export interface ProjectFormOptionsView {
 }
 
 export interface TeamTaskView {
+  readonly categoryName?: string | null;
   readonly id: string;
   /** Required by task mutations so stale screens cannot overwrite newer work. */
   readonly version: number;
@@ -210,6 +211,7 @@ export interface ProjectFormInput {
 }
 
 export interface TaskFormInput {
+  readonly categoryId?: string | null;
   readonly title: string;
   readonly projectId: string;
   readonly assigneeEmployeeId: string;

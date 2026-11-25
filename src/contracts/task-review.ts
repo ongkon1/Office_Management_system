@@ -34,6 +34,7 @@ import type { DurationView } from './view-models';
  * not.
  */
 export interface EmployeeTaskFormInput {
+  readonly categoryId?: string | null;
   readonly title: string;
   readonly projectId: string;
   readonly priority: Priority;

@@ -293,6 +293,7 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
       items: [
         { key: 'users', label: 'Users', href: '/admin/users', iconKey: 'user-cog' },
         { key: 'departments', label: 'Departments', href: '/admin/departments', iconKey: 'building' },
+        { key: 'task-categories', label: 'Task Categories', href: '/admin/task-categories', iconKey: 'folder' },
         { key: 'divisions', label: 'Divisions', href: '/admin/divisions', iconKey: 'building', inMobileBottomNav: true },
         { key: 'sessions', label: 'Active Sessions', href: '/admin/sessions', iconKey: 'monitor-smartphone' },
         { key: 'policies', label: 'Work Policies', href: '/admin/policies', iconKey: 'settings' },

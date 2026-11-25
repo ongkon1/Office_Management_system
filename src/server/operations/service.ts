@@ -42,6 +42,7 @@ import {
   isDuplicateKeyError,
   nextRecordCode,
 } from "@/server/organization/record-codes";
+import { isActiveTaskCategory } from "@/server/organization/task-categories";
 import {
   formatDate,
   formatDateRange,
@@ -1457,7 +1458,7 @@ export class OperationsService {
       : `t.project_id IN (${projectIds.map(() => "?").join(",") || "''"})`;
     const scopeValues = hasLeadCapability && !isSuperAdministrator ? [...assigneeIds, ...projectIds] : projectIds;
     const rows = await this.rows(
-      `SELECT t.*,p.name project_name,p.project_code,p.division_id,d.name division_name,d.division_key division_code,d.is_government division_restricted,e.id assignee_id,e.employee_code assignee_employee_code,e.display_name assignee_display_name,e.job_title assignee_job_title,u.image_url assignee_image_url,(SELECT COALESCE(SUM(te.active_minutes),0) FROM time_entries te WHERE te.task_id=t.id AND te.is_active=TRUE AND te.status<>'draft') actual_minutes FROM tasks t JOIN projects p ON p.id=t.project_id JOIN divisions d ON d.id=p.division_id LEFT JOIN employees e ON e.id=t.assignee_employee_id LEFT JOIN users u ON u.id=e.user_id WHERE (${scope}) ${id ? "AND t.id=?" : ""} ORDER BY t.due_date,t.title`,
+      `SELECT t.*,tc.name category_name,p.name project_name,p.project_code,p.division_id,d.name division_name,d.division_key division_code,d.is_government division_restricted,e.id assignee_id,e.employee_code assignee_employee_code,e.display_name assignee_display_name,e.job_title assignee_job_title,u.image_url assignee_image_url,(SELECT COALESCE(SUM(te.active_minutes),0) FROM time_entries te WHERE te.task_id=t.id AND te.is_active=TRUE AND te.status<>'draft') actual_minutes FROM tasks t LEFT JOIN task_categories tc ON tc.id=t.category_id JOIN projects p ON p.id=t.project_id JOIN divisions d ON d.id=p.division_id LEFT JOIN employees e ON e.id=t.assignee_employee_id LEFT JOIN users u ON u.id=e.user_id WHERE (${scope}) ${id ? "AND t.id=?" : ""} ORDER BY t.due_date,t.title`,
       [...scopeValues, ...(id ? [id] : [])],
     );
     const government = hasPermission(a, "organization.government.view");
@@ -1488,6 +1489,7 @@ export class OperationsService {
       id,
       version: Number(r.version),
       title: String(r.title),
+      categoryName: r.category_name == null ? null : String(r.category_name),
       projectId: String(r.project_id),
       projectLabel: String(r.project_name),
       division: division(r),
@@ -1621,7 +1623,11 @@ export class OperationsService {
         "Create a new task in the other project.",
       );
     const taskId = id ?? randomUUID();
-    await this.transaction(async (connection) => {
+    const saved = await this.transaction(async (connection) => {
+      if (input.categoryId != null && (
+        typeof input.categoryId !== 'string' || input.categoryId.length !== 36 ||
+        !await isActiveTaskCategory(connection, input.categoryId)
+      )) return false;
       if (existing)
         await connection.execute(
           "UPDATE tasks SET title=?,assignee_employee_id=?,start_date=?,due_date=?,priority=?,estimated_minutes=?,description=?,version=version+1 WHERE id=?",
@@ -1638,7 +1644,7 @@ export class OperationsService {
         );
       else
         await connection.execute(
-          "INSERT INTO tasks(id,project_id,division_id,title,status,assignee_employee_id,creator_employee_id,creator_role,review_state,start_date,due_date,priority,estimated_minutes,description,is_active) VALUES(?,?,?,?,'pending',?,?,'team_lead','not_required',?,?,?,?,?,TRUE)",
+          "INSERT INTO tasks(id,project_id,division_id,title,status,assignee_employee_id,creator_employee_id,creator_role,review_state,start_date,due_date,priority,estimated_minutes,description,is_active,category_id) VALUES(?,?,?,?,'pending',?,?,'team_lead','not_required',?,?,?,?,?,TRUE,?)",
           [
             taskId,
             input.projectId,
@@ -1651,8 +1657,12 @@ export class OperationsService {
             input.priority,
             input.estimatedMinutes,
             description || null,
+            input.categoryId ?? null,
           ],
         );
+      if (existing && input.categoryId !== undefined) {
+        await connection.execute("UPDATE tasks SET category_id=? WHERE id=?", [input.categoryId, taskId]);
+      }
       await connection.execute("DELETE FROM task_members WHERE task_id=?", [
         taskId,
       ]);
@@ -1674,7 +1684,7 @@ export class OperationsService {
         "INSERT INTO audit_events(event_id,actor_user_id,action,resource_type,resource_id,scope_json,correlation_id,before_protected,after_protected) VALUES(?,?,?,?,?,?,?,?,?)",
         [randomUUID(), actor.userId, existing ? "task.updated" : "task.created", "task", taskId,
           JSON.stringify({ divisionId: String(project.division_id), projectId: input.projectId }), randomUUID(),
-          JSON.stringify(existing ?? null), JSON.stringify({ title, assigneeEmployeeId: input.assigneeEmployeeId, supportingMemberCount: supportingMemberIds.length })],
+          JSON.stringify(existing ?? null), JSON.stringify({ title, assigneeEmployeeId: input.assigneeEmployeeId, supportingMemberCount: supportingMemberIds.length, categoryId: input.categoryId })],
       );
       const previousAssignee = existing ? String(existing.assignee_employee_id) : null;
       if (input.assigneeEmployeeId !== actor.employeeId && input.assigneeEmployeeId !== previousAssignee) {
@@ -1686,7 +1696,9 @@ export class OperationsService {
           eventKey: `${existing ? "updated" : "created"}:${taskId}:${input.assigneeEmployeeId}`,
         });
       }
+      return true;
     });
+    if (!saved) return invalid("categoryId", "That category is unavailable.", "Choose an active category.");
     return this.getTask(userId, taskId);
   }
   async setTaskStatus(userId: string, id: string, status: TaskStatus) {

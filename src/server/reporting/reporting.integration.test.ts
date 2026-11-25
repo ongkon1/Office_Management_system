@@ -98,6 +98,25 @@ describe('Phase 6 database reports and protected exports', () => {
         data(await finance.change('rate', { scope: 'project', scopeId: project, hourlyRate: { amount: '1.01', currency: 'BDT' }, effectiveFrom: '2026-09-01', effectiveTo: '2026-09-30', reason: 'Engineering project rate' }));
         expect(data(await reports.run('payroll-hours', query)).cost?.amount).toBe('5006.03');
     });
+    it('returns project and division man-hour costs without exact-period budgets', async () => {
+        const service = createFinanceViewService(reports, exports);
+        for (const scope of ['project', 'division'] as const) {
+            const result = data(await service.getCostAnalysis(actor.userId, scope, {
+                periodId: '90000000-0000-4000-8000-000000000002',
+                employeeIds: [eid],
+            }));
+            expect(result.totalActive.minutes).toBe(420);
+            expect(result.totalCost).toMatchObject({ visible: true, value: { amount: '5006.03', currency: 'BDT' } });
+            expect(result.lines.length).toBeGreaterThan(0);
+            for (const line of result.lines) {
+                expect(line.cost.visible).toBe(true);
+                expect(line.budget).toEqual({ visible: false, reason: 'not_recorded' });
+                expect(line.variancePercent).toBeNull();
+            }
+            expect(result.totalBudget).toEqual({ visible: false, reason: 'not_recorded' });
+            expect(result.totalVariance).toEqual({ visible: false, reason: 'not_recorded' });
+        }
+    });
     it('redacts all cost values and blocks settings without financial permission', async () => {
         actor = { ...authorized, permissions: new Set(['organization.government.view', 'report.finance.unverified']) };
         const r = data(await reports.run('payroll-hours', query));

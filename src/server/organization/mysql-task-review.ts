@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Pool, PoolConnection, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 import type { RaisedTask, TaskReviewRepository } from './task-review';
 import { primaryLeadOfEmployee } from './department-authority';
+import { isActiveTaskCategory } from './task-categories';
 
 interface TaskRow extends RowDataPacket {
   id: string;
@@ -103,18 +104,22 @@ export class MysqlTaskReviewRepository implements TaskReviewRepository {
     return Boolean(rows[0]);
   }
 
+  categoryAvailable(id: string) {
+    return isActiveTaskCategory(this.pool, id);
+  }
+
   async insertSelfTask(input: Parameters<TaskReviewRepository['insertSelfTask']>[0]) {
     const id = randomUUID();
     await this.pool.execute(
       `INSERT INTO tasks(
         id,project_id,division_id,title,status,priority,assignee_employee_id,
-        creator_employee_id,creator_role,estimated_minutes,due_date,description,review_state
-       ) SELECT ?,p.id,p.division_id,?,'pending',?,?,?,?,?,?,?,? FROM projects p WHERE p.id=?`,
+        creator_employee_id,creator_role,estimated_minutes,due_date,description,review_state,category_id
+       ) SELECT ?,p.id,p.division_id,?,'pending',?,?,?,?,?,?,?,?,? FROM projects p WHERE p.id=?`,
       [
         id, input.title, input.priority, input.employeeId, input.employeeId,
         input.requiresReview ? 'employee' : 'team_lead', input.estimatedMinutes,
         input.dueDate || null, input.description,
-        input.requiresReview ? 'pending_review' : 'not_required', input.projectId,
+        input.requiresReview ? 'pending_review' : 'not_required', input.categoryId ?? null, input.projectId,
       ],
     );
     return id;

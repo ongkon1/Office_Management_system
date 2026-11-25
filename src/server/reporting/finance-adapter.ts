@@ -16,6 +16,8 @@ import { ReportApplication, denied, type RatedLine } from './application';
 import { ExportApplication } from './exports';
 import { jobView, preview } from './adapters';
 const redacted: RedactableMoneyView = { visible: false, reason: 'permission_required' };
+const comparisonMoney = (value: Money | undefined, allowed: boolean): RedactableMoneyView =>
+    allowed && !value ? { visible: false, reason: 'not_recorded' } : moneyView(value);
 const moneyView = (m: Money | undefined): RedactableMoneyView => m ? { visible: true, value: m, display: formatMoney(m), compact: formatMoneyCompact(m) } : redacted;
 const warning = (verified: boolean) => verified ? null : 'This report includes unverified information.';
 export class BackendFinanceService implements FinanceService {
@@ -104,16 +106,17 @@ export class BackendFinanceService implements FinanceService {
             let budget: Money | undefined;
             if (allowed) {
                 const values = await this.app.requests.repository.rows(`SELECT amount,currency FROM budgets WHERE ${scope === 'project' ? 'project_id' : 'division_id'}=? AND period_start=? AND period_end=?`, [row.key, p.data.startDate, p.data.endDate]);
-                if (!values.length)
-                    return invalid('budget', 'Configure a budget for each included scope and the exact report period.');
-                budget = sumMoney(values.map(v => storedMoney(String(v.amount), String(v.currency))));
-                budgets.push(budget);
+                if (values.length) {
+                    budget = sumMoney(values.map(v => storedMoney(String(v.amount), String(v.currency))));
+                    budgets.push(budget);
+                }
             }
             const cost = allowed ? costOfRatedMinutes(row.rated) : undefined;
-            lines.push({ key: row.key, label: row.cells.label, secondaryLabel: p.data.label, active: toDurationView(row.activeMinutes), overtime: toDurationView(row.overtimeMinutes ?? 0), cost: moneyView(cost), budget: moneyView(budget), variance: moneyView(cost && budget ? subtractMoney(cost, budget) : undefined), variancePercent: cost && budget ? variancePercent(cost, budget) : null, estimated: null, estimateVariancePercent: null, sharePercent: r.data.activeMinutes ? Math.round(row.activeMinutes * 100 / r.data.activeMinutes) : 0, isRestrictedScope: false, drillDown: [] });
+            lines.push({ key: row.key, label: row.cells.label, secondaryLabel: p.data.label, active: toDurationView(row.activeMinutes), overtime: toDurationView(row.overtimeMinutes ?? 0), cost: moneyView(cost), budget: comparisonMoney(budget, allowed), variance: comparisonMoney(cost && budget ? subtractMoney(cost, budget) : undefined, allowed), variancePercent: cost && budget ? variancePercent(cost, budget) : null, estimated: null, estimateVariancePercent: null, sharePercent: r.data.activeMinutes ? Math.round(row.activeMinutes * 100 / r.data.activeMinutes) : 0, isRestrictedScope: false, drillDown: [] });
         }
-        const budget = allowed ? sumMoney(budgets) : undefined;
-        return success({ scope, period: p.data, unverifiedWarning: warning(p.data.isVerified), hasFinancialPermission: allowed, restrictionNote: allowed ? null : 'Financial fields require a separate permission.', lines, totalActive: toDurationView(r.data.activeMinutes), totalCost: moneyView(r.data.cost), totalBudget: moneyView(budget), totalVariance: moneyView(r.data.cost && budget ? subtractMoney(r.data.cost, budget) : undefined), totalVariancePercent: r.data.cost && budget ? variancePercent(r.data.cost, budget) : null, trend: [] });
+        // A partial budget cannot be compared to the full report cost.
+        const budget = allowed && budgets.length > 0 && budgets.length === lines.length ? sumMoney(budgets) : undefined;
+        return success({ scope, period: p.data, unverifiedWarning: warning(p.data.isVerified), hasFinancialPermission: allowed, restrictionNote: allowed ? null : 'Financial fields require a separate permission.', lines, totalActive: toDurationView(r.data.activeMinutes), totalCost: moneyView(r.data.cost), totalBudget: comparisonMoney(budget, allowed), totalVariance: comparisonMoney(r.data.cost && budget ? subtractMoney(r.data.cost, budget) : undefined, allowed), totalVariancePercent: r.data.cost && budget ? variancePercent(r.data.cost, budget) : null, trend: [] });
     }
     async getBillableAnalysis(userId: string, f: Partial<FinanceFilters>): Promise<Result<BillableSplitView>> {
         const hours = await this.getHours(userId, f);

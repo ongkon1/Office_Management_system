@@ -143,6 +143,7 @@ export function TaskDetail({ taskId }: { taskId: string }) {
     <PageContainer>
       <PageHeader
         title={summary.title}
+        description={summary.categoryName ?? undefined}
         crumbs={[{ label: 'My Tasks', href: '/tasks' }, { label: summary.title }]}
         backHref="/tasks"
         backLabel="All tasks"

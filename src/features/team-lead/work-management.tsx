@@ -31,6 +31,7 @@ import { Dialog } from '@/components/feedback/overlay';
 import { Tabs, TabPanel } from '@/components/feedback/disclosure';
 import { Field, FormErrorSummary } from '@/components/forms/field';
 import { Checkbox, Input, NumberInput, Select, Textarea } from '@/components/forms/inputs';
+import { TaskCategoryField } from '@/features/tasks/task-category-field';
 import { FilterBar, MultiSelectFilter } from '@/components/data/filters';
 import { TASK_STATUS_LABEL } from '@/lib/status';
 import { cn } from '@/lib/cn';
@@ -491,6 +492,7 @@ function TaskForm({
             onChange={(event) => changeProject(event.target.value)}
           />
         </Field>
+        {!initial && <TaskCategoryField value={form.categoryId} onChange={id => set('categoryId', id)} error={fieldError('categoryId')} />}
         <Field
           label="Assignee"
           required
@@ -672,7 +674,7 @@ export function TeamTaskDetail({ taskId }: { taskId: string }) {
     <PageContainer>
       <PageHeader
         title={task.title}
-        description={task.projectLabel}
+        description={task.categoryName ? `${task.projectLabel} · ${task.categoryName}` : task.projectLabel}
         crumbs={[{ label: 'Tasks', href: '/tasks' }, { label: task.title }]}
         backHref="/tasks"
         backLabel="Tasks"

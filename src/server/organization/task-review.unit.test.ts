@@ -10,6 +10,7 @@ const repo = (): TaskReviewRepository => ({
   }),
   currentLeadForEmployee: vi.fn().mockResolvedValue('lead'),
   projectAvailable: vi.fn().mockResolvedValue(true),
+  categoryAvailable: vi.fn().mockResolvedValue(true),
   insertSelfTask: vi.fn().mockResolvedValue('t1'),
   find: vi.fn().mockResolvedValue({
     id: 't1', creatorEmployeeId: 'e1', reviewState: 'pending_review', version: 1,

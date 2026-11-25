@@ -80,7 +80,7 @@ export type RedactableMoneyView =
        */
       readonly compact: string;
     }
-  | { readonly visible: false; readonly reason: 'permission_required' };
+  | { readonly visible: false; readonly reason: 'permission_required' | 'not_recorded' };
 
 export interface FinanceDashboard {
   readonly period: FinancePeriodRef;

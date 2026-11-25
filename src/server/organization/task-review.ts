@@ -22,7 +22,9 @@ export interface TaskReviewRepository {
   } | null>;
   currentLeadForEmployee(employeeId: string): Promise<string | null>;
   projectAvailable(projectId: string, employeeId: string, divisionIds: readonly string[]): Promise<boolean>;
+  categoryAvailable(id: string): Promise<boolean>;
   insertSelfTask(input: {
+    categoryId?: string;
     employeeId: string;
     projectId: string;
     title: string;
@@ -84,6 +86,7 @@ export class TaskReviewApplicationService {
   async raise(
     userId: string,
     input: {
+      categoryId?: string | null;
       projectId: string;
       title: string;
       priority: string;
@@ -148,7 +151,14 @@ export class TaskReviewApplicationService {
       return validation('estimatedMinutes', 'DURATION_TOO_LARGE', 'The estimate is too large.', 'Enter an estimate below 10,000,000 minutes.');
     }
 
+    if (input.categoryId != null && (
+      typeof input.categoryId !== 'string' || input.categoryId.length !== 36 ||
+      !await this.repo.categoryAvailable(input.categoryId)
+    )) {
+      return validation('categoryId', 'CATEGORY_NOT_AVAILABLE', 'That category is unavailable.', 'Choose an active category.');
+    }
     const id = await this.repo.insertSelfTask({
+      ...(input.categoryId ? { categoryId: input.categoryId } : {}),
       employeeId: employee.id,
       projectId: input.projectId,
       title,
@@ -164,7 +174,7 @@ export class TaskReviewApplicationService {
       actorUserId: userId,
       taskId: id,
       before: null,
-      after: { reviewState },
+      after: { reviewState, ...(input.categoryId ? { categoryId: input.categoryId } : {}) },
       reason: null,
     });
     if (requiresReview && employee.leadEmployeeId) {

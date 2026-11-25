@@ -28,7 +28,7 @@ import {
 
 function VarianceBadge({ percent }: { percent: number | null }) {
   if (percent === null) {
-    return <span className="text-caption text-ink-muted">No budget set</span>;
+    return null;
   }
   return (
     <Badge tone={percent > 0 ? 'danger' : percent < 0 ? 'success' : 'neutral'}>
@@ -166,6 +166,17 @@ export function CostAnalysis({ scope }: { scope: 'project' | 'division' }) {
 
   if (state.status === 'loading') return <FinanceLoading label="cost analysis" />;
   if (state.status !== 'success') {
+    if (state.failure.status === 'validation_failure' && state.failure.focusField === 'costRate') {
+      return (
+        <PageContainer>
+          <EmptyState
+            variant="error"
+            title="Hourly cost rate missing"
+            description="Set an effective project or employee hourly rate for the work dates in this report."
+          />
+        </PageContainer>
+      );
+    }
     return <FinanceFallback result={state.failure} subject="Cost analysis" />;
   }
   const data = state.data;

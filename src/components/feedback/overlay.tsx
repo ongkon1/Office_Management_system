@@ -132,6 +132,8 @@ function useOverlayBehavior(open: boolean, onClose: () => void) {
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
+        // Allow the open category menu to handle Escape first.
+        if (ref.current?.querySelector('.task-category-select [aria-expanded="true"]')) return;
         event.stopPropagation();
         onCloseRef.current();
         return;

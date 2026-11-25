@@ -304,6 +304,7 @@ export interface EntryCalculationPreview {
 /* ------------------------------------------------------------------------- */
 
 export interface TaskSummaryView {
+  readonly categoryName?: string | null;
   readonly id: string;
   /** Required by task mutations so stale screens cannot overwrite newer work. */
   readonly version: number;
