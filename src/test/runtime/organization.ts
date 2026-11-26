@@ -6,6 +6,7 @@ export {
 } from "@/services/mock/organization";
 
 import { success } from "@/contracts/results";
+import { mockStore } from "@/services/mock/store";
 import {
   ALL_DIVISIONS,
   effectiveDivisionIds,
@@ -29,6 +30,9 @@ export const organizationService = {
           (item.assigneeEmployeeId === employeeId ||
             item.supportingMemberIds.includes(employeeId)),
       );
-    return success({ divisions, projects, tasks });
+    const approvedWfh = mockStore.wfhFor(employeeId).some(
+      request => request.wfhDate === workDate && request.state === "approved",
+    );
+    return success({ divisions, projects, tasks, defaultWorkLocation: approvedWfh ? "wfh" as const : "office" as const });
   },
 };

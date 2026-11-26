@@ -113,13 +113,13 @@ export class MysqlTaskReviewRepository implements TaskReviewRepository {
     await this.pool.execute(
       `INSERT INTO tasks(
         id,project_id,division_id,title,status,priority,assignee_employee_id,
-        creator_employee_id,creator_role,estimated_minutes,due_date,description,review_state,category_id
-       ) SELECT ?,p.id,p.division_id,?,'pending',?,?,?,?,?,?,?,?,? FROM projects p WHERE p.id=?`,
+        creator_employee_id,creator_role,estimated_minutes,due_date,description,review_state,category_id,billing_type
+       ) SELECT ?,p.id,p.division_id,?,'pending',?,?,?,?,?,?,?,?,?,? FROM projects p WHERE p.id=?`,
       [
         id, input.title, input.priority, input.employeeId, input.employeeId,
         input.requiresReview ? 'employee' : 'team_lead', input.estimatedMinutes,
         input.dueDate || null, input.description,
-        input.requiresReview ? 'pending_review' : 'not_required', input.categoryId ?? null, input.projectId,
+        input.requiresReview ? 'pending_review' : 'not_required', input.categoryId ?? null, input.billingType ?? null, input.projectId,
       ],
     );
     return id;

@@ -43,6 +43,7 @@ import {
   nextRecordCode,
 } from "@/server/organization/record-codes";
 import { isActiveTaskCategory } from "@/server/organization/task-categories";
+import { isTaskBillingType } from "@/contracts/task-billing";
 import {
   formatDate,
   formatDateRange,
@@ -1490,6 +1491,7 @@ export class OperationsService {
       version: Number(r.version),
       title: String(r.title),
       categoryName: r.category_name == null ? null : String(r.category_name),
+      billingType: isTaskBillingType(r.billing_type) ? r.billing_type : null,
       projectId: String(r.project_id),
       projectLabel: String(r.project_name),
       division: division(r),
@@ -1559,6 +1561,8 @@ export class OperationsService {
     if (!reach) return absent("Project");
     if (!reach.manage)
       return denied("Only the project manager, a Team Lead in its division, HR or a Super Administrator can add or change its tasks.");
+    if (input.billingType !== undefined && !isTaskBillingType(input.billingType))
+      return invalid("billingType", "Choose Billable or Non-billable.", "Select a billing type.");
     const title = input.title.trim();
     if (!title || title.length > 240)
       return invalid("title", "Enter a task title of up to 240 characters.", "Name the outcome the task delivers.");
@@ -1613,7 +1617,7 @@ export class OperationsService {
     )[0];
     if (!project) return absent("Project");
     const existing = id
-      ? (await this.rows("SELECT project_id,assignee_employee_id,title,start_date,due_date,priority,estimated_minutes,description FROM tasks WHERE id=?", [id]))[0]
+      ? (await this.rows("SELECT project_id,assignee_employee_id,title,start_date,due_date,priority,estimated_minutes,description,billing_type FROM tasks WHERE id=?", [id]))[0]
       : null;
     if (!existing && (!project.is_active || String(project.status) !== "active" || !project.accepts_time_entries))
       return invalid("projectId", "New tasks require an active project that accepts work.", "Choose another project or ask an administrator to activate this one.");
@@ -1630,7 +1634,7 @@ export class OperationsService {
       )) return false;
       if (existing)
         await connection.execute(
-          "UPDATE tasks SET title=?,assignee_employee_id=?,start_date=?,due_date=?,priority=?,estimated_minutes=?,description=?,version=version+1 WHERE id=?",
+          "UPDATE tasks SET title=?,assignee_employee_id=?,start_date=?,due_date=?,priority=?,estimated_minutes=?,description=?,billing_type=COALESCE(?,billing_type),version=version+1 WHERE id=?",
           [
             title,
             input.assigneeEmployeeId,
@@ -1639,12 +1643,13 @@ export class OperationsService {
             input.priority,
             input.estimatedMinutes,
             description || null,
+            input.billingType ?? null,
             taskId,
           ],
         );
       else
         await connection.execute(
-          "INSERT INTO tasks(id,project_id,division_id,title,status,assignee_employee_id,creator_employee_id,creator_role,review_state,start_date,due_date,priority,estimated_minutes,description,is_active,category_id) VALUES(?,?,?,?,'pending',?,?,'team_lead','not_required',?,?,?,?,?,TRUE,?)",
+          "INSERT INTO tasks(id,project_id,division_id,title,status,assignee_employee_id,creator_employee_id,creator_role,review_state,start_date,due_date,priority,estimated_minutes,description,is_active,category_id,billing_type) VALUES(?,?,?,?,'pending',?,?,'team_lead','not_required',?,?,?,?,?,TRUE,?,?)",
           [
             taskId,
             input.projectId,
@@ -1658,6 +1663,7 @@ export class OperationsService {
             input.estimatedMinutes,
             description || null,
             input.categoryId ?? null,
+            input.billingType ?? null,
           ],
         );
       if (existing && input.categoryId !== undefined) {
@@ -1684,7 +1690,7 @@ export class OperationsService {
         "INSERT INTO audit_events(event_id,actor_user_id,action,resource_type,resource_id,scope_json,correlation_id,before_protected,after_protected) VALUES(?,?,?,?,?,?,?,?,?)",
         [randomUUID(), actor.userId, existing ? "task.updated" : "task.created", "task", taskId,
           JSON.stringify({ divisionId: String(project.division_id), projectId: input.projectId }), randomUUID(),
-          JSON.stringify(existing ?? null), JSON.stringify({ title, assigneeEmployeeId: input.assigneeEmployeeId, supportingMemberCount: supportingMemberIds.length, categoryId: input.categoryId })],
+          JSON.stringify(existing ?? null), JSON.stringify({ title, assigneeEmployeeId: input.assigneeEmployeeId, supportingMemberCount: supportingMemberIds.length, categoryId: input.categoryId, billing_type: input.billingType ?? existing?.billing_type ?? null })],
       );
       const previousAssignee = existing ? String(existing.assignee_employee_id) : null;
       if (input.assigneeEmployeeId !== actor.employeeId && input.assigneeEmployeeId !== previousAssignee) {
@@ -2152,7 +2158,7 @@ export class OperationsService {
         item.status === "in_progress" &&
         ["not_required", "approved"].includes(item.reviewState),
     );
-    return success({ divisions, projects, tasks });
+    return success({ divisions, projects, tasks, defaultWorkLocation: context.approvedWfh ? "wfh" : "office" });
   }
   async listProjectsForDivision(
     userId: string,

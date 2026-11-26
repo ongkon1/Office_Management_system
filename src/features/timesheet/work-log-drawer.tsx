@@ -75,10 +75,8 @@ function tasksForEmployee(
 function initialDraft(
   employeeId: string,
   workDate: string,
-  initialTaskId?: string,
   copiedDraft?: CopiedWorkLogDraft,
   editingWorkLog?: WorkLog,
-  options?: WorkEntryOptions,
 ): WorkLogDraft {
   if (editingWorkLog) {
     return { ...editingWorkLog };
@@ -91,14 +89,12 @@ function initialDraft(
     };
   }
 
-  const initialTask = options?.tasks.find((task) => task.id === initialTaskId);
-
   return {
     employeeId,
     workDate,
-    divisionId: initialTask?.divisionId ?? options?.divisions[0]?.id ?? "",
-    projectId: initialTask?.projectId ?? "",
-    taskId: initialTask?.id ?? "",
+    divisionId: "",
+    projectId: "",
+    taskId: "",
     durationMinutes: null,
     workLocation: "office",
     workDescription: "",
@@ -150,7 +146,6 @@ export function WorkLogDrawer({
     initialDraft(
       employeeId,
       defaultWorkDate,
-      initialTaskId,
       copiedDraft,
       editingWorkLog,
     ),
@@ -189,7 +184,6 @@ export function WorkLogDrawer({
         initialDraft(
           employeeId,
           defaultWorkDate,
-          initialTaskId,
           copiedDraft,
           editingWorkLog,
         ),
@@ -219,19 +213,27 @@ export function WorkLogDrawer({
     optionRequest.state.status === "success"
       ? optionRequest.state.data
       : EMPTY_WORK_OPTIONS;
+  const taskLinked = Boolean(initialTaskId && !editingWorkLog && !copiedDraft);
+  const linkedTask = taskLinked ? options.tasks.find((task) => task.id === initialTaskId) : undefined;
+  const linkedDivision = options.divisions.find((division) => division.id === linkedTask?.divisionId);
+  const linkedProject = options.projects.find((project) => project.id === linkedTask?.projectId);
+  const linkedReady = Boolean(linkedTask && linkedDivision && linkedProject);
   const resolvedForm = React.useMemo<WorkLogDraft>(() => {
-    const initialTask = options.tasks.find((task) => task.id === initialTaskId);
+    if (taskLinked) {
+      return {
+        ...form,
+        divisionId: linkedTask?.divisionId ?? "",
+        projectId: linkedTask?.projectId ?? "",
+        taskId: linkedTask?.id ?? "",
+        workLocation: options.defaultWorkLocation ?? "office",
+        completedWork: form.workDescription,
+      };
+    }
     return {
       ...form,
-      divisionId:
-        form.divisionId ||
-        initialTask?.divisionId ||
-        options.divisions[0]?.id ||
-        "",
-      projectId: form.projectId || initialTask?.projectId || "",
-      taskId: form.taskId || initialTask?.id || "",
+      divisionId: form.divisionId || options.divisions[0]?.id || "",
     };
-  }, [form, initialTaskId, options]);
+  }, [form, linkedTask, options, taskLinked]);
   const divisionIds = options.divisions.map((division) => division.id);
   const projects = React.useMemo(
     () =>
@@ -252,6 +254,7 @@ export function WorkLogDrawer({
 
   const previewReady = Boolean(
     open &&
+    (!taskLinked || (linkedReady && resolvedForm.workDescription.trim())) &&
     resolvedForm.workDate &&
     resolvedForm.divisionId &&
     resolvedForm.projectId &&
@@ -267,6 +270,8 @@ export function WorkLogDrawer({
     resolvedForm.projectId,
     resolvedForm.taskId,
     resolvedForm.durationMinutes ?? "",
+    resolvedForm.workLocation,
+    ...(taskLinked ? [resolvedForm.workDescription] : []),
   ].join("|");
 
   // The preview is deliberately produced by the service's shared calculation
@@ -326,7 +331,7 @@ export function WorkLogDrawer({
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (saving) return;
+    if (saving || (taskLinked && !linkedReady)) return;
 
     setSaving(true);
     setFailure(null);
@@ -417,6 +422,7 @@ export function WorkLogDrawer({
               form="work-log-form"
               variant="primary"
               loading={saving}
+              disabled={taskLinked && !linkedReady}
             >
               {editingWorkLog ? "Save correction" : "Save work log"}
             </Button>
@@ -478,6 +484,7 @@ export function WorkLogDrawer({
             ready={previewReady}
             previewKey={previewKey}
             state={preview}
+            taskLinked={taskLinked}
           />
 
           <section
@@ -511,6 +518,7 @@ export function WorkLogDrawer({
                 />
               </Field>
 
+              {!taskLinked && <>
               <Field
                 label="Division"
                 required
@@ -599,7 +607,23 @@ export function WorkLogDrawer({
                   options={LOCATION_OPTIONS}
                 />
               </Field>
+              </>}
             </div>
+            {taskLinked && (
+              optionRequest.state.status === "loading" ? (
+                <p role="status" className="text-body-sm text-ink-muted">Checking task for this date…</p>
+              ) : linkedTask && linkedDivision && linkedProject ? (
+                <dl className="grid gap-3 rounded-md border border-border bg-surface-sunken p-3 sm:grid-cols-3">
+                  <div className="min-w-0 break-words"><dt className="text-caption text-ink-muted">Division</dt><dd>{linkedDivision.name}</dd></div>
+                  <div className="min-w-0 break-words"><dt className="text-caption text-ink-muted">Project</dt><dd>{linkedProject.name}</dd></div>
+                  <div className="min-w-0 break-words"><dt className="text-caption text-ink-muted">Task</dt><dd>{linkedTask.title}</dd></div>
+                </dl>
+              ) : (
+                <Alert tone="warning" title="This task cannot receive work on the selected date">
+                  Check the work date, task status and your division and project assignments.
+                </Alert>
+              )
+            )}
           </section>
 
           <section
@@ -614,6 +638,7 @@ export function WorkLogDrawer({
               label="Work description"
               required
               error={fieldErrors.workDescription}
+                helperText={taskLinked ? "Describe what you worked on and what you achieved." : undefined}
             >
               <Textarea
                 name="workDescription"
@@ -626,6 +651,7 @@ export function WorkLogDrawer({
               />
             </Field>
 
+            {!taskLinked && <>
             <Field
               label="Completed work"
               required
@@ -682,6 +708,7 @@ export function WorkLogDrawer({
                 );
               }}
             />
+            </>}
           </section>
 
           {showOvertimeReason && (
@@ -853,10 +880,12 @@ function WorkLogCalculationPreview({
   ready,
   previewKey,
   state,
+  taskLinked,
 }: {
   readonly ready: boolean;
   readonly previewKey: string;
   readonly state: PreviewState;
+  readonly taskLinked: boolean;
 }) {
   const isCurrent = "key" in state && state.key === previewKey;
 
@@ -883,7 +912,9 @@ function WorkLogCalculationPreview({
 
       {!ready && (
         <p className="mt-3 text-body-sm text-ink-muted">
-          Enter a duration and select an eligible task to see the day result.
+          {taskLinked
+            ? "Enter a duration and work description to see the day result."
+            : "Enter a duration and select an eligible task to see the day result."}
         </p>
       )}
 

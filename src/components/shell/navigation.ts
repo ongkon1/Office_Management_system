@@ -33,12 +33,17 @@ export interface NavGroupDefinition {
   readonly items: readonly NavDefinition[];
 }
 
+const TASK_CATEGORIES: NavDefinition = {
+  key: 'task-categories', label: 'Task Categories', href: '/admin/task-categories', iconKey: 'folder',
+};
+
 const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
   employee: [
     {
       key: 'primary',
       label: null,
       items: [
+        TASK_CATEGORIES,
         { key: 'dashboard', label: 'Dashboard', href: '/dashboard', iconKey: 'layout-dashboard', inMobileBottomNav: true },
         { key: 'timesheets', label: 'My Timesheet', href: '/timesheets', iconKey: 'clock', inMobileBottomNav: true },
         { key: 'tasks', label: 'My Tasks', href: '/tasks', iconKey: 'check-square', inMobileBottomNav: true },
@@ -293,7 +298,6 @@ const NAVIGATION: Readonly<Record<RoleKey, readonly NavGroupDefinition[]>> = {
       items: [
         { key: 'users', label: 'Users', href: '/admin/users', iconKey: 'user-cog' },
         { key: 'departments', label: 'Departments', href: '/admin/departments', iconKey: 'building' },
-        { key: 'task-categories', label: 'Task Categories', href: '/admin/task-categories', iconKey: 'folder' },
         { key: 'divisions', label: 'Divisions', href: '/admin/divisions', iconKey: 'building', inMobileBottomNav: true },
         { key: 'sessions', label: 'Active Sessions', href: '/admin/sessions', iconKey: 'monitor-smartphone' },
         { key: 'policies', label: 'Work Policies', href: '/admin/policies', iconKey: 'settings' },
@@ -348,7 +352,7 @@ export function buildNavigation({
   const usedGroupKeys = new Set<string>();
 
   return NAVIGATION[role]
-    .map<NavGroupView>((group) => {
+    .map<NavGroupView>((group, index, groups) => {
       // A role can legitimately contain multiple groups with the same
       // semantic key (for example, two `primary` sections). React keys must
       // still be unique among siblings or the navigation can duplicate/drop
@@ -364,7 +368,7 @@ export function buildNavigation({
       return {
       key,
       label: group.label,
-      items: group.items
+      items: (role !== 'employee' && index === groups.length - 1 ? [...group.items, TASK_CATEGORIES] : group.items)
         .filter((item) => !item.flag || isFeatureEnabled(flags, item.flag))
         .filter((item) => role === 'super_admin' || !item.permission || permissions.includes(item.permission))
         .map<NavItemView>((item) => ({

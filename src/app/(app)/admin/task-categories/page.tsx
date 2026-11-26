@@ -12,16 +12,22 @@ import { PageContainer, PageHeader } from '@/components/layout/page';
 import type { TaskCategory, TaskCategoryCommand } from '@/contracts/task-categories';
 import { useAsync } from '@/lib/use-async';
 import { taskCategories } from '@/services/server/task-categories';
+import { useSession } from '@/features/access/session-provider';
 
 type Editor = { action: 'create' } | { action: 'rename' | 'setActive'; category: TaskCategory };
 
 export default function TaskCategoriesPage() {
+  const { user } = useSession();
+  const canManageArchive = user?.roles.includes('super_admin') ?? false;
   const [revision, refresh] = useState(0);
   const [editor, setEditor] = useState<Editor | null>(null);
   const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
-  const { state } = useAsync(() => taskCategories({ action: 'list', includeArchived: true }), [revision]);
+  const { state } = useAsync(
+    () => taskCategories({ action: 'list', includeArchived: canManageArchive }),
+    [revision, user?.userId, canManageArchive],
+  );
 
   function open(next: Editor) {
     setName(next.action === 'rename' ? next.category.name : '');
@@ -74,9 +80,11 @@ export default function TaskCategoriesPage() {
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Button variant="secondary" size="sm" aria-label={`Edit ${category.name}`} onClick={() => open({ action: 'rename', category })}>Edit</Button>
-                    <Button variant="ghost" size="sm" aria-label={`${category.isActive ? 'Archive' : 'Restore'} ${category.name}`} onClick={() => open({ action: 'setActive', category })}>
-                      {category.isActive ? 'Archive' : 'Restore'}
-                    </Button>
+                    {canManageArchive && (
+                      <Button variant="ghost" size="sm" aria-label={`${category.isActive ? 'Archive' : 'Restore'} ${category.name}`} onClick={() => open({ action: 'setActive', category })}>
+                        {category.isActive ? 'Archive' : 'Restore'}
+                      </Button>
+                    )}
                   </div>
                 </li>
               ))}

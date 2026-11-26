@@ -14,6 +14,7 @@ import { Field, FormErrorSummary } from '@/components/forms/field';
 import { Input, Select, Textarea } from '@/components/forms/inputs';
 import { Button } from '@/components/ui/button';
 import { TaskCategoryField } from './task-category-field';
+import { TaskBillingField } from './task-billing-field';
 
 const PRIORITIES: readonly Priority[] = ['low', 'medium', 'high', 'urgent'];
 
@@ -185,6 +186,7 @@ export function RaiseTaskButton({ onCreated }: { onCreated: () => void }) {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <TaskCategoryField value={form.categoryId} onChange={id => set('categoryId', id)} error={errorFor('categoryId')} />
+            <TaskBillingField value={form.billingType} onChange={value => set('billingType', value)} error={errorFor('billingType')} />
             <Field label="Project" required error={errorFor('projectId')}>
               <Select
                 name="projectId"

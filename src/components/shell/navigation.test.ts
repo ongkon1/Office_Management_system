@@ -102,11 +102,14 @@ describe('buildNavigation', () => {
   });
 
   it('puts each role\'s frequent operational destinations before secondary administration', () => {
-    expect(hrefsFor({ role: 'employee', flags: DEMO_FEATURE_FLAGS, permissions: [] }).slice(0, 3)).toEqual([
+    const employeeHrefs = hrefsFor({ role: 'employee', flags: DEMO_FEATURE_FLAGS, permissions: [] });
+    expect(employeeHrefs.slice(0, 4)).toEqual([
+      '/admin/task-categories',
       '/dashboard',
       '/timesheets',
       '/tasks',
     ]);
+    expect(employeeHrefs.at(-1)).toBe('/settings');
 
     expect(hrefsFor({ role: 'team_lead', flags: DEMO_FEATURE_FLAGS, permissions: [] }).slice(0, 5)).toEqual([
       '/dashboard',

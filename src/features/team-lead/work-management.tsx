@@ -32,6 +32,8 @@ import { Tabs, TabPanel } from '@/components/feedback/disclosure';
 import { Field, FormErrorSummary } from '@/components/forms/field';
 import { Checkbox, Input, NumberInput, Select, Textarea } from '@/components/forms/inputs';
 import { TaskCategoryField } from '@/features/tasks/task-category-field';
+import { TaskBillingField } from '@/features/tasks/task-billing-field';
+import { TASK_BILLING_LABELS, TASK_BILLING_OPTIONS } from '@/contracts/task-billing';
 import { FilterBar, MultiSelectFilter } from '@/components/data/filters';
 import { TASK_STATUS_LABEL } from '@/lib/status';
 import { cn } from '@/lib/cn';
@@ -396,6 +398,7 @@ function TaskForm({
   const [form, setForm] = React.useState<TaskFormInput>(() => initial
     ? { title: initial.title, projectId: initial.projectId, assigneeEmployeeId: initial.assignee?.id ?? '', supportingMemberIds: initial.supportingMembers.map((item) => item.id), startDate: initial.startDate, dueDate: initial.dueDate, priority: initial.priority, estimatedMinutes: initial.estimated.minutes, description: initial.description ?? '', checklist: initial.checklist.map((item) => item.label) }
     : { title: '', projectId: defaultProjectId ?? '', assigneeEmployeeId: '', supportingMemberIds: [], startDate: businessToday(), dueDate: null, priority: 'medium', estimatedMinutes: 0, description: '', checklist: [] });
+  const [billingType, setBillingType] = React.useState(initial?.billingType ?? undefined);
   const [checklistText, setChecklistText] = React.useState(form.checklist.join('\n'));
   const [errors, setErrors] = React.useState<FieldErrors>([]);
   const [failure, setFailure] = React.useState<string | null>(null);
@@ -453,6 +456,7 @@ function TaskForm({
       user?.userId ?? '',
       {
         ...form,
+        billingType,
         supportingMemberIds: isSelfAssigned ? [] : form.supportingMemberIds,
         checklist: checklistText.split('\n').map((item) => item.trim()).filter(Boolean),
       },
@@ -493,6 +497,7 @@ function TaskForm({
           />
         </Field>
         {!initial && <TaskCategoryField value={form.categoryId} onChange={id => set('categoryId', id)} error={fieldError('categoryId')} />}
+        <TaskBillingField value={billingType} onChange={setBillingType} error={fieldError('billingType')} />
         <Field
           label="Assignee"
           required
@@ -547,6 +552,7 @@ export function TeamTaskBoard() {
   const toast = useToast();
   const [formOpen, setFormOpen] = React.useState(false);
   const [employeeId, setEmployeeId] = React.useState('all');
+  const [billingFilter, setBillingFilter] = React.useState('all');
   const [selectedTeamEmployeeIds, setSelectedTeamEmployeeIds] = React.useState<readonly string[] | null>(null);
   const [version, setVersion] = React.useState(0);
   const { state, reload } = useAsync(
@@ -584,7 +590,9 @@ export function TeamTaskBoard() {
   const filteredTasks = isAdministrator
     ? employeeId === 'all' ? state.data : state.data.filter((task) => task.assignee?.id === employeeId)
     : selectedTeamIds.length === 0 ? state.data : state.data.filter((task) => task.assignee && selectedTeamIds.includes(task.assignee.id));
-  const boardTasks = filteredTasks.map((task) => teamBoardTask(task, user?.employeeId ?? ''));
+  const boardTasks = filteredTasks
+    .filter(task => !isAdministrator || billingFilter === 'all' || (task.billingType ?? 'unclassified') === billingFilter)
+    .map(task => teamBoardTask(task, user?.employeeId ?? ''));
   return (
     <PageContainer>
       <PageHeader
@@ -613,6 +621,7 @@ export function TeamTaskBoard() {
         viewerEmployeeId={user?.employeeId ?? null}
         scopeFilter={(isAdministrator || teamOptions.length > 0) ? (
           isAdministrator ? (
+            <>
             <Select
               aria-label="Filter tasks by employee name"
               value={employeeId}
@@ -620,6 +629,13 @@ export function TeamTaskBoard() {
               options={[{ value: 'all', label: 'All employees' }, ...employeeOptions]}
               className="min-w-52"
             />
+            <Select
+              aria-label="Filter tasks by billing type"
+              value={billingFilter}
+              onChange={event => setBillingFilter(event.target.value)}
+              options={[{ value: 'all', label: 'All billing types' }, ...TASK_BILLING_OPTIONS, { value: 'unclassified', label: 'Unclassified' }]}
+            />
+            </>
           ) : (
             <MultiSelectFilter
               label="Team member"
@@ -630,8 +646,13 @@ export function TeamTaskBoard() {
             />
           )
         ) : undefined}
-        scopeFilterActive={isAdministrator ? employeeId !== 'all' : selectedTeamIds.length > 0}
-        onClearScopeFilter={() => isAdministrator ? setEmployeeId('all') : setSelectedTeamEmployeeIds([])}
+        scopeFilterActive={isAdministrator ? employeeId !== 'all' || billingFilter !== 'all' : selectedTeamIds.length > 0}
+        onClearScopeFilter={() => {
+          if (isAdministrator) {
+            setEmployeeId('all');
+            setBillingFilter('all');
+          } else setSelectedTeamEmployeeIds([]);
+        }}
         onMoved={reload}
       />
       <Dialog
@@ -681,6 +702,7 @@ export function TeamTaskDetail({ taskId }: { taskId: string }) {
         meta={
           <>
             <Scope />
+            <Badge tone="neutral">{task.billingType ? TASK_BILLING_LABELS[task.billingType] : 'Unclassified'}</Badge>
             {task.isOverdue && <Badge tone="danger">Overdue</Badge>}
             <Badge tone="accent">{TASK_STATUS_LABEL[task.status]}</Badge>
           </>
@@ -755,6 +777,7 @@ function teamBoardTask(task: TeamTaskView, viewerEmployeeId: string): WorkflowBo
     id: task.id,
     version: task.version,
     title: task.title,
+    billingLabel: task.billingType ? TASK_BILLING_LABELS[task.billingType] : 'Unclassified',
     href: `/tasks/${task.id}`,
     project: {
       id: task.projectId,

@@ -34,6 +34,7 @@ import type { DurationView } from './view-models';
  * not.
  */
 export interface EmployeeTaskFormInput {
+  readonly billingType?: import('./task-billing').TaskBillingType;
   readonly categoryId?: string | null;
   readonly title: string;
   readonly projectId: string;

@@ -47,6 +47,7 @@ export function DayView({
   const [editingWorkLog, setEditingWorkLog] = React.useState<WorkLog>();
   const [copyingId, setCopyingId] = React.useState<string | null>(null);
   const [handledLogTaskId, setHandledLogTaskId] = React.useState(initialLogTaskId);
+  const [workLogTaskId, setWorkLogTaskId] = React.useState(initialLogTaskId);
   const [copyOpen, setCopyOpen] = React.useState(false);
   const [deleteId, setDeleteId] = React.useState<string | null>(null);
 
@@ -73,11 +74,14 @@ export function DayView({
     setHandledLogTaskId(initialLogTaskId);
     if (initialLogTaskId) {
       setCopiedWorkLog(undefined);
+      setEditingWorkLog(undefined);
+      setWorkLogTaskId(initialLogTaskId);
       setWorkLogOpen(true);
     }
   }
 
   function openWorkLog() {
+    setWorkLogTaskId(undefined);
     setCopiedWorkLog(undefined);
     setEditingWorkLog(undefined);
     setWorkLogOpen(true);
@@ -429,7 +433,7 @@ export function DayView({
         onClose={() => setWorkLogOpen(false)}
         employeeId={employeeId}
         defaultWorkDate={date}
-        initialTaskId={initialLogTaskId}
+        initialTaskId={workLogTaskId}
         copiedDraft={copiedWorkLog}
         editingWorkLog={editingWorkLog}
         onSaved={reload}

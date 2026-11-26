@@ -1,4 +1,4 @@
-import type { Division, Project, Task } from "./domain";
+import type { Division, Project, Task, WorkLocation } from "./domain";
 
 /**
  * Authorized choices for one employee and local work date.
@@ -11,4 +11,5 @@ export interface WorkEntryOptions {
   readonly divisions: readonly Division[];
   readonly projects: readonly Project[];
   readonly tasks: readonly Task[];
+  readonly defaultWorkLocation?: WorkLocation;
 }

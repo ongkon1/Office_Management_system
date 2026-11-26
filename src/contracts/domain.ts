@@ -383,6 +383,7 @@ export function taskAcceptsTime(
 }
 
 export interface Task extends AuditableRecord {
+  readonly billingType?: import('./task-billing').TaskBillingType | null;
   readonly id: string;
   /** Optimistic-concurrency version; legacy fixture records may omit it. */
   readonly version?: number;

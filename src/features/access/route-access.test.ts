@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { PermissionKey, RoleKey, SessionUser } from '@/contracts/domain';
 import { DEMO_FEATURE_FLAGS, MVP_ONLY_FEATURE_FLAGS } from '@/contracts/feature-flags';
 import { checkRouteAccess, findRule } from './route-access';
+import { buildNavigation } from '@/components/shell/navigation';
 
 function userWith(role: RoleKey, permissions: readonly PermissionKey[] = []): SessionUser {
   return {
@@ -40,6 +41,15 @@ describe('findRule', () => {
 });
 
 describe('checkRouteAccess', () => {
+  it('shows one Task Categories link and allows the page for every role', () => {
+    const roles = ['employee', 'team_lead', 'hr_manager', 'management', 'super_admin'] as const;
+    for (const role of roles) {
+      expect(allow('/admin/task-categories', userWith(role))).toBe(true);
+      const links = buildNavigation({ role, flags: DEMO_FEATURE_FLAGS, permissions: [] }).flatMap(group => group.items);
+      expect(links.filter(link => link.href === '/admin/task-categories')).toHaveLength(1);
+      expect(allow('/admin/departments', userWith(role))).toBe(role === 'super_admin');
+    }
+  });
   it('lets each role reach its own dashboard', () => {
     expect(allow('/dashboard', userWith('employee'))).toBe(true);
     expect(allow('/hr', userWith('hr_manager'))).toBe(true);

@@ -31,7 +31,7 @@ export async function manageTaskCategories(
     if (command.includeArchived && !actor.isAdmin) return indistinguishableNotFound();
     return success(await list(pool, Boolean(command.includeArchived)));
   }
-  if (!actor.isAdmin) return indistinguishableNotFound();
+  if (command.action === 'setActive' && !actor.isAdmin) return indistinguishableNotFound();
   const name = 'name' in command ? command.name.trim().replace(/\s+/gu, ' ') : null;
   if (name !== null && (!name || name.length > 120)) {
     return invalid('name', 'Enter a category name of up to 120 characters.');
@@ -44,7 +44,7 @@ export async function manageTaskCategories(
       'SELECT id,name,is_active FROM task_categories WHERE id=? FOR UPDATE', [id],
     );
     const before = rows[0] ? view(rows[0]) : null;
-    if (command.action !== 'create' && !before) {
+    if (command.action !== 'create' && (!before || (!before.isActive && !actor.isAdmin))) {
       await db.rollback();
       return indistinguishableNotFound();
     }
@@ -55,7 +55,7 @@ export async function manageTaskCategories(
     } else {
       await db.execute('UPDATE task_categories SET is_active=? WHERE id=?', [command.isActive, id]);
     }
-    const categories = await list(db, true);
+    const categories = await list(db, actor.isAdmin);
     await new AuditWriter(new MysqlAuditSink(db)).append({
       actorUserId: actor.userId, action: `task_category.${command.action}`,
       resourceType: 'task_category', resourceId: id, scope: {}, correlationId: randomUUID(),
@@ -66,7 +66,9 @@ export async function manageTaskCategories(
   } catch (error) {
     await db.rollback();
     if ((error as { code?: string }).code === 'ER_DUP_ENTRY') {
-      return invalid('name', 'A category with that name already exists. Check the archived list too.');
+      return invalid('name', actor.isAdmin
+        ? 'A category with that name already exists. Check the archived list too.'
+        : 'This category name is already in use.');
     }
     throw error;
   } finally {

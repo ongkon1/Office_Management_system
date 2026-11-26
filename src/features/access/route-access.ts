@@ -149,6 +149,7 @@ export const ROUTE_RULES: readonly RouteRule[] = [
 
   // Administration.
   { path: '/admin', roles: ['super_admin'] },
+  { path: '/admin/task-categories', roles: ALL_ROLES },
   { path: '/admin/holidays', roles: ['super_admin', 'hr_manager'] },
   { path: '/admin/audit', roles: ['super_admin'], permission: 'control.audit.view' },
 ];

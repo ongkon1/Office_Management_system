@@ -337,6 +337,7 @@ function taskView(task: Task): TeamTaskView {
     id: task.id,
     version: task.version ?? 1,
     title: task.title,
+    billingType: task.billingType ?? null,
     projectId: task.projectId,
     projectLabel: project ? `${project.code} · ${project.name}` : task.projectId,
     division: divisionRef(task.divisionId),
@@ -772,6 +773,7 @@ export const mockTeamLeadService: TeamLeadService = {
     const now = new Date().toISOString();
     const task: Task = {
       id: existing?.id ?? `tsk-${Date.now()}`, title: input.title.trim(), projectId: input.projectId,
+      billingType: input.billingType ?? existing?.billingType ?? null,
       divisionId: project.divisionId, assigneeEmployeeId: input.assigneeEmployeeId,
       supportingMemberIds: isSelfAssigned ? [] : input.supportingMemberIds, creatorEmployeeId,
       priority: input.priority, startDate: input.startDate, dueDate: input.dueDate,

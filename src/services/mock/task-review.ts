@@ -307,6 +307,7 @@ export const mockTaskReviewService: TaskReviewService = {
     const now = `${DEMO_TODAY}T09:00:00+06:00`;
     const task: Task = {
       id: nextId(),
+      billingType: input.billingType ?? null,
       title: input.title.trim(),
       divisionId: project.divisionId,
       projectId: project.id,

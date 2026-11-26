@@ -1,6 +1,7 @@
 import type { TaskReviewState } from '@/contracts/domain';
 import type { Result } from '@/contracts/results';
 import { businessToday } from '@/lib/business-date';
+import { isTaskBillingType, type TaskBillingType } from '@/contracts/task-billing';
 
 export interface RaisedTask {
   readonly id: string;
@@ -24,6 +25,7 @@ export interface TaskReviewRepository {
   projectAvailable(projectId: string, employeeId: string, divisionIds: readonly string[]): Promise<boolean>;
   categoryAvailable(id: string): Promise<boolean>;
   insertSelfTask(input: {
+    billingType?: TaskBillingType;
     categoryId?: string;
     employeeId: string;
     projectId: string;
@@ -86,6 +88,7 @@ export class TaskReviewApplicationService {
   async raise(
     userId: string,
     input: {
+      billingType?: TaskBillingType;
       categoryId?: string | null;
       projectId: string;
       title: string;
@@ -157,7 +160,11 @@ export class TaskReviewApplicationService {
     )) {
       return validation('categoryId', 'CATEGORY_NOT_AVAILABLE', 'That category is unavailable.', 'Choose an active category.');
     }
+    if (input.billingType !== undefined && !isTaskBillingType(input.billingType)) {
+      return validation('billingType', 'INVALID_BILLING_TYPE', 'Choose Billable or Non-billable.', 'Select a billing type.');
+    }
     const id = await this.repo.insertSelfTask({
+      ...(input.billingType ? { billingType: input.billingType } : {}),
       ...(input.categoryId ? { categoryId: input.categoryId } : {}),
       employeeId: employee.id,
       projectId: input.projectId,
@@ -174,7 +181,7 @@ export class TaskReviewApplicationService {
       actorUserId: userId,
       taskId: id,
       before: null,
-      after: { reviewState, ...(input.categoryId ? { categoryId: input.categoryId } : {}) },
+      after: { reviewState, ...(input.categoryId ? { categoryId: input.categoryId } : {}), ...(input.billingType ? { billingType: input.billingType } : {}) },
       reason: null,
     });
     if (requiresReview && employee.leadEmployeeId) {

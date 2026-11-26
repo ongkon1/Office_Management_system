@@ -3,7 +3,6 @@ import {
   fireEvent,
   render,
   screen,
-  waitFor,
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -44,7 +43,7 @@ beforeEach(() => {
 });
 
 describe("Log Work form", () => {
-  it("shows the complete duration-only form with an eligible task preselected", async () => {
+  it("shows a read-only task assignment and hides redundant inputs", async () => {
     renderDrawer();
     const dialog = screen.getByRole("dialog", { name: "Log work" });
 
@@ -54,23 +53,12 @@ describe("Log Work form", () => {
     expect(
       within(dialog).getByRole("textbox", { name: /Duration/ }),
     ).toHaveAttribute("placeholder", "0:00");
-    await waitFor(() =>
-      expect(
-        within(dialog).getByRole("combobox", { name: /Division/ }),
-      ).toHaveValue("pia"),
-    );
-    expect(
-      within(dialog).getByRole("combobox", { name: /Project/ }),
-    ).toHaveValue("prj-vp2");
-    expect(within(dialog).getByRole("combobox", { name: /Task/ })).toHaveValue(
-      "tsk-1",
-    );
-    expect(
-      within(dialog).getByRole("combobox", { name: /Task/ }),
-    ).not.toHaveTextContent("Inference latency profiling");
-    expect(
-      within(dialog).getByLabelText("Attach supporting files (optional)"),
-    ).toBeInTheDocument();
+    expect(await within(dialog).findByText("Division")).toBeInTheDocument();
+    expect(within(dialog).getByText("Project")).toBeInTheDocument();
+    expect(within(dialog).getByText("Task", { exact: true })).toBeInTheDocument();
+    expect(within(dialog).queryByRole("combobox")).not.toBeInTheDocument();
+    expect(within(dialog).queryByLabelText("Work location")).not.toBeInTheDocument();
+    expect(within(dialog).queryByLabelText("Completed work")).not.toBeInTheDocument();
     expect(
       within(dialog).queryByLabelText(/Start time|End time/),
     ).not.toBeInTheDocument();
@@ -146,11 +134,6 @@ describe("Log Work form", () => {
       within(dialog).getByRole("textbox", { name: /Work description/ }),
       "Reviewed model output and investigated failures.",
     );
-    await user.type(
-      within(dialog).getByRole("textbox", { name: /Completed work/ }),
-      "Documented the failed cases and proposed fixes.",
-    );
-
     await act(async () => {
       fireEvent.submit(
         within(dialog).getByRole("form", { name: "Log work form" }),
@@ -165,10 +148,14 @@ describe("Log Work form", () => {
     const saved = entries.find((entry) => entry.id.startsWith("wl-"));
     expect(saved).toMatchObject({
       activeMinutes: 90,
+      divisionId: "pia",
+      projectId: "prj-vp2",
+      taskId: "tsk-1",
+      workLocation: "office",
+      completedWork: "Reviewed model output and investigated failures.",
       startTime: null,
       endTime: null,
       state: "saved",
-      taskId: "tsk-1",
     });
   });
 
@@ -252,6 +239,7 @@ describe("Log Work form", () => {
     });
 
     expect(within(preview).getByText(/Enter a duration/)).toBeInTheDocument();
+    await user.type(within(dialog).getByLabelText(/Work description/), "Completed the review.");
 
     await user.type(
       within(dialog).getByRole("textbox", { name: /Duration/ }),
@@ -282,6 +270,7 @@ describe("Log Work form", () => {
     renderDrawer();
     const dialog = screen.getByRole("dialog", { name: "Log work" });
     const duration = within(dialog).getByRole("textbox", { name: /Duration/ });
+    await user.type(within(dialog).getByLabelText(/Work description/), "Completed the review.");
 
     await user.type(duration, "6:00");
     await user.tab();

@@ -107,6 +107,7 @@ export interface ProjectFormOptionsView {
 }
 
 export interface TeamTaskView {
+  readonly billingType?: import('./task-billing').TaskBillingType | null;
   readonly categoryName?: string | null;
   readonly id: string;
   /** Required by task mutations so stale screens cannot overwrite newer work. */
@@ -211,6 +212,7 @@ export interface ProjectFormInput {
 }
 
 export interface TaskFormInput {
+  readonly billingType?: import('./task-billing').TaskBillingType;
   readonly categoryId?: string | null;
   readonly title: string;
   readonly projectId: string;

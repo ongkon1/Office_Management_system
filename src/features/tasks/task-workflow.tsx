@@ -65,6 +65,7 @@ export interface WorkflowBoardTask {
   readonly dueDate: string | null;
   readonly dueDateLabel: string | null;
   readonly isOverdue: boolean;
+  readonly billingLabel?: string;
   readonly reviewBlockedReason: string | null;
   /** Whether this viewer may log against the task once it is In Progress. */
   readonly canLogWorkWhenInProgress: boolean;
@@ -289,6 +290,7 @@ function TaskCard({
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2">
+        {task.billingLabel && <Badge tone="neutral">{task.billingLabel}</Badge>}
         {task.isOverdue && (
           <Badge tone="danger" icon={<TriangleAlert aria-hidden className="size-3.5" />}>
             Overdue
